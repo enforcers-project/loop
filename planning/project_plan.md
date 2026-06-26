@@ -28,7 +28,9 @@ As an attendee, I want to join a pickup run and claim a spot, so that I secure m
 
 Landing / Login / Signup, Onboarding (interest selection), Home / "For You" Feed, Search Results, Event Detail, Create Event, Organizer Profile, Saved / My RSVPs, and Profile / Settings.
 
-<img width="1590" height="1050" alt="image" src="https://github.com/user-attachments/assets/d80f270d-8c77-4434-8387-e392baf9fb67" />
+<img width="1590" height="1050" alt="image" src="https://github.com/user-attachments/assets/02dc3dad-26ef-4cc2-924c-4c85bf742f3b" />
+
+
 
 
 ## Data Model

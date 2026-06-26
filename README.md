@@ -2,11 +2,11 @@
 
 # SITE Capstone Project
 
-SITE Course Year: **20__**
+SITE Course Year: **2026**
 
-Cohort: **Add Company Sponsor Name**
+Cohort: **Salesforce**
 
-Team Member Names:**Insert Team Member Names**
+Team Member Names:**Benny Nketia, Heartwill Gbekle, Mussie Aregay**
 
 Mentors Names: **Insert Professional Mentor Names**
 

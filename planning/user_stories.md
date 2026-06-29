@@ -38,18 +38,16 @@ Leo, 19 — casual baller. Organizes weekend basketball runs and wants players t
 
 ## User Stories
 
-As an attendee, I want to pick my interests at signup, so that my feed is relevant from day one.
-As an attendee, I want a personalized "For You" feed, so that I see events matching my taste without searching.
-As an attendee, I want to search in plain language like "free events this weekend," so that I can find events without exact keywords.
-As an attendee, I want to filter events by category, location, and date, so that I can narrow down to what's relevant to me.
-As an attendee, I want to save and RSVP to events, so that I can track what I'm planning to attend.
-As an attendee, I want to follow organizers, so that their upcoming events appear in my feed.
+As an attendee, I want to pick my interests when I sign up, so that my feed feels relevant from day one.
+As an attendee, I want a personalized "For You" feed, so that I see events that match my taste without searching.
+As an attendee, I want to search in plain language like "free events this weekend," so that I can find events without guessing the exact title.
+As an attendee, I want to filter events by category, location, and date, so that I can quickly narrow down to what fits my plans.
+As an attendee, I want to save and RSVP to events, so that I can keep track of what I'm planning to attend.
+As an attendee, I want to follow organizers and promoters, so that their upcoming events show up in my feed.
+As an attendee, I want to join a pickup sports run and claim a position, so that I can lock in my spot before it fills up.
 As an organizer, I want to create an event with a flyer and details, so that people can discover and RSVP to it.
-As an organizer, I want AI to auto-tag my event and help write its description, so that it surfaces in searches and reads well.
-As an organizer, I want to see who has RSVP'd, so that I can gauge attendance.
-As a sports host, I want to post a run with players-needed and skill level, so that the right players can find and join.
-As a sports host, I want to see how many players have signed up vs. needed, so that I know whether my run is filled.
-As an attendee, I want to join a pickup run and claim a position, so that I can secure my spot in the game.
+As an organizer, I want AI to suggest tags and help write my event description, so that my event reads well and surfaces in the right searches.
+As a sports host, I want to post a run showing players needed, skill level, and spots filled, so that the right players can find it and see if there's room.
 
 
 ## Wireframe (Bonus)

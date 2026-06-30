@@ -40,7 +40,7 @@ Leo, 19 — casual baller. Organizes weekend basketball runs and wants players t
 
 ### Attendee
 1. As an attendee, I want to pick my interests when I sign up, so that my feed feels relevant from day one.
-   
+
 2. As an attendee, I want a personalized "For You" feed, so that I see events that match my taste without searching.
    
 3. As an attendee, I want to search in plain language like "free events this weekend," so that I can find events without guessing the exact title.
@@ -56,7 +56,7 @@ Leo, 19 — casual baller. Organizes weekend basketball runs and wants players t
 8. As an attendee, I want to join a pickup sports run and claim a position, so that I can lock in my spot before it fills up.
 
 ### Organizer / Promoter
-9. As an organizer, I want to create an event with a flyer and details, so that people can discover and RSVP to it.
+9. As an organizer, I want to create an event with a flyer/image and details, so that people can discover and RSVP to it.
     
 10. As an organizer, I want AI to suggest tags and help write my event description, so that my event reads well and surfaces in the right searches.
     

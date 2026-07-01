@@ -39,36 +39,36 @@ Leo, 19 — casual baller. Organizes weekend basketball runs and wants players t
 ## User Stories
 
 ### Attendee
+
 1. As an attendee, I want to pick my interests when I sign up, so that my feed feels relevant from day one.
 
 2. As an attendee, I want a personalized "For You" feed, so that I see events that match my taste without searching.
-   
+
 3. As an attendee, I want to search in plain language like "free events this weekend," so that I can find events without guessing the exact title.
-   
+
 4. As an attendee, I want to filter events by category, location, and date, so that I can quickly narrow down to what fits my plans.
-   
+
 5. As an attendee, I want to save and RSVP to events, so that I can keep track of what I'm planning to attend.
-    
+
 6. As an attendee, I want to follow organizers and promoters, so that their upcoming events show up in my feed.
-    
+
 7. As an attendee, I want a reminder before an event I saved or RSVP'd to, so that I don't find out about it too late or forget to go.
-    
+
 8. As an attendee, I want to join a pickup sports run and claim a position, so that I can lock in my spot before it fills up.
 
+9. As a host, I want to post a run showing players needed, skill level, and spots filled, so that the right players can find it and see if there's room.
+
+10. As a host, I want to see and manage who has claimed a spot, so that I know my run will actually have enough players to go ahead.
+
 ### Organizer / Promoter
-9. As an organizer, I want to create an event with a flyer/image and details, so that people can discover and RSVP to it.
-    
-10. As an organizer, I want AI to suggest tags and help write my event description, so that my event reads well and surfaces in the right searches.
-    
-11. As an organizer, I want to see who has RSVP'd and how my event is performing, so that I can gauge interest and plan accordingly.
-    
-12. As an organizer, I want people to follow me and see my following grow, so that I can reach the right audience without reposting the same flyer everywhere.
 
-### Sports Host
-13. As a sports host, I want to post a run showing players needed, skill level, and spots filled, so that the right players can find it and see if there's room.
-    
-14. As a sports host, I want to see and manage who has claimed a spot, so that I know my run will actually have enough players to go ahead.
+11. As an organizer, I want to create an event with a flyer/image and details, so that people can discover and RSVP to it.
 
+12. As an organizer, I want AI to suggest tags and help write my event description, so that my event reads well and surfaces in the right searches.
+
+13. As an organizer, I want to see who has RSVP'd and how my event is performing, so that I can gauge interest and plan accordingly.
+
+14. As an organizer, I want people to follow me and see my following grow, so that I can reach the right audience without reposting the same flyer everywhere.
 
 ## Wireframe (Bonus)
 

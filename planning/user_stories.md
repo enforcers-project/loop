@@ -70,6 +70,18 @@ Leo, 19 — casual baller. Organizes weekend basketball runs and wants players t
 
 14. As an organizer, I want people to follow me and see my following grow, so that I can reach the right audience without reposting the same flyer everywhere.
 
+
+## Decisions Log — User Stories
+
+- **Story we debated the scope of**: "As a user, I want to host a pickup run with spots, skill level, and positions" — debated whether hosting a run should be its own role (Sports Host) or a capability of an existing role. Debated whether to prescribe the position-claiming mechanic in the story or leave it to implementation; decided to keep "spots, skill level, and positions" in the story because it's a distinctive product behavior, not a technical detail.
+  **How we resolved it**: Collapsed Sports Host into an attendee/host capability rather than a standalone role, since hosting a run uses the same verb set as any user action (create, view, manage) and doesn't require elevated permissions like a promoter. Kept two roles — Attendee and Organizer/Promoter — with pickup runs treated as an event type rather than a third persona.
+
+- **Story we cut (and why)**: Cut the standalone "Sports Host" role and its two stories as a separate section — the capabilities overlapped entirely with Organizer, and the difference was event-type-specific fields (skill level, spots) rather than a different actor. Re-homed the two stories under Attendee as host capabilities instead of deleting the functionality.
+
+- **Story that changed after Claude's feedback**: Original: "As a sports host, I want to post a run..." and "As a sports host, I want to see and manage who has claimed a spot..." — Claude flagged that a role should be defined by distinct permissions, not by content type, and Sports Host shared Organizer's exact capabilities. Revised to: "As a host, I want to post a run showing players needed, skill level, and spots filled..." and "As a host, I want to see and manage who has claimed a spot..." — reframing host as a peer capability any attendee can use, not a separate role.
+
+- **AI feature story: user benefit we landed on**: For "As an organizer, I want AI to suggest tags and help write my event description," described the benefit as the event reading well and surfacing in the right searches — what the organizer experiences (better discovery, less writing friction), not the model, the prompt, or the re-ranking pipeline behind it.
+
 ## Wireframe (Bonus)
 
 <img width="1590" height="1050" alt="image" src="https://github.com/user-attachments/assets/31cd7eb9-ad22-4b93-852d-2d72ec03b176" />

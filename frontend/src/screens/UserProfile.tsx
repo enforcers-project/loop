@@ -41,9 +41,9 @@ export function UserProfile() {
         <div className="absolute inset-0 bg-gradient-to-r from-primary/60 to-accent/60" />
       </div>
 
-      <div className="mx-auto max-w-[1140px] px-5">
+      <div className="relative z-10 mx-auto max-w-[1140px] px-5">
         {/* avatar overlapping cover */}
-        <div className="-mt-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="-mt-4 flex flex-col gap-4 pt-2 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-end gap-4">
             <div className="relative">
               <img

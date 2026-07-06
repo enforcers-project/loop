@@ -1,0 +1,331 @@
+import { useState } from 'react'
+import { Calendar, ImagePlus, MapPin, Sparkles, X } from 'lucide-react'
+import type { Category, Event } from '../lib/types'
+import { CATEGORY_COLOR, cn } from '../lib/utils'
+import { FormField, inputClass } from '../components/primitives'
+import { EventCard } from '../components/EventCard'
+
+const CATEGORIES: Category[] = ['Music', 'Nightlife', 'Sports', 'Networking', 'Food', 'Campus']
+const AI_DESCRIPTION =
+  'Get ready for an unforgettable night. Doors open early, the energy is high, and the lineup is stacked. Grab your crew, dress the part, and come make some memories — this is the one everyone will be talking about.'
+const AI_TAGS = ['#Afrobeats', '#21+', '#Nightlife', '#Oakland', '#RooftopParty']
+
+const POSITION_TEMPLATE = 'Goalkeeper, Defender, Midfielder, Forward'
+
+export function CreateEvent() {
+  const [title, setTitle] = useState('')
+  const [category, setCategory] = useState<Category>('Nightlife')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [location, setLocation] = useState('')
+  const [price, setPrice] = useState('')
+  const [capacity, setCapacity] = useState('')
+  const [age, setAge] = useState('')
+  const [description, setDescription] = useState('')
+  const [flyer, setFlyer] = useState<string | null>(null)
+  const [writing, setWriting] = useState(false)
+  const [tags, setTags] = useState<string[]>([])
+
+  // sports
+  const [isSports, setIsSports] = useState(false)
+  const [playersNeeded, setPlayersNeeded] = useState('')
+  const [skill, setSkill] = useState('All Levels')
+  const [positions, setPositions] = useState('')
+  const [indoor, setIndoor] = useState(false)
+
+  const writeWithAI = () => {
+    setWriting(true)
+    setTimeout(() => {
+      setDescription(AI_DESCRIPTION)
+      setTags(AI_TAGS)
+      setWriting(false)
+    }, 1400)
+  }
+
+  const previewEvent: Event = {
+    id: 'preview',
+    title: title || 'Your event title',
+    category,
+    poster:
+      flyer ||
+      'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=800&q=80',
+    price: price ? `$${price}` : 'Free',
+    isFree: !price || price === '0',
+    date:
+      date || time
+        ? `${date || 'Date'} · ${time || 'Time'}`
+        : 'Date · Time',
+    isoDate: '',
+    venueName: location || 'Venue',
+    city: 'Oakland',
+    lat: 37.8,
+    lng: -122.27,
+    organizerId: 'org-preview',
+    organizer: {
+      id: 'org-preview',
+      name: 'You',
+      handle: '@you',
+      avatar: 'https://i.pravatar.cc/150?img=1',
+      verified: false,
+      role: 'Organizer',
+      followers: 0,
+      bio: '',
+      cover: '',
+    },
+    description,
+    tags,
+    goingCount: 0,
+    goingAvatars: [],
+    capacity: Number(capacity) || 100,
+    rsvpCount: 0,
+    saveCount: 0,
+    almostFull: false,
+    ageRestriction: age ? `${age}+` : undefined,
+    isSports,
+    playersNeeded: Number(playersNeeded) || undefined,
+    playersSignedUp: isSports ? 0 : undefined,
+    skillLevel: isSports ? skill : undefined,
+    indoor,
+  }
+
+  return (
+    <div className="mx-auto max-w-[1240px] px-5 pb-24 pt-6 md:pb-10">
+      <h1 className="font-display text-2xl font-bold text-ink">Create an event</h1>
+      <p className="mt-1 text-sm text-text-secondary">
+        Fill in the details — your live preview updates as you type.
+      </p>
+
+      <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px]">
+        {/* form */}
+        <div className="space-y-5">
+          {/* flyer upload */}
+          <div>
+            <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">Flyer</span>
+            <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-border-light bg-surface text-text-muted transition-colors hover:border-primary">
+              {flyer ? (
+                <img src={flyer} alt="" className="h-full w-full rounded-card object-cover" />
+              ) : (
+                <>
+                  <ImagePlus size={28} />
+                  <span className="text-sm">Upload a flyer</span>
+                </>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) setFlyer(URL.createObjectURL(f))
+                }}
+              />
+            </label>
+          </div>
+
+          <FormField label="Event title">
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Afro Nation Rooftop"
+              className={inputClass}
+            />
+          </FormField>
+
+          {/* category chips */}
+          <div>
+            <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">Category</span>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCategory(c)}
+                  className={cn(
+                    'rounded-pill border px-4 py-2 text-sm font-medium transition-colors',
+                    category === c
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
+                  )}
+                  style={category === c ? { backgroundColor: CATEGORY_COLOR[c], borderColor: CATEGORY_COLOR[c] } : undefined}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Date">
+              <div className="relative">
+                <input
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  placeholder="Sat, Jul 12"
+                  className={cn(inputClass, 'pr-10')}
+                />
+                <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              </div>
+            </FormField>
+            <FormField label="Time">
+              <input
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                placeholder="9:00 PM"
+                className={inputClass}
+              />
+            </FormField>
+          </div>
+
+          <FormField label="Location">
+            <div className="relative">
+              <input
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Skyline Rooftop, Oakland"
+                className={cn(inputClass, 'pr-10')}
+              />
+              <MapPin size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            </div>
+          </FormField>
+
+          <div className="grid grid-cols-3 gap-4">
+            <FormField label="Price ($)">
+              <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" className={inputClass} />
+            </FormField>
+            <FormField label="Capacity">
+              <input value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="100" className={inputClass} />
+            </FormField>
+            <FormField label="Min age">
+              <input value={age} onChange={(e) => setAge(e.target.value)} placeholder="18" className={inputClass} />
+            </FormField>
+          </div>
+
+          {/* description + AI write */}
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[13px] font-medium text-text-secondary">Description</span>
+              <button
+                onClick={writeWithAI}
+                disabled={writing}
+                className="flex items-center gap-1.5 rounded-pill bg-primary-light px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-60"
+              >
+                <Sparkles size={13} />
+                {writing ? 'Writing…' : 'Write with AI'}
+              </button>
+            </div>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              placeholder="Tell people what to expect…"
+              className={cn(inputClass, 'resize-none')}
+            />
+          </div>
+
+          {/* AI tags panel */}
+          {tags.length > 0 && (
+            <div className="rounded-card border border-primary-light bg-primary-light/50 p-4">
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-primary">
+                <Sparkles size={13} /> AI-suggested tags
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {tags.map((t) => (
+                  <span
+                    key={t}
+                    className="flex items-center gap-1 rounded-pill bg-white px-3 py-1 text-xs font-medium text-primary shadow-sm"
+                  >
+                    {t}
+                    <button onClick={() => setTags((prev) => prev.filter((x) => x !== t))}>
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* sports toggle */}
+          <div className="rounded-card border border-border-light p-4">
+            <label className="flex cursor-pointer items-center justify-between">
+              <div>
+                <span className="text-sm font-semibold text-ink">This is a pickup run</span>
+                <p className="text-xs text-text-secondary">Add roster, positions & skill level.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={isSports}
+                onChange={(e) => setIsSports(e.target.checked)}
+                className="peer sr-only"
+              />
+              <span className="relative h-6 w-11 rounded-full bg-border-light transition-colors peer-checked:bg-primary">
+                <span
+                  className={cn(
+                    'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform',
+                    isSports ? 'translate-x-5' : 'translate-x-0.5',
+                  )}
+                />
+              </span>
+            </label>
+
+            {isSports && (
+              <div className="mt-4 space-y-4 border-t border-border-light pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Players needed">
+                    <input
+                      value={playersNeeded}
+                      onChange={(e) => setPlayersNeeded(e.target.value)}
+                      placeholder="14"
+                      className={inputClass}
+                    />
+                  </FormField>
+                  <FormField label="Skill level">
+                    <select
+                      value={skill}
+                      onChange={(e) => setSkill(e.target.value)}
+                      className={inputClass}
+                    >
+                      <option>All Levels</option>
+                      <option>Beginner</option>
+                      <option>Intermediate</option>
+                      <option>Advanced</option>
+                    </select>
+                  </FormField>
+                </div>
+                <FormField label="Positions (comma separated)">
+                  <input
+                    value={positions}
+                    onChange={(e) => setPositions(e.target.value)}
+                    placeholder={POSITION_TEMPLATE}
+                    className={inputClass}
+                  />
+                </FormField>
+                <label className="flex items-center gap-2 text-sm text-text-secondary">
+                  <input
+                    type="checkbox"
+                    checked={indoor}
+                    onChange={(e) => setIndoor(e.target.checked)}
+                    className="h-4 w-4 rounded border-border-light text-primary"
+                  />
+                  Indoor court/field
+                </label>
+              </div>
+            )}
+          </div>
+
+          <button className="w-full rounded-button bg-accent py-3.5 text-sm font-semibold text-white transition-transform active:scale-95">
+            Publish event
+          </button>
+        </div>
+
+        {/* live preview */}
+        <div className="hidden lg:block">
+          <div className="sticky top-24">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Live preview
+            </p>
+            <EventCard event={previewEvent} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

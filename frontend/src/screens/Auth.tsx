@@ -1,17 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useApp } from '../context/AppContext'
+import { useApp, type Role } from '../context/AppContext'
 import { cn } from '../lib/utils'
 import { FormField, PasswordField, inputClass } from '../components/primitives'
 
 type Mode = 'signup' | 'login'
-type RoleId = 'attendee' | 'organizer' | 'promoter' | 'sportsHost'
 
-const ROLES: { id: RoleId; label: string; blurb: string }[] = [
+// Two roles only. Hosting pickup runs is an Organizer sub-capability toggled
+// below (not a role) — a plain attendee can't host. See planning §3/§10.
+const ROLES: { id: Role; label: string; blurb: string }[] = [
   { id: 'attendee', label: 'Attendee', blurb: 'Discover & RSVP' },
-  { id: 'organizer', label: 'Organizer', blurb: 'Host events' },
-  { id: 'promoter', label: 'Promoter', blurb: 'Run nightlife' },
-  { id: 'sportsHost', label: 'Sports Host', blurb: 'Run pickup games' },
+  { id: 'organizer', label: 'Organizer', blurb: 'Create & manage events' },
 ]
 
 export function Auth() {
@@ -21,11 +20,15 @@ export function Auth() {
   const [mode, setMode] = useState<Mode>(params.get('mode') === 'login' ? 'login' : 'signup')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
-  const [role, setRole] = useState<RoleId>('attendee')
+  const [role, setRole] = useState<Role>('attendee')
+  const [isHost, setIsHost] = useState(false)
 
   useMemo(() => {
     if (params.get('mode') === 'login') setMode('login')
   }, [params])
+
+  // Hosting is organizer-only; drop the flag if they aren't signing up as one.
+  const wantsHost = role === 'organizer' && isHost
 
   const submit = () => {
     const handle = '@' + (email.split('@')[0] || 'you')
@@ -34,7 +37,7 @@ export function Auth() {
       mode === 'signup'
         ? { id: 'user-demo', email, name: name || 'New User', role, handle, avatar }
         : { id: 'user-demo', email, name: 'Demo User', role: 'attendee', handle, avatar }
-    login(self, mode === 'signup' ? role : 'attendee')
+    login(self, mode === 'signup' ? role : 'attendee', mode === 'signup' && wantsHost)
     navigate(mode === 'signup' ? '/onboarding' : '/feed')
   }
 
@@ -136,6 +139,26 @@ export function Auth() {
                     </button>
                   ))}
                 </div>
+
+                {/* Host is an organizer sub-capability — only offered to organizers. */}
+                {role === 'organizer' && (
+                  <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-button border border-border-light bg-white px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={isHost}
+                      onChange={(e) => setIsHost(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border-light text-primary"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-ink">
+                        I host pickup sports runs
+                      </span>
+                      <span className="block text-xs text-text-muted">
+                        Unlocks rosters, positions &amp; skill levels
+                      </span>
+                    </span>
+                  </label>
+                )}
               </div>
             )}
 

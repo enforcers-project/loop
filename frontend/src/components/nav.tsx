@@ -25,7 +25,7 @@ export function TopNav() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { isLoggedIn, user, role } = useApp()
-  const canCreate = role === 'organizer' || role === 'promoter' || role === 'sportsHost'
+  const canCreate = role === 'organizer'
 
   return (
     <header className="sticky top-0 z-30 border-b border-border-light bg-white/95 backdrop-blur-md">
@@ -111,7 +111,7 @@ export function TopNav() {
 export function BottomBar() {
   const { pathname } = useLocation()
   const { role } = useApp()
-  const canCreate = role === 'organizer' || role === 'promoter' || role === 'sportsHost'
+  const canCreate = role === 'organizer'
 
   const tab = (to: string, Icon: typeof Home, label: string) => {
     const active = pathname.startsWith(to)

@@ -12,19 +12,19 @@ renders.
 
 - Node 20+ and npm
 
-## 1. Start the backend (port 4000)
+## 1. Start the backend (port 3000)
 
 ```bash
 cd backend
 npm install
-npm run dev        # http://localhost:4000  (tsx watch)
+npm run dev        # http://localhost:3000  (tsx watch)
 ```
 
 Sanity check:
 
 ```bash
-curl http://localhost:4000/api/health
-curl http://localhost:4000/api/events | head -c 300
+curl http://localhost:3000/api/health
+curl http://localhost:3000/api/events | head -c 300
 ```
 
 ## 2. Start the frontend (port 5173)

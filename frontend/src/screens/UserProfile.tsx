@@ -7,15 +7,13 @@ import { RoleBadge } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 
 type Tab = 'Saved' | 'Going' | 'Interests'
-const ROLE_LABEL: Record<string, 'Attendee' | 'Organizer' | 'Promoter' | 'Sports Host'> = {
-  attendee: 'Attendee',
-  organizer: 'Organizer',
-  promoter: 'Promoter',
-  sportsHost: 'Sports Host',
-}
 
 export function UserProfile() {
-  const { user, role, interests, savedIds, goingIds } = useApp()
+  const { user, role, isHost, interests, savedIds, goingIds } = useApp()
+  // Two logic roles + the host capability drive the display RoleBadge:
+  // an organizer-host shows the green "Sports Host" tint (per planning §5).
+  const roleLabel =
+    role === 'organizer' ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
   const [tab, setTab] = useState<Tab>('Saved')
   const [events, setEvents] = useState<Event[]>([])
   const [allInterests, setAllInterests] = useState<Interest[]>([])
@@ -58,7 +56,7 @@ export function UserProfile() {
                 <h1 className="font-display text-2xl font-bold text-ink">
                   {user?.name ?? 'Demo User'}
                 </h1>
-                <RoleBadge role={ROLE_LABEL[role] ?? 'Attendee'} />
+                <RoleBadge role={roleLabel} />
               </div>
               <p className="mt-0.5 text-sm text-text-muted">{user?.handle ?? '@you'}</p>
               <div className="mt-1 flex items-center gap-4 text-sm text-text-secondary">

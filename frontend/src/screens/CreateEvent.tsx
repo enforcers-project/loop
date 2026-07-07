@@ -4,6 +4,7 @@ import type { Category, Event } from '../lib/types'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
 import { FormField, inputClass } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
+import { useApp } from '../context/AppContext'
 
 const CATEGORIES: Category[] = ['Music', 'Nightlife', 'Sports', 'Networking', 'Food', 'Campus']
 const AI_DESCRIPTION =
@@ -13,6 +14,9 @@ const AI_TAGS = ['#Afrobeats', '#21+', '#Nightlife', '#Oakland', '#RooftopParty'
 const POSITION_TEMPLATE = 'Goalkeeper, Defender, Midfielder, Forward'
 
 export function CreateEvent() {
+  // Posting a pickup run requires the host sub-capability (organizer + is_host).
+  // Non-hosts can create ordinary events but never see the Sports toggle.
+  const { isHost } = useApp()
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState<Category>('Nightlife')
   const [date, setDate] = useState('')
@@ -243,7 +247,8 @@ export function CreateEvent() {
             </div>
           )}
 
-          {/* sports toggle */}
+          {/* sports toggle — host capability only */}
+          {isHost && (
           <div className="rounded-card border border-border-light p-4">
             <label className="flex cursor-pointer items-center justify-between">
               <div>
@@ -310,6 +315,7 @@ export function CreateEvent() {
               </div>
             )}
           </div>
+          )}
 
           <button className="w-full rounded-button bg-accent py-3.5 text-sm font-semibold text-white transition-transform active:scale-95">
             Publish event

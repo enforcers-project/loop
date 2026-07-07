@@ -35,8 +35,8 @@ export function Auth() {
     const avatar = 'https://i.pravatar.cc/150?img=1'
     const self =
       mode === 'signup'
-        ? { id: 'user-demo', email, name: name || 'New User', role, handle, avatar }
-        : { id: 'user-demo', email, name: 'Demo User', role: 'attendee', handle, avatar }
+        ? { id: 'user-demo', email, name: name || 'Alex Carter', role, handle, avatar }
+        : { id: 'user-demo', email, name: 'Alex Carter', role: 'attendee', handle, avatar }
     login(self, mode === 'signup' ? role : 'attendee', mode === 'signup' && wantsHost)
     navigate(mode === 'signup' ? '/onboarding' : '/feed')
   }

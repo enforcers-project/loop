@@ -4,32 +4,37 @@ import { Calendar, MapPin } from 'lucide-react'
 import { api } from '../lib/api'
 import type { Category, Event } from '../lib/types'
 import { useApp } from '../context/AppContext'
-import { CATEGORY_COLOR } from '../lib/utils'
+import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
 import { CatRow, SearchBar } from '../components/rows'
 import { EventGrid } from '../components/EventCard'
+import { EventImage } from '../components/EventImage'
 import { AIChip, AlmostFullBadge, GoingStack, RSVPBtn, SaveBtn } from '../components/primitives'
 
 const TABS = ['For You', 'Trending', 'Following'] as const
 type Tab = (typeof TABS)[number]
 
-/* Featured hero card — 320px tall. */
+/* Featured hero card — controlled 320px (desktop) height with a smooth
+   bottom-up overlay so the white text stays readable. */
 function FeaturedCard({ event }: { event: Event }) {
   const navigate = useNavigate()
   const { savedIds, goingIds, toggleSaved, toggleGoing } = useApp()
   return (
-    <div
-      className="relative h-80 overflow-hidden rounded-card shadow-card"
-      style={{ backgroundColor: '#000' }}
-    >
-      <img src={event.poster} alt="" className="h-full w-full object-cover opacity-80" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+    <div className="relative h-[300px] overflow-hidden rounded-card shadow-hero md:h-[330px]">
+      <EventImage
+        src={event.poster}
+        alt={event.title}
+        category={event.category}
+        title={event.title}
+        iconSize={56}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
 
       <div className="absolute inset-x-4 top-4 flex items-start justify-between gap-2">
         {event.rationale ? (
-          <AIChip text={event.rationale} />
+          <AIChip text={recommendationLabel(event.rationale, event.category)} />
         ) : (
           <span
-            className="rounded-pill px-2.5 py-1 text-xs font-semibold text-white"
+            className="rounded-pill px-2.5 py-1 text-xs font-semibold text-white shadow-sm"
             style={{ backgroundColor: CATEGORY_COLOR[event.category] }}
           >
             {event.category}
@@ -38,17 +43,19 @@ function FeaturedCard({ event }: { event: Event }) {
         {event.almostFull && <AlmostFullBadge />}
       </div>
 
-      <div className="absolute inset-x-4 bottom-4 text-white">
-        <h2 className="font-display text-2xl font-bold md:text-3xl">{event.title}</h2>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/80">
+      <div className="absolute inset-x-4 bottom-4 text-white sm:inset-x-6 sm:bottom-6">
+        <h2 className="font-display text-[26px] font-bold leading-tight md:text-[30px]">
+          {event.title}
+        </h2>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/90">
           <span className="flex items-center gap-1.5">
-            <Calendar size={14} /> {event.date}
+            <Calendar size={15} className="opacity-90" /> {event.date}
           </span>
           <span className="flex items-center gap-1.5">
-            <MapPin size={14} /> {event.venueName} · {event.city}
+            <MapPin size={15} className="opacity-90" /> {event.venueName} · {event.city}
           </span>
         </div>
-        <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <GoingStack count={event.goingCount} avatars={event.goingAvatars} size="md" />
           <div className="flex items-center gap-2">
             <SaveBtn saved={savedIds.has(event.id)} onToggle={() => toggleSaved(event.id)} />
@@ -99,14 +106,14 @@ export function ForYouFeed() {
   const [featured, ...rest] = filtered
 
   return (
-    <div className="mx-auto max-w-[1440px] px-5 pb-24 pt-4 md:pb-10">
-      {/* sticky search */}
-      <div className="sticky top-16 z-20 -mx-5 bg-white/95 px-5 py-3 backdrop-blur-md">
+    <div className="loop-container pb-24 pt-4 md:pb-12">
+      {/* sticky search — 32px below the navbar */}
+      <div className="sticky top-16 z-20 -mx-4 bg-white/95 px-4 pb-3 pt-2 backdrop-blur-md md:-mx-6 md:px-6">
         <SearchBar value={query} onChange={setQuery} />
       </div>
 
-      {/* tabs */}
-      <div className="mt-3 flex gap-2">
+      {/* tabs — 20px below search */}
+      <div className="mt-5 flex gap-2">
         {TABS.map((t) => (
           <button
             key={t}
@@ -123,24 +130,26 @@ export function ForYouFeed() {
         ))}
       </div>
 
-      {/* category row */}
-      <div className="mt-3">
+      {/* category row — ~14px below tabs */}
+      <div className="mt-3.5">
         <CatRow active={cat} onChange={setCat} />
       </div>
 
-      {/* featured hero */}
+      {/* featured hero — 24px below categories */}
       {featured && (
-        <div className="mt-5">
+        <div className="mt-6">
           <FeaturedCard event={featured} />
         </div>
       )}
 
-      {/* grid */}
+      {/* grid — 24px below hero */}
       <div className="mt-6">
         {rest.length > 0 ? (
           <EventGrid events={rest} showRationale />
         ) : (
-          <p className="py-16 text-center text-sm text-text-muted">No events match yet.</p>
+          !featured && (
+            <p className="py-16 text-center text-sm text-text-muted">No events match yet.</p>
+          )
         )}
       </div>
     </div>

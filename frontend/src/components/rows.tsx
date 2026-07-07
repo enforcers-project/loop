@@ -29,11 +29,12 @@ export function CatRow({
   onChange: (c: Category | 'All') => void
 }) {
   return (
-    <div className="scrollbar-hide -mx-5 flex gap-2 overflow-x-auto px-5 py-1">
+    <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
       {CATS.map((c) => (
         <button
           key={c}
           onClick={() => onChange(c)}
+          aria-pressed={active === c}
           className={cn(pillBase, active === c ? pillSelected : pillUnselected)}
         >
           {c}
@@ -69,11 +70,12 @@ export function FilterBar({
   onToggle: (k: keyof Filters) => void
 }) {
   return (
-    <div className="scrollbar-hide -mx-5 flex gap-2 overflow-x-auto px-5 py-1">
+    <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
       {FILTER_DEFS.map((f) => (
         <button
           key={f.key}
           onClick={() => onToggle(f.key)}
+          aria-pressed={filters[f.key]}
           className={cn(pillBase, filters[f.key] ? pillSelected : pillUnselected)}
         >
           {f.label}
@@ -104,23 +106,30 @@ export function SearchBar({
   placeholder?: string
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-input border border-border-light bg-white px-4 py-3 shadow-card focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
-      <Search size={18} className="flex-shrink-0 text-text-muted" />
+    <div className="flex h-[52px] items-center gap-2 rounded-input border border-border-light bg-white px-4 shadow-card transition-shadow focus-within:border-primary focus-within:shadow-card-hover focus-within:ring-2 focus-within:ring-primary/15">
+      <Search size={20} className="flex-shrink-0 text-text-muted" />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && onSubmit?.()}
         placeholder={placeholder}
-        className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-placeholder"
+        aria-label="Search events"
+        className="min-w-0 flex-1 bg-transparent text-[15px] text-text-primary outline-none placeholder:text-placeholder"
       />
       {showLocation && (
-        <button className="hidden items-center gap-1 rounded-pill bg-surface px-2.5 py-1 text-xs font-medium text-text-secondary sm:flex">
-          <MapPin size={13} />
+        <button
+          className="hidden h-8 items-center gap-1 rounded-pill bg-surface px-3 text-xs font-semibold text-text-secondary transition-colors hover:text-ink sm:flex"
+          aria-label={`Location: ${city}`}
+        >
+          <MapPin size={14} className="text-text-muted" />
           {city}
         </button>
       )}
       {showMic && (
-        <button className="flex-shrink-0 text-text-muted hover:text-primary" aria-label="Voice search">
+        <button
+          className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface hover:text-primary"
+          aria-label="Search by voice"
+        >
           <Mic size={18} />
         </button>
       )}

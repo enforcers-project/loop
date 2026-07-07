@@ -44,24 +44,27 @@ export function Discover() {
     })
   }, [events, cat, filters, query])
 
+  const heading =
+    cat !== 'All'
+      ? `${filtered.length} ${cat} event${filtered.length === 1 ? '' : 's'} near you`
+      : `${filtered.length} event${filtered.length === 1 ? '' : 's'} near you this week`
+
   return (
-    <div className="mx-auto max-w-[1440px] px-5 pb-24 pt-4 md:pb-10">
+    <div className="loop-container pb-24 pt-4 md:pb-12">
       <SearchBar value={query} onChange={setQuery} placeholder="Search events, venues, organizers…" />
 
-      <div className="mt-3">
+      {/* filters — first row categories, second row quick filters */}
+      <div className="mt-4">
         <CatRow active={cat} onChange={setCat} />
       </div>
       <div className="mt-2">
         <FilterBar filters={filters} onToggle={toggle} />
       </div>
 
-      {/* count header */}
-      <div className="mb-4 mt-4 flex items-baseline justify-between">
-        <h1 className="font-display text-xl font-bold text-ink">
-          {filtered.length} event{filtered.length === 1 ? '' : 's'}
-          {cat !== 'All' ? ` in ${cat}` : ' near you'}
-        </h1>
-      </div>
+      {/* section heading — 24px above, 20px below to the grid */}
+      <h1 className="mb-5 mt-6 font-display text-[22px] font-bold leading-tight text-ink md:text-2xl">
+        {heading}
+      </h1>
 
       {filtered.length > 0 ? (
         <EventGrid events={filtered} />

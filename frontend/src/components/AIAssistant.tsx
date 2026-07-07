@@ -68,7 +68,9 @@ export function AIAssistant() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-white shadow-card-hover transition-transform hover:scale-105"
+          /* Sits above the mobile bottom bar + safe area on small screens,
+             bottom-right on desktop. */
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-white shadow-card-hover transition-transform hover:scale-105 md:bottom-6 md:right-6"
           aria-label="Ask Loop AI"
         >
           <Sparkles size={24} />

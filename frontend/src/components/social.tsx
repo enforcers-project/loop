@@ -3,6 +3,7 @@ import { Bookmark, Heart, MessageCircle, Plus, Send } from 'lucide-react'
 import type { Post } from '../lib/types'
 import { cn, formatCount } from '../lib/utils'
 import { VerifiedBadge } from './primitives'
+import { EventImage } from './EventImage'
 
 /* --------------------------------------------------------------------------
    StoriesRow — horizontal avatar ring row; labels allow 2 lines, w-16
@@ -13,9 +14,13 @@ export function StoriesRow({
   stories: { name: string; avatar: string; isYou?: boolean }[]
 }) {
   return (
-    <div className="scrollbar-hide flex gap-4 overflow-x-auto pb-1">
+    <div className="scrollbar-hide -mx-1 flex gap-4 overflow-x-auto px-1 pb-1">
       {stories.map((s, i) => (
-        <button key={i} className="flex w-16 flex-shrink-0 flex-col items-center gap-1.5">
+        <button
+          key={i}
+          className="flex w-[68px] flex-shrink-0 flex-col items-center gap-1.5"
+          aria-label={s.isYou ? 'Add to your story' : `${s.name}'s story`}
+        >
           <span
             className={cn(
               'relative grid h-16 w-16 place-items-center rounded-full p-[3px]',
@@ -27,7 +32,7 @@ export function StoriesRow({
             <img
               src={s.avatar}
               alt=""
-              className="h-full w-full rounded-full border-2 border-white object-cover"
+              className="h-full w-full rounded-full border-2 border-white bg-surface object-cover"
             />
             {s.isYou && (
               <span className="absolute -bottom-0.5 -right-0.5 grid h-5 w-5 place-items-center rounded-full border-2 border-white bg-primary text-white">
@@ -35,7 +40,7 @@ export function StoriesRow({
               </span>
             )}
           </span>
-          <span className="text-center text-[11px] leading-tight text-text-secondary">
+          <span className="w-full truncate text-center text-[11px] font-medium leading-tight text-text-secondary">
             {s.isYou ? 'Your story' : s.name}
           </span>
         </button>
@@ -52,14 +57,21 @@ export function PostCard({ post }: { post: Post }) {
   const [saved, setSaved] = useState(false)
   const org = post.organizer
 
+  const iconBtn =
+    'grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-surface'
+
   return (
     <article className="overflow-hidden rounded-card border border-border-light bg-white shadow-card">
       {/* header */}
-      <div className="flex items-center gap-3 p-4">
-        <img src={org?.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
-        <div className="flex-1">
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <img
+          src={org?.avatar}
+          alt=""
+          className="h-11 w-11 flex-shrink-0 rounded-full bg-surface object-cover"
+        />
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
-            <span className="text-sm font-semibold text-ink">{org?.name}</span>
+            <span className="truncate text-sm font-semibold text-ink">{org?.name}</span>
             {org?.verified && <VerifiedBadge size={14} />}
           </div>
           <span className="text-xs text-text-muted">{post.timeAgo} ago</span>
@@ -67,47 +79,50 @@ export function PostCard({ post }: { post: Post }) {
       </div>
 
       {/* image */}
-      <img src={post.image} alt="" className="aspect-square w-full object-cover" />
+      <div className="relative aspect-square w-full bg-surface">
+        <EventImage
+          src={post.image}
+          alt={post.caption}
+          category={post.event?.category}
+          title={org?.name}
+          iconSize={48}
+        />
+      </div>
 
-      {/* action row */}
-      <div className="flex items-center gap-4 px-4 pt-3">
-        <button onClick={() => setLiked((v) => !v)} aria-label="Like">
+      {/* action row — even spacing, larger tap targets */}
+      <div className="flex items-center gap-1 px-3 pt-2.5">
+        <button onClick={() => setLiked((v) => !v)} className={iconBtn} aria-label="Like" aria-pressed={liked}>
           <Heart
-            size={24}
-            className={cn(
-              'transition-colors',
-              liked ? 'fill-accent text-accent' : 'text-ink',
-            )}
+            size={22}
+            className={cn('transition-colors', liked ? 'fill-accent text-accent' : 'text-ink')}
           />
         </button>
-        <button aria-label="Comment">
-          <MessageCircle size={24} className="text-ink" />
+        <button className={iconBtn} aria-label="Comment">
+          <MessageCircle size={22} className="text-ink" />
         </button>
-        <button aria-label="Share">
-          <Send size={22} className="text-ink" />
+        <button className={iconBtn} aria-label="Share">
+          <Send size={20} className="text-ink" />
         </button>
         <button
           onClick={() => setSaved((v) => !v)}
-          className="ml-auto"
-          aria-label="Save"
+          className={cn(iconBtn, 'ml-auto')}
+          aria-label={saved ? 'Remove bookmark' : 'Bookmark'}
+          aria-pressed={saved}
         >
-          <Bookmark
-            size={24}
-            className={cn(saved ? 'fill-primary text-primary' : 'text-ink')}
-          />
+          <Bookmark size={22} className={cn(saved ? 'fill-primary text-primary' : 'text-ink')} />
         </button>
       </div>
 
       {/* likes + caption + comments */}
-      <div className="space-y-1 px-4 pb-4 pt-2">
+      <div className="space-y-1.5 px-4 pb-4 pt-1.5">
         <div className="text-sm font-semibold text-ink">
           {formatCount(post.likes + (liked ? 1 : 0))} likes
         </div>
-        <p className="text-sm text-text-primary">
+        <p className="text-sm leading-relaxed text-text-primary">
           <span className="font-semibold">{org?.handle.replace('@', '')}</span> {post.caption}
         </p>
         {post.comments.map((c) => (
-          <p key={c.id} className="text-sm text-text-secondary">
+          <p key={c.id} className="text-sm leading-relaxed text-text-secondary">
             <span className="font-semibold text-ink">{c.author}</span> {c.text}
           </p>
         ))}

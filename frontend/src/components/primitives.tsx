@@ -99,10 +99,11 @@ export function RSVPBtn({
     <button
       onClick={onClick}
       className={cn(
-        'rounded-button font-semibold transition-transform active:scale-95',
-        sm ? 'px-4 py-2 text-sm' : 'px-5 py-3 text-sm',
+        'inline-flex items-center justify-center rounded-button font-semibold transition-transform active:scale-95',
+        // consistent control height: 44px standard, 40px compact (card footers)
+        sm ? 'h-10 px-4 text-sm' : 'h-11 px-6 text-sm',
         variant === 'filled'
-          ? 'bg-accent text-white hover:opacity-90'
+          ? 'bg-accent text-white shadow-sm hover:opacity-90'
           : 'border border-accent bg-white text-accent hover:bg-accent/5',
       )}
     >
@@ -117,16 +118,21 @@ export function RSVPBtn({
 export function SaveBtn({
   saved,
   onToggle,
+  sm = false,
 }: {
   saved: boolean
   onToggle: () => void
+  sm?: boolean
 }) {
   return (
     <button
       onClick={onToggle}
-      aria-label={saved ? 'Unsave' : 'Save'}
+      aria-label={saved ? 'Remove bookmark' : 'Bookmark event'}
+      aria-pressed={saved}
       className={cn(
-        'grid h-10 w-10 place-items-center rounded-button border transition-colors',
+        'grid flex-shrink-0 place-items-center rounded-button border transition-colors',
+        // square control that matches RSVP height: 40px compact / 44px standard
+        sm ? 'h-10 w-10' : 'h-11 w-11',
         saved
           ? 'border-primary bg-primary-light text-primary'
           : 'border-border-light bg-white text-text-secondary hover:border-primary hover:text-primary',
@@ -152,9 +158,10 @@ export function FollowBtn({
   return (
     <button
       onClick={onToggle}
+      aria-pressed={following}
       className={cn(
-        'rounded-button font-semibold transition-colors',
-        sm ? 'px-4 py-2 text-sm' : 'px-5 py-2.5 text-sm',
+        'inline-flex items-center justify-center rounded-button font-semibold transition-colors',
+        sm ? 'h-9 min-w-[84px] px-4 text-sm' : 'h-11 min-w-[100px] px-5 text-sm',
         following
           ? 'border border-border-light bg-white text-text-secondary hover:border-text-muted'
           : 'bg-primary text-white hover:opacity-90',
@@ -166,13 +173,15 @@ export function FollowBtn({
 }
 
 /* --------------------------------------------------------------------------
-   AIChip — violet pill, Sparkles icon + truncated rationale (max-w 168px)
+   AIChip — violet recommendation pill, Sparkles icon + short intentional
+   label. Text is kept short upstream (recommendationLabel) so it never
+   truncates or overflows; whitespace-nowrap keeps it on a single line.
 -------------------------------------------------------------------------- */
 export function AIChip({ text }: { text: string }) {
   return (
-    <span className="inline-flex max-w-[168px] items-center gap-1 rounded-pill bg-primary/90 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+    <span className="inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-pill bg-primary px-2.5 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
       <Sparkles size={12} className="flex-shrink-0" />
-      <span className="truncate">{text}</span>
+      <span>{text}</span>
     </span>
   )
 }

@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom'
 import { Calendar, MapPin } from 'lucide-react'
 import type { Event } from '../lib/types'
-import { CATEGORY_COLOR, cn } from '../lib/utils'
+import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
 import { useApp } from '../context/AppContext'
+import { EventImage } from './EventImage'
 import {
   AIChip,
   AlmostFullBadge,
@@ -16,7 +17,7 @@ import {
 function CategoryBadge({ category }: { category: Event['category'] }) {
   return (
     <span
-      className="rounded-pill px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm"
+      className="rounded-pill px-2.5 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur-sm"
       style={{ backgroundColor: CATEGORY_COLOR[category] }}
     >
       {category}
@@ -44,22 +45,28 @@ export function EventCard({
   }
 
   return (
-    <article
-      className="group flex flex-col overflow-hidden rounded-card border border-border-light bg-card-bg shadow-card transition-shadow hover:shadow-card-hover"
-    >
-      {/* Poster */}
-      <div className="relative h-48 cursor-pointer overflow-hidden" onClick={go}>
-        <img
-          src={event.poster}
-          alt={event.title}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10" />
+    <article className="group flex h-full flex-col overflow-hidden rounded-card border border-border-light bg-card-bg shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover">
+      {/* Poster — fixed 180px height, consistent across every card */}
+      <button
+        type="button"
+        onClick={go}
+        aria-label={`View ${event.title}`}
+        className="relative block h-[180px] w-full cursor-pointer overflow-hidden"
+      >
+        <div className="absolute inset-0 transition-transform duration-500 group-hover:scale-105">
+          <EventImage
+            src={event.poster}
+            alt={event.title}
+            category={event.category}
+            title={event.title}
+          />
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/10" />
 
         {/* top row: AIChip|CategoryBadge (left) + AlmostFullBadge (right) */}
-        <div className="absolute inset-x-3 top-3 flex items-start justify-between gap-2">
+        <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
           {showRationale && event.rationale ? (
-            <AIChip text={event.rationale} />
+            <AIChip text={recommendationLabel(event.rationale, event.category)} />
           ) : (
             <CategoryBadge category={event.category} />
           )}
@@ -67,16 +74,16 @@ export function EventCard({
         </div>
 
         {/* price bottom-left */}
-        <span className="absolute bottom-3 left-3 rounded-pill bg-white/95 px-2.5 py-1 text-xs font-bold text-ink">
+        <span className="absolute bottom-3 left-3 rounded-pill bg-white/95 px-2.5 py-1 text-xs font-bold text-ink shadow-sm">
           {event.isFree ? 'Free' : event.price}
         </span>
-      </div>
+      </button>
 
       {/* Info */}
       <div className="flex flex-1 flex-col p-4">
         <h3
           onClick={go}
-          className="cursor-pointer font-display text-base font-bold leading-snug text-[#111] line-clamp-2"
+          className="min-h-[42px] cursor-pointer font-display text-base font-bold leading-snug text-ink line-clamp-2"
         >
           {event.title}
         </h3>
@@ -87,35 +94,39 @@ export function EventCard({
             <img
               src={event.organizer.avatar}
               alt=""
-              className="h-5 w-5 rounded-full object-cover"
+              width={20}
+              height={20}
+              className="h-5 w-5 flex-shrink-0 rounded-full object-cover"
             />
-            <span className="text-xs text-text-secondary">{event.organizer.name}</span>
+            <span className="truncate text-[13px] font-medium text-text-secondary">
+              {event.organizer.name}
+            </span>
             {event.organizer.verified && <VerifiedBadge size={14} />}
           </div>
         )}
 
         {/* date + venue row */}
         <div className="mt-3 space-y-1.5">
-          <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-            <Calendar size={13} className="flex-shrink-0" />
+          <div className="flex items-center gap-1.5 text-[13px] text-text-secondary">
+            <Calendar size={13} className="flex-shrink-0 text-text-muted" />
             <span className="truncate">{event.date}</span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-            <MapPin size={13} className="flex-shrink-0" />
+          <div className="flex items-center gap-1.5 text-[13px] text-text-secondary">
+            <MapPin size={13} className="flex-shrink-0 text-text-muted" />
             <span className="truncate">
               {event.venueName} · {event.city}
             </span>
           </div>
         </div>
 
-        {/* actions */}
-        <div className="mt-4 flex items-center justify-between gap-2 border-t border-border-light pt-3">
+        {/* actions — pinned to the bottom so every footer aligns */}
+        <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-light pt-3">
           <GoingStack
             count={event.isSports ? event.playersSignedUp ?? 0 : event.goingCount}
             avatars={event.goingAvatars}
           />
-          <div className="flex items-center gap-2">
-            <SaveBtn saved={saved} onToggle={() => toggleSaved(event.id)} />
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <SaveBtn sm saved={saved} onToggle={() => toggleSaved(event.id)} />
             <RSVPBtn
               sm
               variant={going ? 'outline' : 'filled'}
@@ -130,20 +141,19 @@ export function EventCard({
   )
 }
 
-/* Width wrapper for the flex-wrap grid — Figma gridSystem cardWidths. */
-export function EventGrid({ events, showRationale }: { events: Event[]; showRationale?: boolean }) {
+/* Responsive event grid — 1 col mobile · 2 tablet · 3 medium desktop · 4 large.
+   Uses CSS grid so every cell is equal width with consistent gaps. */
+export function EventGrid({
+  events,
+  showRationale,
+}: {
+  events: Event[]
+  showRationale?: boolean
+}) {
   return (
-    <div className="flex flex-wrap justify-center gap-4 xl:justify-start">
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {events.map((e) => (
-        <div
-          key={e.id}
-          className={cn(
-            'w-full sm:w-[calc(50%-8px)]',
-            'lg:w-[calc(33.333%-11px)] xl:w-[calc(25%-12px)]',
-          )}
-        >
-          <EventCard event={e} showRationale={showRationale} />
-        </div>
+        <EventCard key={e.id} event={e} showRationale={showRationale} />
       ))}
     </div>
   )

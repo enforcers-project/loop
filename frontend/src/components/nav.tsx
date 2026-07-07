@@ -27,59 +27,55 @@ export function TopNav() {
   const { isLoggedIn, user, role } = useApp()
   const canCreate = role === 'organizer'
 
+  const linkClass = (active: boolean) =>
+    cn(
+      'rounded-button px-4 py-2 text-sm transition-colors',
+      active
+        ? 'font-semibold text-primary'
+        : 'font-medium text-text-secondary hover:text-ink',
+    )
+
   return (
     <header className="sticky top-0 z-30 border-b border-border-light bg-white/95 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5">
-        <Link to={isLoggedIn ? '/feed' : '/'}>{LOGO}</Link>
+      <div className="loop-container flex h-16 items-center justify-between gap-4">
+        <Link to={isLoggedIn ? '/feed' : '/'} className="flex-shrink-0">
+          {LOGO}
+        </Link>
 
         {isLoggedIn && (
-          <nav className="hidden items-center gap-1 md:flex">
-            {NAV_LINKS.map((l) => {
-              const active = pathname.startsWith(l.to)
-              return (
-                <Link
-                  key={l.to}
-                  to={l.to}
-                  className={cn(
-                    'rounded-button px-4 py-2 text-sm font-medium transition-colors',
-                    active ? 'text-primary' : 'text-text-secondary hover:text-ink',
-                  )}
-                >
-                  {l.label}
-                </Link>
-              )
-            })}
+          <nav className="hidden items-center gap-2 md:flex">
+            {NAV_LINKS.map((l) => (
+              <Link key={l.to} to={l.to} className={linkClass(pathname.startsWith(l.to))}>
+                {l.label}
+              </Link>
+            ))}
             {canCreate && (
-              <Link
-                to="/create"
-                className={cn(
-                  'rounded-button px-4 py-2 text-sm font-medium transition-colors',
-                  pathname.startsWith('/create')
-                    ? 'text-primary'
-                    : 'text-text-secondary hover:text-ink',
-                )}
-              >
+              <Link to="/create" className={linkClass(pathname.startsWith('/create'))}>
                 Create
               </Link>
             )}
           </nav>
         )}
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-shrink-0 items-center gap-2">
           {isLoggedIn ? (
             <>
               <button
-                className="relative grid h-10 w-10 place-items-center rounded-button text-text-secondary hover:bg-surface"
+                className="relative grid h-10 w-10 place-items-center rounded-button text-text-secondary transition-colors hover:bg-surface hover:text-ink"
                 aria-label="Notifications"
               >
                 <Bell size={20} />
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent ring-2 ring-white" />
               </button>
-              <button onClick={() => navigate('/profile')} aria-label="Profile">
+              <button
+                onClick={() => navigate('/profile')}
+                aria-label="Your profile"
+                className="grid h-10 w-10 place-items-center rounded-full"
+              >
                 <img
                   src={user?.avatar}
                   alt=""
-                  className="h-9 w-9 rounded-full border border-border-light object-cover"
+                  className="h-9 w-9 rounded-full border border-border-light bg-surface object-cover"
                 />
               </button>
             </>
@@ -130,7 +126,7 @@ export function BottomBar() {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-border-light bg-white/95 px-2 backdrop-blur-md md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-border-light bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
       {tab('/feed', Home, 'For You')}
       {tab('/discover', Compass, 'Discover')}
       {canCreate ? (

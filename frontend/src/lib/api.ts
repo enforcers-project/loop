@@ -1,14 +1,7 @@
 // API client. Talks to the backend when reachable; falls back to the local
 // mock seed so the Figma UI always renders (the prototype was mock-driven).
 
-import type {
-  Category,
-  Event,
-  Interest,
-  CategoryDef,
-  Organizer,
-  Post,
-} from './types'
+import type { Category, Event, Interest, CategoryDef, Organizer, Post } from './types'
 import {
   EVENTS as MOCK_EVENTS,
   INTERESTS as MOCK_INTERESTS,

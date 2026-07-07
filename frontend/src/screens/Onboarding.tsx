@@ -6,7 +6,14 @@ import type { Interest } from '../lib/types'
 import { useApp } from '../context/AppContext'
 import { cn } from '../lib/utils'
 
-const CITIES = ['Oakland, CA', 'San Francisco, CA', 'Berkeley, CA', 'San Jose, CA', 'New York, NY', 'Atlanta, GA']
+const CITIES = [
+  'Oakland, CA',
+  'San Francisco, CA',
+  'Berkeley, CA',
+  'San Jose, CA',
+  'New York, NY',
+  'Atlanta, GA',
+]
 
 export function Onboarding() {
   const navigate = useNavigate()
@@ -24,7 +31,8 @@ export function Onboarding() {
   const toggle = (id: string) =>
     setPicked((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
 
@@ -53,9 +61,7 @@ export function Onboarding() {
 
       {step === 1 ? (
         <div className="flex flex-1 flex-col">
-          <h1 className="font-display text-3xl font-bold text-ink">
-            What are you into?
-          </h1>
+          <h1 className="font-display text-3xl font-bold text-ink">What are you into?</h1>
           <div className="mt-2 flex items-center gap-3">
             <p className="text-sm text-text-secondary">Pick at least 3 — we’ll tune your feed.</p>
             <span
@@ -156,7 +162,9 @@ export function Onboarding() {
               onClick={finish}
               className={cn(
                 'w-full rounded-button py-3.5 text-sm font-semibold transition-colors',
-                city ? 'bg-accent text-white active:scale-95' : 'cursor-not-allowed bg-surface text-text-muted',
+                city
+                  ? 'bg-accent text-white active:scale-95'
+                  : 'cursor-not-allowed bg-surface text-text-muted',
               )}
             >
               Finish — take me to my feed

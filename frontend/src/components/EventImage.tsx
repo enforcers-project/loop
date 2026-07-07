@@ -51,9 +51,7 @@ export function EventImage({
   iconSize?: number
   showLabel?: boolean
 }) {
-  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>(
-    src ? 'loading' : 'error',
-  )
+  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>(src ? 'loading' : 'error')
 
   const visual = category ? CATEGORY_VISUAL[category] : DEFAULT_VISUAL
   const { Icon } = visual

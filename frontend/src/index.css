@@ -162,12 +162,7 @@ a,
   }
 }
 .loop-skeleton {
-  background: linear-gradient(
-    90deg,
-    #efeff1 25%,
-    #f7f7f8 37%,
-    #efeff1 63%
-  );
+  background: linear-gradient(90deg, #efeff1 25%, #f7f7f8 37%, #efeff1 63%);
   background-size: 200% 100%;
   animation: loop-shimmer 1.4s ease-in-out infinite;
 }

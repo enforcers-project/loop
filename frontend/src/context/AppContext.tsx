@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  type ReactNode,
-} from 'react'
+import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import type { SelfUser } from '../lib/types'
 
 // Loop has two roles. Hosting pickup runs is an Organizer sub-capability
@@ -57,7 +51,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggle = (set: (fn: (s: Set<string>) => Set<string>) => void) => (id: string) =>
     set((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
 

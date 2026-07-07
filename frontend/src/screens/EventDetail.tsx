@@ -5,18 +5,22 @@ import { api } from '../lib/api'
 import type { Event } from '../lib/types'
 import { useApp } from '../context/AppContext'
 import { CATEGORY_COLOR } from '../lib/utils'
-import {
-  FollowBtn,
-  GoingStack,
-  RSVPBtn,
-  SaveBtn,
-  VerifiedBadge,
-} from '../components/primitives'
+import { FollowBtn, GoingStack, RSVPBtn, SaveBtn, VerifiedBadge } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
 
 const DEMO_COMMENTS = [
-  { id: 'c1', author: 'dami_o', avatar: 'https://i.pravatar.cc/150?img=5', text: 'This is going to be huge 🔥 who’s coming?' },
-  { id: 'c2', author: 'bay_kt', avatar: 'https://i.pravatar.cc/150?img=8', text: 'Bought my ticket, see you there!' },
+  {
+    id: 'c1',
+    author: 'dami_o',
+    avatar: 'https://i.pravatar.cc/150?img=5',
+    text: 'This is going to be huge 🔥 who’s coming?',
+  },
+  {
+    id: 'c2',
+    author: 'bay_kt',
+    avatar: 'https://i.pravatar.cc/150?img=8',
+    text: 'Bought my ticket, see you there!',
+  },
 ]
 
 export function EventDetail() {
@@ -121,9 +125,7 @@ export function EventDetail() {
               {/* GoingStack card */}
               <div className="mt-6 flex items-center justify-between rounded-card bg-white/10 p-4 backdrop-blur-sm">
                 <GoingStack count={event.goingCount} avatars={event.goingAvatars} size="md" />
-                <span className="text-xl font-bold">
-                  {event.isFree ? 'Free' : event.price}
-                </span>
+                <span className="text-xl font-bold">{event.isFree ? 'Free' : event.price}</span>
               </div>
 
               {/* CTAs */}

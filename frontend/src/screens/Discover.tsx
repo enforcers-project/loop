@@ -22,8 +22,7 @@ export function Discover() {
     api.events().then(setEvents)
   }, [])
 
-  const toggle = (k: keyof Filters) =>
-    setFilters((f) => ({ ...f, [k]: !f[k] }))
+  const toggle = (k: keyof Filters) => setFilters((f) => ({ ...f, [k]: !f[k] }))
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
@@ -51,7 +50,11 @@ export function Discover() {
 
   return (
     <div className="loop-container pb-24 pt-4 md:pb-12">
-      <SearchBar value={query} onChange={setQuery} placeholder="Search events, venues, organizers…" />
+      <SearchBar
+        value={query}
+        onChange={setQuery}
+        placeholder="Search events, venues, organizers…"
+      />
 
       {/* filters — first row categories, second row quick filters */}
       <div className="mt-4">

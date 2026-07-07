@@ -48,8 +48,7 @@ export function UserProfile() {
   const { user, role, isHost, interests, savedIds, goingIds } = useApp()
   // Two logic roles + the host capability drive the display RoleBadge:
   // an organizer-host shows the green "Sports Host" tint (per planning §5).
-  const roleLabel =
-    role === 'organizer' ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
+  const roleLabel = role === 'organizer' ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
   const [tab, setTab] = useState<Tab>('Saved')
   const [events, setEvents] = useState<Event[]>([])
   const [allInterests, setAllInterests] = useState<Interest[]>([])

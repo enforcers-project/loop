@@ -4,14 +4,7 @@ import type { Event } from '../lib/types'
 import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
 import { useApp } from '../context/AppContext'
 import { EventImage } from './EventImage'
-import {
-  AIChip,
-  AlmostFullBadge,
-  GoingStack,
-  RSVPBtn,
-  SaveBtn,
-  VerifiedBadge,
-} from './primitives'
+import { AIChip, AlmostFullBadge, GoingStack, RSVPBtn, SaveBtn, VerifiedBadge } from './primitives'
 
 /* CategoryBadge — the top-left tint pill when there's no AI rationale. */
 function CategoryBadge({ category }: { category: Event['category'] }) {
@@ -122,7 +115,7 @@ export function EventCard({
         {/* actions — pinned to the bottom so every footer aligns */}
         <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-light pt-3">
           <GoingStack
-            count={event.isSports ? event.playersSignedUp ?? 0 : event.goingCount}
+            count={event.isSports ? (event.playersSignedUp ?? 0) : event.goingCount}
             avatars={event.goingAvatars}
           />
           <div className="flex flex-shrink-0 items-center gap-2">
@@ -143,13 +136,7 @@ export function EventCard({
 
 /* Responsive event grid — 1 col mobile · 2 tablet · 3 medium desktop · 4 large.
    Uses CSS grid so every cell is equal width with consistent gaps. */
-export function EventGrid({
-  events,
-  showRationale,
-}: {
-  events: Event[]
-  showRationale?: boolean
-}) {
+export function EventGrid({ events, showRationale }: { events: Event[]; showRationale?: boolean }) {
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {events.map((e) => (

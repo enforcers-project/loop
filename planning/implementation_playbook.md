@@ -62,10 +62,10 @@ You (humans) do these once; they're not Claude prompts (they need your accounts/
 **Goal:** `backend/` and `frontend/` skeletons, shared tooling, CI.
 ```
 Read planning/project_plan.md (stack note at the top of §6, and §8 for the frontend stack).
-Scaffold a two-folder repo: backend/ (Node + TypeScript + Fastify or Express + Prisma) and
+Scaffold a two-folder repo: backend/ (Node + JavaScript + Fastify or Express + Prisma) and
 frontend/ (React 18 + Vite + Tailwind CSS v4, fonts Space Grotesk + Inter, lucide-react icons).
 Add: root README with run instructions, .gitignore, .env.example in both folders, ESLint+Prettier,
-and a GitHub Actions workflow that lints + type-checks + builds both folders on PR.
+and a GitHub Actions workflow that lints + format-checks + builds both folders on PR.
 Don't add app features yet. Tell me how to run each folder.
 ```
 **Verify:** `npm run dev` starts an empty backend on a port and an empty React app; CI passes on a PR.
@@ -108,7 +108,7 @@ Don't seed data yet. Show me `prisma migrate dev` output.
 ```
 Read planning/project_plan.md §6 (categories, interests, events, sports_details, sports_positions)
 and the spec_audit_recommendation_search.md "seed 40–60 native demo events" item.
-Write backend/prisma/seed.ts that inserts:
+Write backend/prisma/seed.js that inserts:
 - the 6 categories + an `other` catch-all with color_hex (give `other` a neutral gray), from the Figma tokens
 - 24 interests, each with a NON-NULL category_id
 - 40–60 native events across all 6 categories in ONE demo city (real lat/lng), INCLUDING several

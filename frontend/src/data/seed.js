@@ -1,71 +1,8 @@
-// Loop demo seed data — the in-memory catalog served by the API.
-// Categories, interests, avatars, and a native demo event catalog.
-
-export type Category = 'Music' | 'Nightlife' | 'Sports' | 'Networking' | 'Food' | 'Campus'
-
-export interface Organizer {
-  id: string
-  name: string
-  handle: string
-  avatar: string
-  verified: boolean
-  role: 'Attendee' | 'Organizer' | 'Promoter' | 'Sports Host'
-  followers: number
-  bio: string
-  cover: string
-}
-
-export interface SportsPosition {
-  label: string
-  capacity: number
-  filled: number
-}
-
-export interface RosterPlayer {
-  name: string
-  avatar: string
-  position: string
-  skill: 'Beginner' | 'Intermediate' | 'Advanced'
-  status: 'claimed' | 'waitlist'
-}
-
-export interface Event {
-  id: string
-  title: string
-  category: Category
-  poster: string
-  price: string // e.g. "Free", "$25", "$10"
-  isFree: boolean
-  date: string // display string, e.g. "Sat, Jul 12 · 9:00 PM"
-  isoDate: string
-  venueName: string
-  city: string
-  lat: number
-  lng: number
-  organizerId: string
-  description: string
-  tags: string[]
-  goingCount: number
-  goingAvatars: string[]
-  capacity: number
-  rsvpCount: number
-  saveCount: number
-  almostFull: boolean
-  rationale?: string // "Because you ..." AI chip
-  ageRestriction?: string // e.g. "21+"
-  // sports-only
-  isSports?: boolean
-  sport?: string
-  playersNeeded?: number
-  playersSignedUp?: number
-  skillLevel?: string
-  indoor?: boolean
-  positions?: SportsPosition[]
-  roster?: RosterPlayer[]
-}
+// Loop demo seed data — the in-memory catalog (frontend mock fallback mirror
+// of backend/src/data/seed.ts). Types live in ../lib/types.ts.
 
 /** Figma categoryColors */
-export const CATEGORIES: { name: Category; color: string }[] = [
+export const CATEGORIES = [
   { name: 'Music', color: '#6D5EFC' },
   { name: 'Nightlife', color: '#FF2E74' },
   { name: 'Sports', color: '#16C784' },
@@ -75,7 +12,7 @@ export const CATEGORIES: { name: Category; color: string }[] = [
 ]
 
 /** 24 interest chips for onboarding (Figma: INTERESTS 24 items) */
-export const INTERESTS: { id: string; label: string; category: Category }[] = [
+export const INTERESTS = [
   { id: 'afrobeats', label: 'Afrobeats', category: 'Music' },
   { id: 'hiphop', label: 'Hip-Hop', category: 'Music' },
   { id: 'house', label: 'House / EDM', category: 'Music' },
@@ -102,7 +39,7 @@ export const INTERESTS: { id: string; label: string; category: Category }[] = [
   { id: 'study-jams', label: 'Study Jams', category: 'Campus' },
 ]
 
-export const AVATARS: string[] = [
+export const AVATARS = [
   'https://i.pravatar.cc/150?img=1',
   'https://i.pravatar.cc/150?img=5',
   'https://i.pravatar.cc/150?img=8',
@@ -117,7 +54,7 @@ export const AVATARS: string[] = [
   'https://i.pravatar.cc/150?img=60',
 ]
 
-export const ORGANIZERS: Organizer[] = [
+export const ORGANIZERS = [
   {
     id: 'org-lagos',
     name: 'Lagos Nights',
@@ -175,9 +112,9 @@ export const ORGANIZERS: Organizer[] = [
   },
 ]
 
-const IMG = (id: string, w = 800) => `https://images.unsplash.com/${id}?w=${w}&q=80`
+const IMG = (id, w = 800) => `https://images.unsplash.com/${id}?w=${w}&q=80`
 
-export const EVENTS: Event[] = [
+export const EVENTS = [
   {
     id: 'ev-afrobeats',
     title: 'Afro Nation Rooftop: Amapiano Edition',
@@ -551,18 +488,7 @@ export const EVENTS: Event[] = [
 ]
 
 /** Instagram-style social posts derived from events (Figma SocialFeed). */
-export interface Post {
-  id: string
-  organizerId: string
-  eventId: string
-  image: string
-  caption: string
-  likes: number
-  comments: { id: string; author: string; text: string }[]
-  timeAgo: string
-}
-
-export const POSTS: Post[] = [
+export const POSTS = [
   {
     id: 'post-1',
     organizerId: 'org-lagos',

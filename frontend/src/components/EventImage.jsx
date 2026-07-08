@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useState } from 'react'
 import {
   Music,
   Moon,
@@ -7,15 +7,13 @@ import {
   UtensilsCrossed,
   GraduationCap,
   CalendarDays,
-  type LucideIcon,
 } from 'lucide-react'
-import type { Category } from '../lib/types'
 import { cn } from '../lib/utils'
 
 /* Per-category brand gradient + icon for the polished image fallback. Each
    gradient stays anchored in Loop's purple/pink palette but shifts toward the
    category tint so a fallback still reads as the right kind of event. */
-const CATEGORY_VISUAL: Record<Category, { gradient: string; Icon: LucideIcon }> = {
+const CATEGORY_VISUAL = {
   Music: { gradient: 'linear-gradient(135deg, #6D5EFC 0%, #A855F7 100%)', Icon: Music },
   Nightlife: { gradient: 'linear-gradient(135deg, #FF2E74 0%, #6D5EFC 100%)', Icon: Moon },
   Sports: { gradient: 'linear-gradient(135deg, #16C784 0%, #6D5EFC 100%)', Icon: Trophy },
@@ -42,20 +40,12 @@ export function EventImage({
   className,
   iconSize = 40,
   showLabel = true,
-}: {
-  src?: string | null
-  alt?: string
-  category?: Category
-  title?: string
-  className?: string
-  iconSize?: number
-  showLabel?: boolean
 }) {
-  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>(src ? 'loading' : 'error')
+  const [status, setStatus] = useState(src ? 'loading' : 'error')
 
   const visual = category ? CATEGORY_VISUAL[category] : DEFAULT_VISUAL
   const { Icon } = visual
-  const fallbackStyle: CSSProperties = { backgroundImage: visual.gradient }
+  const fallbackStyle = { backgroundImage: visual.gradient }
 
   return (
     <div className="absolute inset-0 h-full w-full overflow-hidden bg-surface">

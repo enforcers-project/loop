@@ -1,12 +1,11 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Sparkles, Bookmark, Eye, EyeOff, Check } from 'lucide-react'
 import { cn, ROLE_STYLE } from '../lib/utils'
-import type { Role } from '../lib/types'
 
 /* --------------------------------------------------------------------------
    FormField — label (13px Inter 500 #6B6B76) above child
 -------------------------------------------------------------------------- */
-export function FormField({ label, children }: { label: string; children: ReactNode }) {
+export function FormField({ label, children }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">{label}</span>
@@ -22,7 +21,7 @@ export const inputClass =
 /* --------------------------------------------------------------------------
    PasswordField — text input with show/hide eye toggle
 -------------------------------------------------------------------------- */
-export function PasswordField({ placeholder = '••••••••' }: { placeholder?: string }) {
+export function PasswordField({ placeholder = '••••••••' }) {
   const [show, setShow] = useState(false)
   return (
     <div className="relative">
@@ -46,7 +45,7 @@ export function PasswordField({ placeholder = '••••••••' }: { pl
 /* --------------------------------------------------------------------------
    VerifiedBadge — 16px violet circle with white checkmark
 -------------------------------------------------------------------------- */
-export function VerifiedBadge({ size = 16 }: { size?: number }) {
+export function VerifiedBadge({ size = 16 }) {
   return (
     <span
       className="inline-flex items-center justify-center rounded-full bg-primary text-white"
@@ -61,7 +60,7 @@ export function VerifiedBadge({ size = 16 }: { size?: number }) {
 /* --------------------------------------------------------------------------
    RoleBadge — pill with role-specific tinted bg + text
 -------------------------------------------------------------------------- */
-export function RoleBadge({ role }: { role: Role }) {
+export function RoleBadge({ role }) {
   const s = ROLE_STYLE[role]
   return (
     <span
@@ -76,17 +75,7 @@ export function RoleBadge({ role }: { role: Role }) {
 /* --------------------------------------------------------------------------
    RSVPBtn — hot-pink CTA button
 -------------------------------------------------------------------------- */
-export function RSVPBtn({
-  variant = 'filled',
-  sm = false,
-  children = 'RSVP',
-  onClick,
-}: {
-  variant?: 'filled' | 'outline'
-  sm?: boolean
-  children?: ReactNode
-  onClick?: () => void
-}) {
+export function RSVPBtn({ variant = 'filled', sm = false, children = 'RSVP', onClick }) {
   return (
     <button
       onClick={onClick}
@@ -107,15 +96,7 @@ export function RSVPBtn({
 /* --------------------------------------------------------------------------
    SaveBtn — bookmark toggle, filled violet when saved
 -------------------------------------------------------------------------- */
-export function SaveBtn({
-  saved,
-  onToggle,
-  sm = false,
-}: {
-  saved: boolean
-  onToggle: () => void
-  sm?: boolean
-}) {
+export function SaveBtn({ saved, onToggle, sm = false }) {
   return (
     <button
       onClick={onToggle}
@@ -138,15 +119,7 @@ export function SaveBtn({
 /* --------------------------------------------------------------------------
    FollowBtn — violet fill when not following, bordered gray when following
 -------------------------------------------------------------------------- */
-export function FollowBtn({
-  following = false,
-  onToggle,
-  sm = false,
-}: {
-  following?: boolean
-  onToggle?: () => void
-  sm?: boolean
-}) {
+export function FollowBtn({ following = false, onToggle, sm = false }) {
   return (
     <button
       onClick={onToggle}
@@ -169,7 +142,7 @@ export function FollowBtn({
    label. Text is kept short upstream (recommendationLabel) so it never
    truncates or overflows; whitespace-nowrap keeps it on a single line.
 -------------------------------------------------------------------------- */
-export function AIChip({ text }: { text: string }) {
+export function AIChip({ text }) {
   return (
     <span className="inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-pill bg-primary px-2.5 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur-sm">
       <Sparkles size={12} className="flex-shrink-0" />
@@ -181,7 +154,7 @@ export function AIChip({ text }: { text: string }) {
 /* --------------------------------------------------------------------------
    AlmostFullBadge — hot-pink pill, flex-shrink-0, whitespace-nowrap
 -------------------------------------------------------------------------- */
-export function AlmostFullBadge({ label = 'Almost full' }: { label?: string }) {
+export function AlmostFullBadge({ label = 'Almost full' }) {
   return (
     <span className="flex-shrink-0 whitespace-nowrap rounded-pill bg-accent px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
       {label}
@@ -192,15 +165,7 @@ export function AlmostFullBadge({ label = 'Almost full' }: { label?: string }) {
 /* --------------------------------------------------------------------------
    GoingStack — 3 overlapping avatars + "+N going"
 -------------------------------------------------------------------------- */
-export function GoingStack({
-  count,
-  avatars,
-  size = 'sm',
-}: {
-  count: number
-  avatars: string[]
-  size?: 'sm' | 'md'
-}) {
+export function GoingStack({ count, avatars, size = 'sm' }) {
   const px = size === 'sm' ? 24 : 32
   const shown = avatars.slice(0, 3)
   const extra = Math.max(0, count - shown.length)

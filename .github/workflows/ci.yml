@@ -39,11 +39,13 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Frontend is plain JS/JSX and has no typecheck script; skip where absent.
       - name: Type-check
-        run: npm run typecheck
+        run: npm run typecheck --if-present
 
       - name: Format check
         run: npm run format:check
 
+      # Frontend bundles with Vite; the plain-JS backend has no build step.
       - name: Build
-        run: npm run build
+        run: npm run build --if-present

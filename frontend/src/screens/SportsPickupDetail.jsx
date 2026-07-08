@@ -2,17 +2,16 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Calendar, MapPin, Users } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Event, RosterPlayer } from '../lib/types'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
 import { VerifiedBadge } from '../components/primitives'
 
-const SKILL_STYLE: Record<RosterPlayer['skill'], { bg: string; text: string }> = {
+const SKILL_STYLE = {
   Beginner: { bg: '#F0EFFE', text: '#6D5EFC' },
   Intermediate: { bg: '#FFF3D6', text: '#B57900' },
   Advanced: { bg: '#DFF7EC', text: '#16C784' },
 }
 
-function SkillBadge({ skill }: { skill: RosterPlayer['skill'] }) {
+function SkillBadge({ skill }) {
   const s = SKILL_STYLE[skill]
   return (
     <span
@@ -27,8 +26,8 @@ function SkillBadge({ skill }: { skill: RosterPlayer['skill'] }) {
 export function SportsPickupDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [event, setEvent] = useState<Event | null>(null)
-  const [position, setPosition] = useState<string | null>(null)
+  const [event, setEvent] = useState(null)
+  const [position, setPosition] = useState(null)
   const [joined, setJoined] = useState(false)
 
   useEffect(() => {

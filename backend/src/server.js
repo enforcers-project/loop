@@ -1,14 +1,6 @@
 import express from 'express'
 import cors from 'cors'
-import {
-  EVENTS,
-  ORGANIZERS,
-  CATEGORIES,
-  INTERESTS,
-  AVATARS,
-  POSTS,
-  type Event,
-} from './data/seed.js'
+import { EVENTS, ORGANIZERS, CATEGORIES, INTERESTS, AVATARS, POSTS } from './data/seed.js'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3000
@@ -17,15 +9,15 @@ app.use(cors({ origin: true, credentials: true }))
 app.use(express.json())
 
 // Standard error/response envelope (planning §7 Conventions).
-function ok(res: express.Response, data: unknown) {
+function ok(res, data) {
   res.json({ data })
 }
-function fail(res: express.Response, status: number, message: string) {
+function fail(res, status, message) {
   res.status(status).json({ error: { message } })
 }
 
 /** Join an event with its organizer for the EventCard shape the frontend expects. */
-function withOrganizer(ev: Event) {
+function withOrganizer(ev) {
   const organizer = ORGANIZERS.find((o) => o.id === ev.organizerId) ?? null
   return { ...ev, organizer }
 }
@@ -96,7 +88,7 @@ app.get('/api/events/:id/related', (req, res) => {
 // --- Recommendations (basic fallback path, planning §9.1 #1–2) --------------
 // POST /api/recommendations { interests?: string[] }
 app.post('/api/recommendations', (req, res) => {
-  const interests: string[] = Array.isArray(req.body?.interests) ? req.body.interests : []
+  const interests = Array.isArray(req.body?.interests) ? req.body.interests : []
   const interestCats = new Set(
     INTERESTS.filter((i) => interests.includes(i.id)).map((i) => i.category),
   )

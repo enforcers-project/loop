@@ -1,6 +1,5 @@
 import { Mic, MapPin, Search } from 'lucide-react'
 import { cn } from '../lib/utils'
-import type { Category } from '../lib/types'
 
 /* Single selected-state standard across the app: filled #6D5EFC + white text. */
 const pillBase =
@@ -11,23 +10,9 @@ const pillUnselected = 'bg-white text-text-secondary border-border-light hover:b
 /* --------------------------------------------------------------------------
    CatRow — horizontal scrollable category chip row
 -------------------------------------------------------------------------- */
-const CATS: (Category | 'All')[] = [
-  'All',
-  'Music',
-  'Nightlife',
-  'Sports',
-  'Networking',
-  'Food',
-  'Campus',
-]
+const CATS = ['All', 'Music', 'Nightlife', 'Sports', 'Networking', 'Food', 'Campus']
 
-export function CatRow({
-  active,
-  onChange,
-}: {
-  active: Category | 'All'
-  onChange: (c: Category | 'All') => void
-}) {
+export function CatRow({ active, onChange }) {
   return (
     <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
       {CATS.map((c) => (
@@ -47,14 +32,7 @@ export function CatRow({
 /* --------------------------------------------------------------------------
    FilterBar — horizontal scrollable filter pills (multi-select)
 -------------------------------------------------------------------------- */
-export interface Filters {
-  free: boolean
-  today: boolean
-  weekend: boolean
-  sports: boolean
-  nearby: boolean
-}
-const FILTER_DEFS: { key: keyof Filters; label: string }[] = [
+const FILTER_DEFS = [
   { key: 'free', label: 'Free' },
   { key: 'today', label: 'Today' },
   { key: 'weekend', label: 'This weekend' },
@@ -62,13 +40,7 @@ const FILTER_DEFS: { key: keyof Filters; label: string }[] = [
   { key: 'nearby', label: 'Nearby' },
 ]
 
-export function FilterBar({
-  filters,
-  onToggle,
-}: {
-  filters: Filters
-  onToggle: (k: keyof Filters) => void
-}) {
+export function FilterBar({ filters, onToggle }) {
   return (
     <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
       {FILTER_DEFS.map((f) => (
@@ -96,14 +68,6 @@ export function SearchBar({
   showLocation = true,
   city = 'Oakland',
   placeholder = "Try 'free Afrobeats party this weekend'",
-}: {
-  value: string
-  onChange: (v: string) => void
-  onSubmit?: () => void
-  showMic?: boolean
-  showLocation?: boolean
-  city?: string
-  placeholder?: string
 }) {
   return (
     <div className="flex h-[52px] items-center gap-2 rounded-input border border-border-light bg-white px-4 shadow-card transition-shadow focus-within:border-primary focus-within:shadow-card-hover focus-within:ring-2 focus-within:ring-primary/15">

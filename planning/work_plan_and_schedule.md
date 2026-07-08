@@ -61,7 +61,7 @@ Lane A/B are backend-heavy (that's where the unbuilt work is); Lane C is mostly 
 
 | Issue | Title | Owner |
 |---|---|---|
-| #1 | Repo/CI finalize + app scaffold (lint/typecheck/build on PR) | **C** |
+| #1 | Repo/CI finalize + app scaffold (lint/format/build on PR) | **C** |
 | #2 | **Prisma schema + migrations for all §6 tables/enums** + pgvector/citext extensions, `vector(384)`, HNSW index, generated `search_document`, capacity trigger | **A (lead) + B (pair on vector/index/raw-SQL parts)** |
 | #3 | Seed 6 categories + 24 interests (Figma tokens, `interests.category_id` NOT NULL) | **B** |
 | #4 | Seed 40–60 native demo events incl. pickup runs (guarantees a non-empty feed) | **B** |

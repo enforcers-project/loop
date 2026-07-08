@@ -42,7 +42,7 @@ You (humans) do these once; they're not Claude prompts (they need your accounts/
   - SeatGeek client id/secret
   - Google Maps Platform key (Places + Maps JS)
   - Hosted embeddings/LLM key (e.g. OpenAI/Anthropic) — **backend only**
-- [ ] **Decide the embedding model** now so the `vector(1536)` placeholder gets pinned (e.g. `text-embedding-3-small` = 1536; a local MiniLM = 384). Everything vector-related uses this one number.
+- [x] **Embedding model decided → DIM pinned to `vector(384)`** (a MiniLM-class local model, e.g. `all-MiniLM-L6-v2`; chosen over `text-embedding-3-small` = 1536 — see `project_plan.md` §10). Everything vector-related uses this one number: `384`.
 
 > **Prompt to help scaffold the GitHub board/issues** (optional, uses the `gh` CLI):
 > ```
@@ -90,10 +90,10 @@ Read planning/project_plan.md §6 (the whole data model — every table, enum, c
 exactly, then generate the initial migration. Bake in the applied audit fixes:
 - interests.category_id is NOT NULL
 - drop comments.like_count
-- event_embeddings/user_preference_vectors: one active row per event/user (PK on the id), vector(‹DIM›)
+- event_embeddings/user_preference_vectors: one active row per event/user (PK on the id), vector(384)
 - user_sessions.id is a plain uuid PK that can accept a client-supplied id (no forced default on insert path)
 - all the partial unique indexes + the comments XOR check + the events UNIQUE(source, external_id)
-- pin vector(‹DIM›) to ‹the model we chose in Phase 0›
+- vector(384) is pinned (Phase 0 / Sprint 0 decision) — a MiniLM-class local model, e.g. `all-MiniLM-L6-v2`; use 384 for all three vector columns and their HNSW indexes
 Use pgvector's Unsupported type or the prisma pgvector approach for the vector columns; add the
 HNSW/IVFFlat index and the generated search_document tsvector via a raw-SQL migration step.
 Note which constraints (capacity trigger, generated tsvector, Σ position.capacity = players_needed)

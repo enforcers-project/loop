@@ -1,0 +1,39 @@
+# Loop local dev database — Postgres 16 with pgvector.
+# Brings up a single Postgres container the backend connects to via DATABASE_URL.
+#
+#   docker compose up -d        # start in the background
+#   docker compose down         # stop (keeps data)
+#   docker compose down -v      # stop AND wipe the data volume (fresh DB)
+#
+# The pgvector/pgvector image is stock Postgres 16 with the `vector` extension
+# already compiled in. The other extensions we need (citext, pg_trgm, cube,
+# earthdistance) ship with Postgres itself — the init script below enables them.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: loop-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: loop
+      POSTGRES_PASSWORD: loop
+      POSTGRES_DB: loop
+    ports:
+      # host:container — connect from the host (and Prisma) on localhost:5433.
+      # Host port is 5433 (not 5432) because a native PostgreSQL 18 already owns
+      # 5432 on this machine. Inside the container Postgres still runs on 5432.
+      - "5433:5432"
+    volumes:
+      # Named volume = data survives `docker compose down` (not `down -v`).
+      - loop_pgdata:/var/lib/postgresql/data
+      # Anything in /docker-entrypoint-initdb.d runs ONCE, only when the data
+      # volume is first created (i.e. on a fresh DB). Enables our extensions.
+      - ./backend/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loop -d loop"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  loop_pgdata:

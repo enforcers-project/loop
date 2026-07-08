@@ -1,7 +1,6 @@
 // API client. Talks to the backend when reachable; falls back to the local
 // mock seed so the Figma UI always renders (the prototype was mock-driven).
 
-import type { Category, Event, Interest, CategoryDef, Organizer, Post } from './types'
 import {
   EVENTS as MOCK_EVENTS,
   INTERESTS as MOCK_INTERESTS,
@@ -10,23 +9,23 @@ import {
   POSTS as MOCK_POSTS,
 } from '../data/seed'
 
-const withOrganizer = (e: Event): Event => ({
+const withOrganizer = (e) => ({
   ...e,
   organizer: MOCK_ORGANIZERS.find((o) => o.id === e.organizerId) ?? null,
 })
 
-async function get<T>(path: string, fallback: () => T): Promise<T> {
+async function get(path, fallback) {
   try {
     const res = await fetch(`/api${path}`, { credentials: 'include' })
     if (!res.ok) throw new Error(String(res.status))
     const json = await res.json()
-    return json.data as T
+    return json.data
   } catch {
     return fallback()
   }
 }
 
-async function post<T>(path: string, body: unknown, fallback: () => T): Promise<T> {
+async function post(path, body, fallback) {
   try {
     const res = await fetch(`/api${path}`, {
       method: 'POST',
@@ -36,21 +35,13 @@ async function post<T>(path: string, body: unknown, fallback: () => T): Promise<
     })
     if (!res.ok) throw new Error(String(res.status))
     const json = await res.json()
-    return json.data as T
+    return json.data
   } catch {
     return fallback()
   }
 }
 
-export interface EventFilters {
-  category?: Category | 'All'
-  isFree?: boolean
-  isSports?: boolean
-  q?: string
-  sort?: 'popular' | 'date'
-}
-
-function mockFilter({ category, isFree, isSports, q }: EventFilters): Event[] {
+function mockFilter({ category, isFree, isSports, q }) {
   let list = MOCK_EVENTS.map(withOrganizer)
   if (category && category !== 'All') list = list.filter((e) => e.category === category)
   if (isFree) list = list.filter((e) => e.isFree)
@@ -70,10 +61,10 @@ function mockFilter({ category, isFree, isSports, q }: EventFilters): Event[] {
 }
 
 export const api = {
-  categories: () => get<CategoryDef[]>('/categories', () => MOCK_CATEGORIES),
-  interests: () => get<Interest[]>('/interests', () => MOCK_INTERESTS),
+  categories: () => get('/categories', () => MOCK_CATEGORIES),
+  interests: () => get('/interests', () => MOCK_INTERESTS),
 
-  events: (filters: EventFilters = {}) => {
+  events: (filters = {}) => {
     const qs = new URLSearchParams()
     if (filters.category && filters.category !== 'All') qs.set('category', filters.category)
     if (filters.isFree) qs.set('isFree', 'true')
@@ -81,17 +72,17 @@ export const api = {
     if (filters.q) qs.set('q', filters.q)
     if (filters.sort) qs.set('sort', filters.sort)
     const suffix = qs.toString() ? `?${qs}` : ''
-    return get<Event[]>(`/events${suffix}`, () => mockFilter(filters))
+    return get(`/events${suffix}`, () => mockFilter(filters))
   },
 
-  event: (id: string) =>
-    get<Event | null>(`/events/${id}`, () => {
+  event: (id) =>
+    get(`/events/${id}`, () => {
       const e = MOCK_EVENTS.find((x) => x.id === id)
       return e ? withOrganizer(e) : null
     }),
 
-  related: (id: string) =>
-    get<Event[]>(`/events/${id}/related`, () => {
+  related: (id) =>
+    get(`/events/${id}/related`, () => {
       const e = MOCK_EVENTS.find((x) => x.id === id)
       if (!e) return []
       const rel = MOCK_EVENTS.filter((x) => x.id !== id && x.category === e.category)
@@ -100,8 +91,8 @@ export const api = {
       )
     }),
 
-  recommendations: (interests: string[]) =>
-    post<Event[]>('/recommendations', { interests }, () => {
+  recommendations: (interests) =>
+    post('/recommendations', { interests }, () => {
       const cats = new Set(
         MOCK_INTERESTS.filter((i) => interests.includes(i.id)).map((i) => i.category),
       )
@@ -116,15 +107,15 @@ export const api = {
         )
     }),
 
-  organizer: (id: string) =>
-    get<Organizer | null>(`/organizers/${id}`, () => {
+  organizer: (id) =>
+    get(`/organizers/${id}`, () => {
       const o = MOCK_ORGANIZERS.find((x) => x.id === id)
       if (!o) return null
       return { ...o, events: MOCK_EVENTS.filter((e) => e.organizerId === id).map(withOrganizer) }
     }),
 
   posts: () =>
-    get<Post[]>('/posts', () =>
+    get('/posts', () =>
       MOCK_POSTS.map((p) => ({
         ...p,
         organizer: MOCK_ORGANIZERS.find((o) => o.id === p.organizerId) ?? null,
@@ -132,8 +123,8 @@ export const api = {
       })),
     ),
 
-  aiSearch: (q: string) =>
-    post<{ reply: string; events: Event[] }>('/ai/search', { q }, () => {
+  aiSearch: (q) =>
+    post('/ai/search', { q }, () => {
       let matches = MOCK_EVENTS.map(withOrganizer)
       const n = q.toLowerCase()
       if (n.includes('free')) matches = matches.filter((e) => e.isFree)

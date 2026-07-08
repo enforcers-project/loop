@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Calendar, Clock, MapPin, Users } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Event } from '../lib/types'
 import { useApp } from '../context/AppContext'
 import { CATEGORY_COLOR } from '../lib/utils'
 import { FollowBtn, GoingStack, RSVPBtn, SaveBtn, VerifiedBadge } from '../components/primitives'
@@ -27,8 +26,8 @@ export function EventDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { savedIds, goingIds, followingIds, toggleSaved, toggleGoing, toggleFollow } = useApp()
-  const [event, setEvent] = useState<Event | null>(null)
-  const [related, setRelated] = useState<Event[]>([])
+  const [event, setEvent] = useState(null)
+  const [related, setRelated] = useState([])
 
   useEffect(() => {
     if (!id) return
@@ -97,7 +96,7 @@ export function EventDetail() {
                   </Link>
                   <FollowBtn
                     following={following}
-                    onToggle={() => toggleFollow(event.organizer!.id)}
+                    onToggle={() => toggleFollow(event.organizer.id)}
                     sm
                   />
                 </div>
@@ -197,7 +196,7 @@ export function EventDetail() {
                   alt="Map"
                   className="h-full w-full object-cover"
                   onError={(e) => {
-                    ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                    e.currentTarget.style.display = 'none'
                   }}
                 />
                 <div className="absolute inset-0 grid place-items-center">

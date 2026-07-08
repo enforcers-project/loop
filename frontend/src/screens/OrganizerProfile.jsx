@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Organizer } from '../lib/types'
 import { useApp } from '../context/AppContext'
 import { cn, formatCount } from '../lib/utils'
 import { FollowBtn, RoleBadge, VerifiedBadge } from '../components/primitives'
@@ -12,8 +11,8 @@ export function OrganizerProfile() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { followingIds, toggleFollow } = useApp()
-  const [org, setOrg] = useState<Organizer | null>(null)
-  const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
+  const [org, setOrg] = useState(null)
+  const [tab, setTab] = useState('upcoming')
 
   useEffect(() => {
     if (id) api.organizer(id).then(setOrg)
@@ -71,7 +70,7 @@ export function OrganizerProfile() {
 
         {/* tabs */}
         <div className="mt-6 flex gap-6 border-b border-border-light">
-          {(['upcoming', 'past'] as const).map((t) => (
+          {['upcoming', 'past'].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Calendar, MapPin } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Category, Event } from '../lib/types'
 import { useApp } from '../context/AppContext'
 import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
 import { CatRow, SearchBar } from '../components/rows'
@@ -10,12 +9,11 @@ import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
 import { AIChip, AlmostFullBadge, GoingStack, RSVPBtn, SaveBtn } from '../components/primitives'
 
-const TABS = ['For You', 'Trending', 'Following'] as const
-type Tab = (typeof TABS)[number]
+const TABS = ['For You', 'Trending', 'Following']
 
 /* Featured hero card — controlled 320px (desktop) height with a smooth
    bottom-up overlay so the white text stays readable. */
-function FeaturedCard({ event }: { event: Event }) {
+function FeaturedCard({ event }) {
   const navigate = useNavigate()
   const { savedIds, goingIds, toggleSaved, toggleGoing } = useApp()
   return (
@@ -77,10 +75,10 @@ function FeaturedCard({ event }: { event: Event }) {
 
 export function ForYouFeed() {
   const { interests } = useApp()
-  const [tab, setTab] = useState<Tab>('For You')
-  const [cat, setCat] = useState<Category | 'All'>('All')
+  const [tab, setTab] = useState('For You')
+  const [cat, setCat] = useState('All')
   const [query, setQuery] = useState('')
-  const [events, setEvents] = useState<Event[]>([])
+  const [events, setEvents] = useState([])
 
   useEffect(() => {
     if (tab === 'For You') {

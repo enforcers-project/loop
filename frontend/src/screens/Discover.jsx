@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api'
-import type { Category, Event } from '../lib/types'
-import { CatRow, FilterBar, SearchBar, type Filters } from '../components/rows'
+import { CatRow, FilterBar, SearchBar } from '../components/rows'
 import { EventGrid } from '../components/EventCard'
 
-const EMPTY_FILTERS: Filters = {
+const EMPTY_FILTERS = {
   free: false,
   today: false,
   weekend: false,
@@ -13,16 +12,16 @@ const EMPTY_FILTERS: Filters = {
 }
 
 export function Discover() {
-  const [cat, setCat] = useState<Category | 'All'>('All')
+  const [cat, setCat] = useState('All')
   const [query, setQuery] = useState('')
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
-  const [events, setEvents] = useState<Event[]>([])
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [events, setEvents] = useState([])
 
   useEffect(() => {
     api.events().then(setEvents)
   }, [])
 
-  const toggle = (k: keyof Filters) => setFilters((f) => ({ ...f, [k]: !f[k] }))
+  const toggle = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }))
 
   const filtered = useMemo(() => {
     return events.filter((e) => {

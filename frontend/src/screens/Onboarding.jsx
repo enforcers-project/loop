@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Navigation, Search } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Interest } from '../lib/types'
 import { useApp } from '../context/AppContext'
 import { cn } from '../lib/utils'
 
@@ -18,17 +17,17 @@ const CITIES = [
 export function Onboarding() {
   const navigate = useNavigate()
   const { setInterests } = useApp()
-  const [step, setStep] = useState<1 | 2>(1)
-  const [interests, setInterestList] = useState<Interest[]>([])
-  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [step, setStep] = useState(1)
+  const [interests, setInterestList] = useState([])
+  const [picked, setPicked] = useState(new Set())
   const [citySearch, setCitySearch] = useState('')
-  const [city, setCity] = useState<string | null>(null)
+  const [city, setCity] = useState(null)
 
   useEffect(() => {
     api.interests().then(setInterestList)
   }, [])
 
-  const toggle = (id: string) =>
+  const toggle = (id) =>
     setPicked((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)

@@ -1,14 +1,13 @@
 import js from '@eslint/js'
 import globals from 'globals'
-import tseslint from 'typescript-eslint'
 import prettier from 'eslint-config-prettier'
 
-export default tseslint.config(
+export default [
   // Never lint build output.
   { ignores: ['dist', 'node_modules'] },
   {
-    extends: [js.configs.recommended, ...tseslint.configs.recommended],
-    files: ['**/*.ts'],
+    ...js.configs.recommended,
+    files: ['**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -16,12 +15,9 @@ export default tseslint.config(
     },
     rules: {
       // Allow intentionally-unused args/vars when prefixed with _.
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
-      ],
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
   },
   // Turn off stylistic rules that Prettier owns — must be last to win.
   prettier,
-)
+]

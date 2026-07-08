@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useApp, type Role } from '../context/AppContext'
+import { useApp } from '../context/AppContext'
 import { cn } from '../lib/utils'
 import { FormField, PasswordField, inputClass } from '../components/primitives'
 
-type Mode = 'signup' | 'login'
-
 // Two roles only. Hosting pickup runs is an Organizer sub-capability toggled
 // below (not a role) — a plain attendee can't host. See planning §3/§10.
-const ROLES: { id: Role; label: string; blurb: string }[] = [
+const ROLES = [
   { id: 'attendee', label: 'Attendee', blurb: 'Discover & RSVP' },
   { id: 'organizer', label: 'Organizer', blurb: 'Create & manage events' },
 ]
@@ -17,10 +15,10 @@ export function Auth() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { login } = useApp()
-  const [mode, setMode] = useState<Mode>(params.get('mode') === 'login' ? 'login' : 'signup')
+  const [mode, setMode] = useState(params.get('mode') === 'login' ? 'login' : 'signup')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
-  const [role, setRole] = useState<Role>('attendee')
+  const [role, setRole] = useState('attendee')
   const [isHost, setIsHost] = useState(false)
 
   // Hosting is organizer-only; drop the flag if they aren't signing up as one.
@@ -53,7 +51,7 @@ export function Auth() {
         <div className="rounded-card border border-border-light bg-white p-6 shadow-card sm:p-8">
           {/* mode toggle */}
           <div className="mb-6 flex rounded-button bg-surface p-1">
-            {(['signup', 'login'] as Mode[]).map((m) => (
+            {['signup', 'login'].map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}

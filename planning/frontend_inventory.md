@@ -10,8 +10,8 @@
 
 | Check | Result | Evidence |
 |---|---|---|
-| **Vite `/api` proxy** | ✅ configured | [`vite.config.ts`](../frontend/vite.config.ts): `/api` → `http://localhost:3000`, `changeOrigin: true`. Matches backend `PORT=3000`. |
-| **Build passes** | ✅ exit 0 | `npm run build` (`tsc -b && vite build`) → 1593 modules, clean `dist/` (index 265 kB, css 47 kB). No type errors. |
+| **Vite `/api` proxy** | ✅ configured | [`vite.config.js`](../frontend/vite.config.js): `/api` → `http://localhost:3000`, `changeOrigin: true`. Matches backend `PORT=3000`. |
+| **Build passes** | ✅ exit 0 | `npm run build` (`vite build`) → 1593 modules, clean `dist/` (index 265 kB, css 47 kB). Lint clean. |
 
 Dev flow that works today: `frontend` on `:5173` proxies `/api/*` to the `backend` stub on `:3000`; when the backend is offline the client falls back to the bundled mock seed (below), so the UI always renders.
 
@@ -19,7 +19,7 @@ Dev flow that works today: `frontend` on `:5173` proxies `/api/*` to the `backen
 
 ## The framing that matters: it's **reads vs. writes**, not "screen vs. mock"
 
-The task asks "which screens need real-API wiring vs. mock." The honest answer isn't screen-by-screen — it's about **how [`api.ts`](../frontend/src/lib/api.ts) is built**:
+The task asks "which screens need real-API wiring vs. mock." The honest answer isn't screen-by-screen — it's about **how [`api.js`](../frontend/src/lib/api.js) is built**:
 
 > Every `api.*` method **already fetches the real backend first** (`fetch('/api'+path, { credentials: 'include' })`) and only falls back to the mock seed **on failure** (network error or non-2xx).
 
@@ -31,45 +31,45 @@ That splits the whole inventory into two buckets.
 
 ## Bucket 1 — Reads: contract already wired (low effort)
 
-All 9 `api.*` read methods hit the backend already. Wiring = **verify the returned JSON matches the `Event`/`Interest`/`Organizer`/`Post` types in [`types.ts`](../frontend/src/lib/types.ts), then migrate the `useEffect(() => api.x().then(setState))` pattern to `useQuery`.**
+All 9 `api.*` read methods hit the backend already. Wiring = **verify the returned JSON matches the `Event`/`Interest`/`Organizer`/`Post` shapes documented in [`seed.js`](../frontend/src/data/seed.js), then migrate the `useEffect(() => api.x().then(setState))` pattern to `useQuery`.**
 
 | `api` method | Consuming screens/components | Backend endpoint |
 |---|---|---|
-| `events(filters)` | [Landing](../frontend/src/screens/Landing.tsx), [Discover](../frontend/src/screens/Discover.tsx), [ForYouFeed](../frontend/src/screens/ForYouFeed.tsx), [UserProfile](../frontend/src/screens/UserProfile.tsx), [SocialFeed](../frontend/src/screens/SocialFeed.tsx) | `GET /api/events` |
-| `recommendations(interests)` | [ForYouFeed](../frontend/src/screens/ForYouFeed.tsx) | `POST /api/recommendations` |
-| `event(id)` | [EventDetail](../frontend/src/screens/EventDetail.tsx), [SportsPickupDetail](../frontend/src/screens/SportsPickupDetail.tsx) | `GET /api/events/:id` |
-| `related(id)` | [EventDetail](../frontend/src/screens/EventDetail.tsx) | `GET /api/events/:id/related` |
-| `interests()` | [Onboarding](../frontend/src/screens/Onboarding.tsx), [UserProfile](../frontend/src/screens/UserProfile.tsx) | `GET /api/interests` |
+| `events(filters)` | [Landing](../frontend/src/screens/Landing.jsx), [Discover](../frontend/src/screens/Discover.jsx), [ForYouFeed](../frontend/src/screens/ForYouFeed.jsx), [UserProfile](../frontend/src/screens/UserProfile.jsx), [SocialFeed](../frontend/src/screens/SocialFeed.jsx) | `GET /api/events` |
+| `recommendations(interests)` | [ForYouFeed](../frontend/src/screens/ForYouFeed.jsx) | `POST /api/recommendations` |
+| `event(id)` | [EventDetail](../frontend/src/screens/EventDetail.jsx), [SportsPickupDetail](../frontend/src/screens/SportsPickupDetail.jsx) | `GET /api/events/:id` |
+| `related(id)` | [EventDetail](../frontend/src/screens/EventDetail.jsx) | `GET /api/events/:id/related` |
+| `interests()` | [Onboarding](../frontend/src/screens/Onboarding.jsx), [UserProfile](../frontend/src/screens/UserProfile.jsx) | `GET /api/interests` |
 | `categories()` | (via `CatRow` / seed) | `GET /api/categories` |
-| `organizer(id)` | [OrganizerProfile](../frontend/src/screens/OrganizerProfile.tsx) | `GET /api/organizers/:id` |
-| `posts()` | [SocialFeed](../frontend/src/screens/SocialFeed.tsx) | `GET /api/posts` |
-| `aiSearch(q)` | [AIAssistant](../frontend/src/components/AIAssistant.tsx) | `POST /api/ai/search` (real NL search is Sprint 3 #22/#31) |
+| `organizer(id)` | [OrganizerProfile](../frontend/src/screens/OrganizerProfile.jsx) | `GET /api/organizers/:id` |
+| `posts()` | [SocialFeed](../frontend/src/screens/SocialFeed.jsx) | `GET /api/posts` |
+| `aiSearch(q)` | [AIAssistant](../frontend/src/components/AIAssistant.jsx) | `POST /api/ai/search` (real NL search is Sprint 3 #22/#31) |
 
-**Caveat to verify per endpoint:** the client reads `json.data` (an `{ ok, data }` envelope) and expects the mock's denormalized shape — e.g. events carry a joined `organizer` and `goingAvatars`. The backend must return that same shape or the type check will drift. This is exactly the "verify shape" step, and the reason the reads are *low* effort but not *zero* effort.
+**Caveat to verify per endpoint:** the client reads `json.data` (an `{ ok, data }` envelope) and expects the mock's denormalized shape — e.g. events carry a joined `organizer` and `goingAvatars`. The backend must return that same shape or the read will drift. This is exactly the "verify shape" step, and the reason the reads are *low* effort but not *zero* effort.
 
 ---
 
 ## Bucket 2 — Writes: NOT wired at all (the real gap)
 
-These have **no `api` method**. They mutate [`AppContext`](../frontend/src/context/AppContext.tsx) in-memory (`Set<string>` / local state) and **vanish on refresh**. Each needs a real endpoint + a TanStack Query mutation with optimistic update + cache invalidation.
+These have **no `api` method**. They mutate [`AppContext`](../frontend/src/context/AppContext.jsx) in-memory (`string Set` / local state) and **vanish on refresh**. Each needs a real endpoint + a TanStack Query mutation with optimistic update + cache invalidation.
 
 | Action | Where it lives now | Endpoint it needs | Lands in |
 |---|---|---|---|
-| `login` / `logout` | [Auth](../frontend/src/screens/Auth.tsx) fabricates a `SelfUser` locally | `POST /api/auth/signup` · `/login` · `GET /auth/me` | Sprint 1 #6 |
-| `setInterests` | [Onboarding](../frontend/src/screens/Onboarding.tsx) — context only, never persisted | `PUT /api/users/:id/interests` | Sprint 1 #7 |
-| `toggleSaved` / `toggleGoing` | [EventCard](../frontend/src/components/EventCard.tsx), [ForYouFeed](../frontend/src/screens/ForYouFeed.tsx), [EventDetail](../frontend/src/screens/EventDetail.tsx) — `Set<string>` in context | `PUT/DELETE /api/events/:id/save` · `/rsvp` | Sprint 2 #15 |
-| `toggleFollow` | [OrganizerProfile](../frontend/src/screens/OrganizerProfile.tsx), [SocialFeed](../frontend/src/screens/SocialFeed.tsx), [EventDetail](../frontend/src/screens/EventDetail.tsx) — `Set<string>` in context | follow / unfollow endpoints | Sprint 3 #26 |
-| CreateEvent publish | [CreateEvent](../frontend/src/screens/CreateEvent.tsx) — form state goes nowhere | `POST /api/events` | Sprint 2 #9/#10 |
+| `login` / `logout` | [Auth](../frontend/src/screens/Auth.jsx) fabricates a `SelfUser` locally | `POST /api/auth/signup` · `/login` · `GET /auth/me` | Sprint 1 #6 |
+| `setInterests` | [Onboarding](../frontend/src/screens/Onboarding.jsx) — context only, never persisted | `PUT /api/users/:id/interests` | Sprint 1 #7 |
+| `toggleSaved` / `toggleGoing` | [EventCard](../frontend/src/components/EventCard.jsx), [ForYouFeed](../frontend/src/screens/ForYouFeed.jsx), [EventDetail](../frontend/src/screens/EventDetail.jsx) — `string Set` in context | `PUT/DELETE /api/events/:id/save` · `/rsvp` | Sprint 2 #15 |
+| `toggleFollow` | [OrganizerProfile](../frontend/src/screens/OrganizerProfile.jsx), [SocialFeed](../frontend/src/screens/SocialFeed.jsx), [EventDetail](../frontend/src/screens/EventDetail.jsx) — `string Set` in context | follow / unfollow endpoints | Sprint 3 #26 |
+| CreateEvent publish | [CreateEvent](../frontend/src/screens/CreateEvent.jsx) — form state goes nowhere | `POST /api/events` | Sprint 2 #9/#10 |
 
 ---
 
 ## Where TanStack Query + the contexts slot in
 
 **TanStack Query** (`@tanstack/react-query`, not yet installed) replaces two patterns:
-- **Reads:** the ~10 repeated `useState` + `useEffect(() => api.x().then(setState))` blocks become `useQuery({ queryKey, queryFn: () => api.x() })`. The existing `api.ts` methods are the query fns nearly as-is.
+- **Reads:** the ~10 repeated `useState` + `useEffect(() => api.x().then(setState))` blocks become `useQuery({ queryKey, queryFn: () => api.x() })`. The existing `api.js` methods are the query fns nearly as-is.
 - **Writes:** the `AppContext` toggles become `useMutation` with `onMutate` optimistic update + `invalidateQueries`. This is what makes save/RSVP feel instant *and* persist.
 
-**Auth context** — *already exists in spirit* as [`AppContext.tsx`](../frontend/src/context/AppContext.tsx): it holds `user / isLoggedIn / role / isHost / login / logout`. Those stay.
+**Auth context** — *already exists in spirit* as [`AppContext.jsx`](../frontend/src/context/AppContext.jsx): it holds `user / isLoggedIn / role / isHost / login / logout`. Those stay.
 
 **Toast context** — **does not exist yet.** Needed for mutation failures, "Saved!" confirmations, and the offline-fallback notice. Build in #8.
 
@@ -79,7 +79,7 @@ These have **no `api` method**. They mutate [`AppContext`](../frontend/src/conte
 
 ## The one architectural decision to make now
 
-[`AppContext`](../frontend/src/context/AppContext.tsx) currently mixes **two kinds of state**:
+[`AppContext`](../frontend/src/context/AppContext.jsx) currently mixes **two kinds of state**:
 
 - **Client/session state** — `user`, `isLoggedIn`, `role`, `isHost`. ✅ *Keep in context.*
 - **Server state** — `savedIds`, `goingIds`, `followingIds`, `interests`. ❌ *This belongs in TanStack Query,* not a context `Set`. Right now it's a client-side guess at server truth, which is exactly why it resets on refresh.
@@ -90,7 +90,7 @@ These have **no `api` method**. They mutate [`AppContext`](../frontend/src/conte
 
 ## Not installed yet (add in #8)
 
-`package.json` currently has **none** of: `@tanstack/react-query`, an HTTP client (native `fetch` is fine — no `axios` needed), a toast lib, `zod`. Present and staying: React 18.3 + Vite 6 + TS 5.6 + Tailwind v4 + `react-router-dom` 6.28 + `lucide-react`.
+`package.json` currently has **none** of: `@tanstack/react-query`, an HTTP client (native `fetch` is fine — no `axios` needed), a toast lib, `zod`. Present and staying: React 18.3 + Vite 6 + plain JS/JSX + Tailwind v4 + `react-router-dom` 6.28 + `lucide-react`.
 
 > **No test framework anywhere** (Vitest/Playwright). The working agreements say "verify behavior" — flagging that there's currently no automated way to. Decide in Sprint 1 whether to add Vitest for the wiring/mutation logic.
 

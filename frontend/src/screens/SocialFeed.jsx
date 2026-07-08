@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../lib/api'
-import type { Event, Organizer, Post } from '../lib/types'
 import { useApp } from '../context/AppContext'
 import { StoriesRow, PostCard } from '../components/social'
 import { EventImage } from '../components/EventImage'
 import { FollowBtn, VerifiedBadge } from '../components/primitives'
 
 /* Small square event thumbnail with the branded fallback baked in. */
-function Thumb({ event, size }: { event: Event; size: number }) {
+function Thumb({ event, size }) {
   return (
     <div
       className="relative flex-shrink-0 overflow-hidden rounded-lg"
@@ -26,7 +25,7 @@ function Thumb({ event, size }: { event: Event; size: number }) {
   )
 }
 
-function SidebarCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SidebarCard({ title, children }) {
   return (
     <section className="rounded-card border border-border-light bg-white p-5 shadow-card">
       <h3 className="mb-4 text-sm font-bold text-ink">{title}</h3>
@@ -37,8 +36,8 @@ function SidebarCard({ title, children }: { title: string; children: React.React
 
 export function SocialFeed() {
   const { followingIds, toggleFollow } = useApp()
-  const [posts, setPosts] = useState<Post[]>([])
-  const [events, setEvents] = useState<Event[]>([])
+  const [posts, setPosts] = useState([])
+  const [events, setEvents] = useState([])
 
   useEffect(() => {
     api.posts().then(setPosts)
@@ -57,9 +56,9 @@ export function SocialFeed() {
     })),
   ]
 
-  const suggested: Organizer[] = events
+  const suggested = events
     .map((e) => e.organizer)
-    .filter((o): o is Organizer => !!o)
+    .filter((o) => !!o)
     .filter((o, i, arr) => arr.findIndex((x) => x.id === o.id) === i)
     .slice(0, 4)
 

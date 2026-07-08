@@ -1,10 +1,19 @@
-// Loop demo seed data — the in-memory catalog (frontend mock fallback mirror
-// of backend/src/data/seed.ts). Types live in ../lib/types.ts.
+// Loop demo seed data — the in-memory catalog served by the API.
+// Categories, interests, avatars, and a native demo event catalog.
 
-import type { CategoryDef, Event, Interest, Organizer, Post } from '../lib/types'
+// Loop demo domain shapes (documented as comments — this project is plain JS/JSX):
+//   Category: 'Music' | 'Nightlife' | 'Sports' | 'Networking' | 'Food' | 'Campus'
+//   Organizer: { id, name, handle, avatar, verified, role, followers, bio, cover }
+//   SportsPosition: { label, capacity, filled }
+//   RosterPlayer: { name, avatar, position, skill, status }
+//   Event: { id, title, category, poster, price, isFree, date, isoDate, venueName,
+//            city, lat, lng, organizerId, description, tags, goingCount, goingAvatars,
+//            capacity, rsvpCount, saveCount, almostFull, rationale?, ageRestriction?,
+//            isSports?, sport?, playersNeeded?, playersSignedUp?, skillLevel?, indoor?,
+//            positions?, roster? }
 
 /** Figma categoryColors */
-export const CATEGORIES: CategoryDef[] = [
+export const CATEGORIES = [
   { name: 'Music', color: '#6D5EFC' },
   { name: 'Nightlife', color: '#FF2E74' },
   { name: 'Sports', color: '#16C784' },
@@ -14,7 +23,7 @@ export const CATEGORIES: CategoryDef[] = [
 ]
 
 /** 24 interest chips for onboarding (Figma: INTERESTS 24 items) */
-export const INTERESTS: Interest[] = [
+export const INTERESTS = [
   { id: 'afrobeats', label: 'Afrobeats', category: 'Music' },
   { id: 'hiphop', label: 'Hip-Hop', category: 'Music' },
   { id: 'house', label: 'House / EDM', category: 'Music' },
@@ -41,7 +50,7 @@ export const INTERESTS: Interest[] = [
   { id: 'study-jams', label: 'Study Jams', category: 'Campus' },
 ]
 
-export const AVATARS: string[] = [
+export const AVATARS = [
   'https://i.pravatar.cc/150?img=1',
   'https://i.pravatar.cc/150?img=5',
   'https://i.pravatar.cc/150?img=8',
@@ -56,7 +65,7 @@ export const AVATARS: string[] = [
   'https://i.pravatar.cc/150?img=60',
 ]
 
-export const ORGANIZERS: Organizer[] = [
+export const ORGANIZERS = [
   {
     id: 'org-lagos',
     name: 'Lagos Nights',
@@ -114,9 +123,9 @@ export const ORGANIZERS: Organizer[] = [
   },
 ]
 
-const IMG = (id: string, w = 800) => `https://images.unsplash.com/${id}?w=${w}&q=80`
+const IMG = (id, w = 800) => `https://images.unsplash.com/${id}?w=${w}&q=80`
 
-export const EVENTS: Event[] = [
+export const EVENTS = [
   {
     id: 'ev-afrobeats',
     title: 'Afro Nation Rooftop: Amapiano Edition',
@@ -489,8 +498,11 @@ export const EVENTS: Event[] = [
   },
 ]
 
-/** Instagram-style social posts derived from events (Figma SocialFeed). */
-export const POSTS: Post[] = [
+/**
+ * Instagram-style social posts derived from events (Figma SocialFeed).
+ * Post: { id, organizerId, eventId, image, caption, likes, comments[], timeAgo }
+ */
+export const POSTS = [
   {
     id: 'post-1',
     organizerId: 'org-lagos',

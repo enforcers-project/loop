@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { Calendar, ImagePlus, MapPin, Sparkles, X } from 'lucide-react'
-import type { Category, Event } from '../lib/types'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
 import { FormField, inputClass } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
 import { useApp } from '../context/AppContext'
 
-const CATEGORIES: Category[] = ['Music', 'Nightlife', 'Sports', 'Networking', 'Food', 'Campus']
+const CATEGORIES = ['Music', 'Nightlife', 'Sports', 'Networking', 'Food', 'Campus']
 const AI_DESCRIPTION =
   'Get ready for an unforgettable night. Doors open early, the energy is high, and the lineup is stacked. Grab your crew, dress the part, and come make some memories — this is the one everyone will be talking about.'
 const AI_TAGS = ['#Afrobeats', '#21+', '#Nightlife', '#Oakland', '#RooftopParty']
@@ -18,7 +17,7 @@ export function CreateEvent() {
   // Non-hosts can create ordinary events but never see the Sports toggle.
   const { isHost } = useApp()
   const [title, setTitle] = useState('')
-  const [category, setCategory] = useState<Category>('Nightlife')
+  const [category, setCategory] = useState('Nightlife')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [location, setLocation] = useState('')
@@ -26,9 +25,9 @@ export function CreateEvent() {
   const [capacity, setCapacity] = useState('')
   const [age, setAge] = useState('')
   const [description, setDescription] = useState('')
-  const [flyer, setFlyer] = useState<string | null>(null)
+  const [flyer, setFlyer] = useState(null)
   const [writing, setWriting] = useState(false)
-  const [tags, setTags] = useState<string[]>([])
+  const [tags, setTags] = useState([])
 
   // sports
   const [isSports, setIsSports] = useState(false)
@@ -46,7 +45,7 @@ export function CreateEvent() {
     }, 1400)
   }
 
-  const previewEvent: Event = {
+  const previewEvent = {
     id: 'preview',
     title: title || 'Your event title',
     category,

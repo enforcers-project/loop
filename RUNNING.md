@@ -2,7 +2,7 @@
 
 Loop is a two-folder app: a **React 18 + Vite + Tailwind v4** frontend (an exact
 implementation of the Figma export in `planning/project_knowledge.md`) and a
-**Node + TypeScript + Express** backend that serves the demo event catalog.
+**Node + JavaScript + Express** backend that serves the demo event catalog.
 
 The frontend talks to the backend through Vite's `/api` proxy, and falls back to
 a bundled mock copy of the seed data if the backend is offline — so the UI always
@@ -17,7 +17,7 @@ renders.
 ```bash
 cd backend
 npm install
-npm run dev        # http://localhost:3000  (tsx watch)
+npm run dev        # http://localhost:3000  (node --watch)
 ```
 
 Sanity check:
@@ -37,13 +37,13 @@ npm run dev        # http://localhost:5173
 
 Open http://localhost:5173. Requests to `/api/*` are proxied to the backend.
 
-## Build / typecheck
+## Build / lint
 
 ```bash
 # frontend
-cd frontend && npm run build     # tsc -b + vite build
+cd frontend && npm run build     # vite build -> dist/
 # backend
-cd backend  && npm run build     # tsc -> dist/
+cd backend  && npm run lint      # plain JS/JSX — no build step; runs directly
 ```
 
 ## What's implemented
@@ -71,7 +71,7 @@ RoleBadge, TopNav, BottomBar, CatRow, FilterBar, StoriesRow, PostCard, AIAssista
 
 Design tokens (colors, radii, shadows, fonts, the single selected-state rule)
 are mapped 1:1 from the Figma JSON into `frontend/src/index.css` (`@theme`) and
-`frontend/src/lib/utils.ts`.
+`frontend/src/lib/utils.js`.
 
 **Backend — REST endpoints:**
 

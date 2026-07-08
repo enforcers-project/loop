@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Bookmark, Heart, MessageCircle, Plus, Send } from 'lucide-react'
-import type { Post } from '../lib/types'
 import { cn, formatCount } from '../lib/utils'
 import { VerifiedBadge } from './primitives'
 import { EventImage } from './EventImage'
@@ -8,11 +7,7 @@ import { EventImage } from './EventImage'
 /* --------------------------------------------------------------------------
    StoriesRow — horizontal avatar ring row; labels allow 2 lines, w-16
 -------------------------------------------------------------------------- */
-export function StoriesRow({
-  stories,
-}: {
-  stories: { name: string; avatar: string; isYou?: boolean }[]
-}) {
+export function StoriesRow({ stories }) {
   return (
     <div className="scrollbar-hide -mx-1 flex gap-4 overflow-x-auto px-1 pb-1">
       {stories.map((s, i) => (
@@ -52,7 +47,7 @@ export function StoriesRow({
 /* --------------------------------------------------------------------------
    PostCard — Instagram-style: header + full image + action row + comments
 -------------------------------------------------------------------------- */
-export function PostCard({ post }: { post: Post }) {
+export function PostCard({ post }) {
   const [liked, setLiked] = useState(false)
   const [saved, setSaved] = useState(false)
   const org = post.organizer

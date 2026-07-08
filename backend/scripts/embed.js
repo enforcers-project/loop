@@ -1,14 +1,14 @@
 /**
  * Sprint-0 Lane-B spike: confirm LOCAL embeddings work with no API key.
  *
- * Unlike scripts/spike-ai.ts (which calls the hosted Hugging Face API), this
+ * Unlike scripts/spike-ai.js (which calls the hosted Hugging Face API), this
  * runs the model *in-process* via @xenova/transformers — pure JavaScript, no
  * Python, no key, no per-call network. The first run downloads the model
  * (~90 MB) into a local cache; every run after that is offline.
  *
  * Throwaway diagnostic — safe to delete after it passes.
  *
- *   npx tsx backend/scripts/embed.ts
+ *   node backend/scripts/embed.js
  *
  * Success = it prints a vector length of 384.
  */
@@ -27,7 +27,7 @@ const SENTENCE = 'Afrobeats rooftop party in Accra this weekend'
   // pooling:'mean' + normalize:true = the standard sentence-embedding recipe
   const output = await embed(SENTENCE, { pooling: 'mean', normalize: true })
 
-  const vector = Array.from(output.data as Float32Array)
+  const vector = Array.from(output.data)
 
   console.log(`sentence: "${SENTENCE}"`)
   console.log(`vector length: ${vector.length}   (expected 384)`)

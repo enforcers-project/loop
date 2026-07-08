@@ -48,10 +48,10 @@ Lane A/B are backend-heavy (that's where the unbuilt work is); Lane C is mostly 
 |---|---|
 | **All (Tue, together)** | Create GitHub Project board (Backlog → Sprint → In Progress → Review → Done), 4 milestones (Sprint 1–4), paste the **39 starter issues** from `project_plan.md`. Agree on the working agreements below. |
 | **A — Mussie** | `docker-compose.yml`: Postgres 16 + pgvector; init SQL enabling `vector`, `citext`, `pg_trgm`, `cube`, `earthdistance`. Wire `backend/.env`. Confirm `\dx` shows all 5. |
-| **B — Benny** | Get API keys (Ticketmaster, SeatGeek, Google Maps, hosted embeddings/LLM) into a shared password manager — **never git**. **Decide the embedding model + pin `vector(DIM)`** (e.g. `text-embedding-3-small` = 1536). Spike a single backend embeddings call to confirm the key works. |
+| **B — Benny** | Get API keys into a shared password manager — **never git**: Ticketmaster, SeatGeek, Google Maps, **Groq** (LLM — parse/tag/describe/chat), **Hugging Face** (embeddings). **AI stack decided (all free, all off-box so the Render web service stays thin):** LLM → **Groq** (`llama-3.1-8b-instant` for parse/tagging, `llama-3.3-70b-versatile` for chat/descriptions); embeddings → **`all-MiniLM-L6-v2` (384-d) via the Hugging Face Inference API**, swappable to a self-hosted Fly/Railway box later. **DIM pinned: `vector(384)`** — same model embeds events *and* queries (see `project_plan.md` §10). Spike one backend Groq call + one HF embed call to confirm both keys work. |
 | **C — Heartwill** | Inventory the existing frontend: list which screens/components need real-API wiring vs mock, note where TanStack Query + Auth/Toast/Modal contexts will slot in. Confirm the Vite `/api` proxy + build both pass. |
 
-**Done when:** board is populated; `docker compose up` gives a DB with all extensions; embedding key verified and `DIM` pinned in the plan; frontend still builds.
+**Done when:** board is populated; `docker compose up` gives a DB with all extensions; embedding key verified and `DIM` pinned in the plan (**pinned: `vector(384)`**); frontend still builds.
 
 ---
 
@@ -62,7 +62,7 @@ Lane A/B are backend-heavy (that's where the unbuilt work is); Lane C is mostly 
 | Issue | Title | Owner |
 |---|---|---|
 | #1 | Repo/CI finalize + app scaffold (lint/typecheck/build on PR) | **C** |
-| #2 | **Prisma schema + migrations for all §6 tables/enums** + pgvector/citext extensions, `vector(DIM)`, HNSW index, generated `search_document`, capacity trigger | **A (lead) + B (pair on vector/index/raw-SQL parts)** |
+| #2 | **Prisma schema + migrations for all §6 tables/enums** + pgvector/citext extensions, `vector(384)`, HNSW index, generated `search_document`, capacity trigger | **A (lead) + B (pair on vector/index/raw-SQL parts)** |
 | #3 | Seed 6 categories + 24 interests (Figma tokens, `interests.category_id` NOT NULL) | **B** |
 | #4 | Seed 40–60 native demo events incl. pickup runs (guarantees a non-empty feed) | **B** |
 | #5 | External-sync stub + dedup + provider-taxonomy→category map | **B** |
@@ -172,7 +172,7 @@ Pull one into a sprint **only** after that sprint's MVP + nice-to-haves are merg
 
 ## Milestone summary (dates → deliverable)
 
-- **Fri Jul 10** — Setup done: DB + extensions running, keys secured, board populated, `DIM` pinned.
+- **Fri Jul 10** — Setup done: DB + extensions running, keys secured, board populated, `DIM` pinned (`vector(384)`).
 - **Fri Jul 17** — `sprint-1`: data model + auth + onboarding + seed live.
 - **Fri Jul 24** — `sprint-2-mvp`: **the demoable MVP** (the one to protect).
 - **Fri Jul 31** — `sprint-3`: AI recommender + NL search + sports roster real.

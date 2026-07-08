@@ -391,7 +391,7 @@ The six screens above are composed from one reusable component set (exact Figma 
 
 ## 6. Data Model
 
-The PostgreSQL schema below is the source of truth for Loop's Prisma schema; behavior-signal capture and vector storage are first-class because the behavior-based "For You" recommender is the headline feature. Tables and columns are `snake_case` (Prisma models map to them via `@@map`), all timestamps are `timestamptz` (UTC), and all surrogate PKs are `uuid` defaulting to `gen_random_uuid()` unless a composite/natural key or `bigint` identity is noted. Requires the `pgvector` and `citext` extensions, plus `cube` + `earthdistance` for the `earth_distance()` radius filter used in "near me" and the recommender pre-filter (§9.2 D) — or `postgis` if we standardize on it (and optionally `pg_trgm` for fuzzy title search). `vector(1536)` is a **PLACEHOLDER dimension** used everywhere — pin it once the embedding model is chosen (e.g. OpenAI `text-embedding-3-small` = 1536, local MiniLM = 384).
+The PostgreSQL schema below is the source of truth for Loop's Prisma schema; behavior-signal capture and vector storage are first-class because the behavior-based "For You" recommender is the headline feature. Tables and columns are `snake_case` (Prisma models map to them via `@@map`), all timestamps are `timestamptz` (UTC), and all surrogate PKs are `uuid` defaulting to `gen_random_uuid()` unless a composite/natural key or `bigint` identity is noted. Requires the `pgvector` and `citext` extensions, plus `cube` + `earthdistance` for the `earth_distance()` radius filter used in "near me" and the recommender pre-filter (§9.2 D) — or `postgis` if we standardize on it (and optionally `pg_trgm` for fuzzy title search). `vector(384)` is the **pinned dimension** used everywhere — chosen with a MiniLM-class local model (e.g. `all-MiniLM-L6-v2` = 384) over OpenAI `text-embedding-3-small` (1536); it can be re-pinned later since every vector row tracks its own `model`/`vector_version` (see §10, Decisions Log).
 
 ### Enum types
 
@@ -729,7 +729,7 @@ Natural-language + filter search log — a strong intent signal plus NL-search a
 | `raw_query` | `text` | Verbatim text ("free Afrobeats party this weekend") |
 | `parsed_filters` | `jsonb` | Structured filters the NL parser produced (category, date range, price, city, geo) |
 | `surface` | `interaction_surface` | `search`, `for_you`, or `assistant` |
-| `query_embedding` | `vector(1536)` | **PLACEHOLDER dim.** Query embedding for semantic recall (nullable) |
+| `query_embedding` | `vector(384)` | Query embedding for semantic recall (nullable). DIM pinned to 384. |
 | `result_count` | `integer` | Results returned |
 | `clicked_event_id` | `uuid` | FK → `events.id` (ON DELETE SET NULL) — first result clicked (relevance signal) |
 | `latency_ms` | `integer` | Server response time (perf monitoring) |
@@ -760,7 +760,7 @@ Per-event content embedding (title + description + tags + category), matched aga
 | Column | Postgres Type | Description |
 |---|---|---|
 | `event_id` | `uuid` | PK **and** FK → `events.id` (ON DELETE CASCADE) — **one active row per event**; a re-embed overwrites in place |
-| `embedding` | `vector(1536)` | **PLACEHOLDER dim.** Event content embedding |
+| `embedding` | `vector(384)` | Event content embedding. DIM pinned to 384. |
 | `model` | `varchar(80)` | Embedding model/version used to produce the current row |
 | `content_hash` | `text` | Hash of embedded text; skip re-embedding if unchanged |
 | `vector_version` | `integer` | Which build produced the current row (reproducibility; bumped on a model migration) |
@@ -776,7 +776,7 @@ Per-user preference vector powering the "For You" feed, computed from interest s
 | Column | Postgres Type | Description |
 |---|---|---|
 | `user_id` | `uuid` | PK **and** FK → `users.id` (ON DELETE CASCADE) — 1:1 |
-| `embedding` | `vector(1536)` | **PLACEHOLDER dim.** Behavior-derived taste vector |
+| `embedding` | `vector(384)` | Behavior-derived taste vector. DIM pinned to 384. |
 | `model` | `varchar(80)` | Model/version that produced it |
 | `vector_version` | `integer` | Version for recompute/rollback |
 | `signal_count` | `integer` | Signals folded in (cold-start blending). Default `0`. |
@@ -1031,7 +1031,7 @@ Two complementary retrieval paths, both inside one Postgres instance for the MVP
 - **Price as single value vs. range.** Used `price_min`/`price_max` + `is_free` rather than one `price`, because synced external events commonly carry price ranges.
 - **Where vectors live.** Isolated in `event_embeddings`/`user_preference_vectors` (not inline `vector` columns on hot tables), with `model`/`vector_version`/`content_hash` for recompute and rollback; a single vector per user was chosen over separate long/short-term vectors to keep the capstone lean.
 - **`search_document` as a generated column.** A `GENERATED` `tsvector` can only reference own-row columns, so it covers title/description/venue only; `event_tags` are folded in via a trigger when tag search is needed.
-- **Vector dimension.** `vector(1536)` is an explicit **PLACEHOLDER** everywhere; pin it once the embedding model is chosen, tracked per row via `model`/`vector_version`.
+- **Vector dimension.** `vector(384)` is **pinned** everywhere (a MiniLM-class local model, e.g. `all-MiniLM-L6-v2`); it can be re-pinned later, tracked per row via `model`/`vector_version`.
 
 ---
 
@@ -1223,7 +1223,7 @@ Loop's AI is a fully backend-only surface (embeddings, LLM, and NL-parse keys ne
 
 ### 9.1 Feature Specifications
 
-Loop's AI surface is five user-facing features plus one assistant, all sharing one backend rule: **every embedding, LLM, and NL-parse call runs server-side** (the hosted embeddings/LLM API keys never reach the browser), and **every call is audited in `ai_generation_logs`** (`type`, `model`, `prompt`, `output`, `tokens_used`, `latency_ms`). Two retrieval layers underpin the features: a **keyword/filter layer** — whose MVP form is Postgres FTS (`events.search_document` tsvector + `pg_trgm` fuzzy + B-tree filters on `category_id`/`city`/`starts_at`/`status` + geo on `(lat,lng)`) and whose documented production/scale-out form is Elasticsearch (same layer, swappable, **not** in the MVP) — and a **semantic layer** on pgvector (`event_embeddings` × `user_preference_vectors`, cosine kNN via HNSW/IVFFlat). The vector dimension `vector(1536)` is a placeholder pinned to the chosen model (e.g. 1536 for OpenAI `text-embedding-3-small`, 384 for a local MiniLM), tracked per row via `model`/`vector_version`.
+Loop's AI surface is five user-facing features plus one assistant, all sharing one backend rule: **every embedding, LLM, and NL-parse call runs server-side** (the hosted embeddings/LLM API keys never reach the browser), and **every call is audited in `ai_generation_logs`** (`type`, `model`, `prompt`, `output`, `tokens_used`, `latency_ms`). Two retrieval layers underpin the features: a **keyword/filter layer** — whose MVP form is Postgres FTS (`events.search_document` tsvector + `pg_trgm` fuzzy + B-tree filters on `category_id`/`city`/`starts_at`/`status` + geo on `(lat,lng)`) and whose documented production/scale-out form is Elasticsearch (same layer, swappable, **not** in the MVP) — and a **semantic layer** on pgvector (`event_embeddings` × `user_preference_vectors`, cosine kNN via HNSW/IVFFlat). The vector dimension is **pinned to `vector(384)`** (`all-MiniLM-L6-v2` via the HF Inference API, chosen over OpenAI `text-embedding-3-small` = 1536), tracked per row via `model`/`vector_version` so it can be re-pinned later.
 
 ---
 
@@ -1282,7 +1282,7 @@ Server-side effect (not user-visible): the seed picks are folded into a cold-sta
 
 **Where it lives:** `ForYouFeed` sticky **search bar** (NL placeholder "Try 'free Afrobeats party this weekend'", mic + location icons; mic is UI-only this build) and the `Discover` screen search bar; parsed constraints render as removable pills in the `FilterBar`.
 
-**Input:** `POST /api/search` with `{ q, near?:{lat,lng,radiusKm}|{city}, filters?, cursor?, limit? }`. Server-side: (a) an LLM/NL parser turns `q` into structured `parsed_filters` (category slugs, `dateFrom`/`dateTo`, `isFree`, `priceMax`, `city`, geo); (b) the hosted embeddings API embeds `q` into `search_queries.query_embedding vector(1536)`; (c) the keyword/filter layer (`events.search_document` FTS + `pg_trgm` fuzzy + B-tree/geo filters) narrows a bounded candidate set honoring hard constraints; (d) pgvector re-ranks candidates by cosine similarity to `event_embeddings` (blended with the caller's `user_preference_vectors` when authed).
+**Input:** `POST /api/search` with `{ q, near?:{lat,lng,radiusKm}|{city}, filters?, cursor?, limit? }`. Server-side: (a) an LLM/NL parser turns `q` into structured `parsed_filters` (category slugs, `dateFrom`/`dateTo`, `isFree`, `priceMax`, `city`, geo); (b) the hosted embeddings API embeds `q` into `search_queries.query_embedding vector(384)`; (c) the keyword/filter layer (`events.search_document` FTS + `pg_trgm` fuzzy + B-tree/geo filters) narrows a bounded candidate set honoring hard constraints; (d) pgvector re-ranks candidates by cosine similarity to `event_embeddings` (blended with the caller's `user_preference_vectors` when authed).
 
 **Output:** matches the endpoint — parsed filters + results + the logged query id:
 ```json
@@ -1423,7 +1423,7 @@ Each published event gets exactly one row in `event_embeddings` (PK/FK `event_id
 1. **Compose the text** on the backend from own-row + joined fields (order matters for the model; keep it deterministic):
    `title` · `category.name` · top `event_tags.label` (source-agnostic, ordered by `confidence` desc, cap 8) · `venue_name` · `city` · a truncated `description` (~500 chars). Sports events append `sports_details.sport` + `skill_level`.
 2. **Hash it.** `content_hash = sha256(composed_text || model)`. If the new hash equals the stored `event_embeddings.content_hash`, **skip the embedding call** — this is the cost guard for re-syncs and re-publishes.
-3. **Embed** via the hosted embeddings API (backend only). Write `embedding` (`vector(1536)` PLACEHOLDER — pin to the chosen model, e.g. 1536 for `text-embedding-3-small`, 384 for MiniLM), set `model`, `content_hash`, bump `vector_version`, stamp `updated_at`. Log the call in `ai_generation_logs` (`type='event_embedding'`, `tokens_used`, `latency_ms`).
+3. **Embed** via the embeddings provider (backend only — **`all-MiniLM-L6-v2` served by the Hugging Face Inference API**, self-hostable on Fly/Railway later). Write `embedding` (`vector(384)`), set `model`, `content_hash`, bump `vector_version`, stamp `updated_at`. Log the call in `ai_generation_logs` (`type='event_embedding'`, `tokens_used`, `latency_ms`).
 4. **When:**
    - On `POST /api/events/:id/publish` (draft→published) — the publish handler enqueues the embed (§7.3 already says publish "enqueues `event_embedding`").
    - On external sync (`POST /api/admin/sync/ticketmaster` / `/seatgeek`) — after upsert on `UNIQUE(source, external_id)`; the `content_hash` skip means only rows whose title/description/price actually changed are re-embedded.
@@ -1575,7 +1575,7 @@ This is deterministic, always fresh, adds no second datastore for a 3-person cap
 Layer 2 is `POST /api/search`. It lets a user type "free Afrobeats party this weekend" instead of clicking pills, and it runs three backend stages in order:
 
 1. **NL parse → `parsed_filters`.** A backend LLM call turns the raw text into structured filters, returning the §7 `parsedFilters` shape `{ category:string[], dateFrom, dateTo, isFree, city, priceMax?, near? }`, which is persisted to `search_queries.parsed_filters` (jsonb) and audited in `ai_generation_logs` (type=`search_parse`). For the example: `isFree:true`, `dateFrom`/`dateTo` = the coming weekend resolved against the request timezone, and `category` mapped to `categories.slug` values like `nightlife`/`music`. Note the deliberate split — the parser only extracts the **coarse, enforceable** constraints; the fine nuance ("*Afrobeats* specifically," "*party* vibe") is left for the embedding in stage 3, because it isn't a column.
-2. **Embed the query → `query_embedding`.** The raw query (plus resolved parsed terms) is sent to the hosted embeddings API and stored in `search_queries.query_embedding` (`vector(1536)`, placeholder dim — same model as `event_embeddings.model`).
+2. **Embed the query → `query_embedding`.** The raw query (plus resolved parsed terms) is sent to the embeddings provider (`all-MiniLM-L6-v2` via the HF Inference API) and stored in `search_queries.query_embedding` (`vector(384)`, DIM pinned — **the same model that embeds events**, or the vectors aren't comparable).
 3. **pgvector re-rank.** The query embedding is scored by cosine (`vector_cosine_ops`, HNSW/IVFFlat) against `event_embeddings.embedding` over the Layer-1 candidate set. **When the caller is authenticated, the score blends in cosine to their `user_preference_vectors.embedding`** so semantic search is personalized (a networking-leaning user's "mixer this weekend" surfaces events tilted to their taste); anonymous callers get pure query-to-event semantics.
 
 All three stages happen server-side inside the endpoint; no API key ever reaches the browser (hard constraint).
@@ -1645,7 +1645,7 @@ Before writing code, set up the delivery scaffolding in GitHub:
 | # | Issue title | References (§ of project_plan.md — schema entity / endpoint / component) | Sprint | Type |
 |---|---|---|---|---|
 | 1 | Repo, CI pipeline, and app scaffold (lint/test/build via GitHub Actions) | infra; stack §top-of-plan (React 18 + Tailwind v4, Postgres + Prisma) | 1 | MVP |
-| 2 | Prisma schema + migrations for full §6 data model; enable `pgvector`/`citext`/`pg_trgm` extensions, `vector(1536)` placeholder dim | §6 (all tables + enum types); §6 "Search: Elasticsearch vs pgvector" | 1 | MVP |
+| 2 | Prisma schema + migrations for full §6 data model; enable `pgvector`/`citext`/`pg_trgm` extensions, `vector(384)` (DIM pinned) | §6 (all tables + enum types); §6 "Search: Elasticsearch vs pgvector" | 1 | MVP |
 | 3 | Seed lookup data: 6 `categories` (Figma color tokens) + 24 `interests` | §6 `categories`, `interests`; `GET /api/categories`, `GET /api/interests`; CatRow, ChipGrid | 1 | MVP |
 | 4 | **Seed 40–60 native demo events incl. pickup runs** (guarantees a non-empty feed for demo) | §6 `events`, `sports_details`, `sports_positions`; §10 Spec-audit note | 1 | MVP |
 | 5 | External-sync stub + dedup: Ticketmaster + SeatGeek adapters, upsert on `UNIQUE(source, external_id)`, `raw_payload`/`last_synced_at`, **+ provider-taxonomy → Loop-category map** (provider genre/segment → one of the 6 categories or `other`; without it synced rows are invisible to CatRow/affinity) | §6 `events` provenance cols + `category_id` (NOT NULL); `POST /api/admin/sync/ticketmaster`, `/seatgeek`, `GET /api/admin/sync/status` (§7.7) | 1 | MVP |
@@ -1752,7 +1752,11 @@ _A fuller thematic running-log of decisions follows below (Roles & personas · N
 - **Behavior is captured as both a raw append-only log (`interaction_events`, `search_queries`) and rollups (`user_category_affinities`)**, then compiled into a per-user `user_preference_vector` (pgvector) — the substrate for the headline recommender.
 - **Roster uses a claim model** (`sports_positions` + `roster_entries`) with partial unique indexes + a capacity trigger; position-less runs seed a synthetic "Any" position so capacity is always enforced.
 - **Search split: Postgres FTS + filters narrow, pgvector personalizes/re-ranks.** Elasticsearch is a documented future scale-out, not an MVP dependency.
-- **Vectors isolated in dedicated tables** (`event_embeddings`, `user_preference_vectors`) with `model`/`vector_version` for recompute/rollback; `vector(1536)` is a placeholder dimension pinned once the embedding model is chosen.
+- **Vectors isolated in dedicated tables** (`event_embeddings`, `user_preference_vectors`) with `model`/`vector_version` for recompute/rollback; `vector(384)` is the pinned dimension (a MiniLM-class local model, e.g. `all-MiniLM-L6-v2`), re-pinnable later via `model`/`vector_version`.
+- **AI providers pinned (Sprint 0, Lane B) — all free, all off-box.** Two separate models back Loop's AI, both reached by backend HTTP call so the Render web service carries neither in memory:
+  - **Embeddings → `all-MiniLM-L6-v2` (384-d), served by the Hugging Face Inference API.** Endpoint (verified working, Sprint 0): `POST https://router.huggingface.co/hf-inference/models/sentence-transformers/all-MiniLM-L6-v2/pipeline/feature-extraction` with `Authorization: Bearer $HF_API_TOKEN` — note HF **retired** the old `api-inference.huggingface.co` host (no longer resolves), so use `router.huggingface.co`. A spike confirmed it returns a **384**-float vector, matching the pinned DIM. The former `vector(1536)` placeholder is resolved to **`vector(384)`** — this one number is used by every vector column (`event_embeddings.embedding`, `user_preference_vectors.embedding`, `search_queries.query_embedding`) and their HNSW `vector_cosine_ops` indexes, so it must be identical across all three, and **the same model must embed both events and queries** or the vectors aren't comparable. Chosen over OpenAI `text-embedding-3-small` (1536): free, and a 4× smaller vector means smaller rows + faster ANN — acceptable because the semantic layer only *re-ranks* a bounded candidate set (§9.3), so raw recall precision isn't the bottleneck. Each row carries its own `model`/`vector_version`, so re-pinning to a 1536-d hosted model (or self-hosting MiniLM on Fly/Railway if HF's free tier throttles) is a versioned forward re-embed, not a schema rewrite.
+  - **LLM → Groq** (free tier) for the generative features: `llama-3.1-8b-instant` for high-volume/latency-sensitive calls (NL-search parse, auto-tagging), `llama-3.3-70b-versatile` for quality-sensitive calls (chat assistant, AI descriptions). Chosen over OpenRouter's free variants (too slow) — Groq is the fastest hosted free option. MiniLM handles embeddings *only*; these generative features need a real LLM, hence a second provider + key (`GROQ_API_KEY`, alongside `HF_API_TOKEN`).
+  - **Deploy note (pending, Lane A):** this stack assumes a **Render** web service + Render Postgres (pgvector) rather than the AWS ECS Fargate + RDS recorded elsewhere in this log; the deploy-target reversal is Lane A's to confirm at Sprint 4 (issue #35) and is intentionally left unchanged here.
 
 ### API & state (§7–§8)
 - **Auth = stateless JWT in an HTTP-only, Secure, SameSite cookie** (not `localStorage`), the correct posture for mobile web (XSS-safe). The `user_sessions` table is the **analytics/browsing-session** row that groups `interaction_events` — deliberately decoupled from the credential store so §7 never references a token/expiry column that §6 doesn't have.

@@ -1,0 +1,903 @@
+// Loop — Prisma schema. Source of truth: planning/project_plan.md §6.
+//
+// Conventions:
+//   - Postgres tables/columns are snake_case; Prisma models are PascalCase and
+//     map down via @@map (tables) and @map (columns).
+//   - All timestamps are timestamptz. UUID PKs default to gen_random_uuid()
+//     (built into Postgres 16 — no extension needed).
+//   - Vector columns use Unsupported("vector(384)") — Prisma creates them but
+//     can't query them; the recommender uses raw SQL. DIM pinned to 384
+//     (all-MiniLM-L6-v2), per §10.
+//
+// Four things Prisma can't express are added in the migration's raw SQL:
+//   1. HNSW cosine indexes on the vector columns
+//   2. events.search_document as a GENERATED tsvector + GIN index
+//   3. partial unique indexes (roster one-live-claim, etc.)
+//   4. the roster capacity trigger + Σ(position.capacity)=players_needed check
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [citext, vector, pg_trgm, cube, earthdistance]
+}
+
+// ============================================================================
+// Enums (§6 "Enum types")
+// ============================================================================
+
+enum UserRole {
+  attendee
+  organizer
+
+  @@map("user_role")
+}
+
+enum OrganizerKind {
+  organizer
+  promoter
+
+  @@map("organizer_kind")
+}
+
+enum EventSource {
+  native
+  ticketmaster
+  seatgeek
+
+  @@map("event_source")
+}
+
+enum EventStatus {
+  draft
+  published
+  cancelled
+  past
+
+  @@map("event_status")
+}
+
+enum RsvpStatus {
+  going
+  interested
+  waitlisted
+  cancelled
+
+  @@map("rsvp_status")
+}
+
+enum SkillLevel {
+  all_levels
+  beginner
+  intermediate
+  advanced
+
+  @@map("skill_level")
+}
+
+enum VenueSetting {
+  indoor
+  outdoor
+
+  @@map("venue_setting")
+}
+
+enum RosterStatus {
+  claimed
+  waitlisted
+  cancelled
+  no_show
+  attended
+
+  @@map("roster_status")
+}
+
+enum TagSource {
+  ai
+  organizer
+  system
+
+  @@map("tag_source")
+}
+
+enum InterestSource {
+  onboarding
+  user_added
+  inferred
+
+  @@map("interest_source")
+}
+
+enum InteractionType {
+  impression
+  view
+  click
+  dwell
+  save
+  unsave
+  rsvp
+  rsvp_cancel
+  attend
+  search
+  search_result_click
+  follow
+  unfollow
+  share
+  category_click
+  tag_click
+  comment
+  post_like
+  claim_spot
+  release_spot
+  ai_query
+  rec_impression
+  rec_click
+  rec_dismiss
+
+  @@map("interaction_type")
+}
+
+enum InteractionSurface {
+  for_you
+  discover
+  search
+  event_detail
+  social
+  organizer_profile
+  user_profile
+  assistant
+  landing
+  notification
+
+  @@map("interaction_surface")
+}
+
+enum NotificationType {
+  event_reminder
+  rsvp_confirmation
+  followed_new_event
+  roster_update
+  comment_reply
+  new_follower
+  social_like
+  event_updated
+  event_cancelled
+  system
+
+  @@map("notification_type")
+}
+
+enum NotificationChannel {
+  in_app
+  push
+  email
+
+  @@map("notification_channel")
+}
+
+enum ReminderStatus {
+  scheduled
+  sent
+  cancelled
+
+  @@map("reminder_status")
+}
+
+enum AiGenerationType {
+  description
+  tags
+  event_embedding
+  user_vector
+  search_parse
+  chat
+
+  @@map("ai_generation_type")
+}
+
+enum AiMessageRole {
+  user
+  assistant
+  system
+
+  @@map("ai_message_role")
+}
+
+enum PostKind {
+  flyer
+  recap
+  update
+
+  @@map("post_kind")
+}
+
+enum FeedbackType {
+  bug
+  feature_request
+  general
+  content_report
+  other
+
+  @@map("feedback_type")
+}
+
+enum FeedbackStatus {
+  new
+  triaged
+  in_progress
+  resolved
+  wont_fix
+
+  @@map("feedback_status")
+}
+
+// ============================================================================
+// 6.1 Accounts & Identity
+// ============================================================================
+
+model User {
+  id                    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                 String         @unique @db.Citext
+  passwordHash          String?        @map("password_hash")
+  role                  UserRole       @default(attendee)
+  organizerKind         OrganizerKind? @map("organizer_kind")
+  isHost                Boolean        @default(false) @map("is_host")
+  displayName           String?        @map("display_name") @db.VarChar(120)
+  handle                String?        @unique @db.Citext
+  isVerified            Boolean        @default(false) @map("is_verified")
+  avatarUrl             String?        @map("avatar_url")
+  coverImageUrl         String?        @map("cover_image_url")
+  bio                   String?
+  homeCity              String?        @map("home_city") @db.VarChar(120)
+  homeLat               Float?         @map("home_lat")
+  homeLng               Float?         @map("home_lng")
+  homePlaceId           String?        @map("home_place_id")
+  locationRadiusKm      Int            @default(40) @map("location_radius_km")
+  onboardingCompletedAt DateTime?      @map("onboarding_completed_at") @db.Timestamptz(6)
+  notificationPrefs     Json?          @map("notification_prefs")
+  followerCount         Int            @default(0) @map("follower_count")
+  followingCount        Int            @default(0) @map("following_count")
+  lastActiveAt          DateTime?      @map("last_active_at") @db.Timestamptz(6)
+  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  oauthAccounts      OauthAccount[]
+  sessions           UserSession[]
+  interests          UserInterest[]
+  events             Event[]                    @relation("EventOrganizer")
+  rsvps              Rsvp[]
+  savedEvents        SavedEvent[]
+  following          Follow[]                   @relation("Follower")
+  followers          Follow[]                   @relation("Followee")
+  interactions       InteractionEvent[]         @relation("InteractionActor")
+  targetedBy         InteractionEvent[]         @relation("InteractionTarget")
+  searchQueries      SearchQuery[]
+  categoryAffinities UserCategoryAffinity[]
+  preferenceVector   UserPreferenceVector?
+  recImpressions     RecommendationImpression[]
+  aiLogs             AiGenerationLog[]
+  aiConversations    AiConversation[]
+  rosterEntries      RosterEntry[]
+  comments           Comment[]
+  posts              Post[]
+  postLikes          PostLike[]
+  stories            Story[]
+  storyViews         StoryView[]
+  notifications      Notification[]             @relation("NotificationRecipient")
+  actedNotifications Notification[]             @relation("NotificationActor")
+  reminders          EventReminder[]
+  feedback           Feedback[]
+
+  @@map("users")
+}
+
+model OauthAccount {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  provider    String   @db.VarChar(40)
+  providerUid String   @map("provider_uid") @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUid])
+  @@map("oauth_accounts")
+}
+
+model UserSession {
+  // For anonymous sessions this id is the CLIENT-minted id (upserted by the
+  // ingest endpoint), so no forced default on the insert path — but native
+  // logins can let Postgres generate one.
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?   @map("user_id") @db.Uuid
+  device    String?   @db.VarChar(40)
+  userAgent String?   @map("user_agent")
+  startedAt DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  endedAt   DateTime? @map("ended_at") @db.Timestamptz(6)
+
+  user          User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interactions  InteractionEvent[]
+  searchQueries SearchQuery[]
+
+  @@map("user_sessions")
+}
+
+// ============================================================================
+// 6.2 Categories & Interests
+// ============================================================================
+
+model Category {
+  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug      String @unique @db.VarChar(40)
+  name      String @db.VarChar(60)
+  colorHex  String @map("color_hex") @db.VarChar(7)
+  icon      String @db.VarChar(40)
+  sortOrder Int    @map("sort_order")
+
+  interests          Interest[]
+  events             Event[]
+  interactions       InteractionEvent[]
+  categoryAffinities UserCategoryAffinity[]
+
+  @@map("categories")
+}
+
+model Interest {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug       String  @unique @db.VarChar(60)
+  label      String  @db.VarChar(80)
+  categoryId String  @map("category_id") @db.Uuid
+  icon       String  @db.VarChar(40)
+  isActive   Boolean @default(true) @map("is_active")
+  sortOrder  Int     @map("sort_order")
+
+  category      Category       @relation(fields: [categoryId], references: [id])
+  userInterests UserInterest[]
+
+  @@map("interests")
+}
+
+model UserInterest {
+  userId     String         @map("user_id") @db.Uuid
+  interestId String         @map("interest_id") @db.Uuid
+  source     InterestSource
+  weight     Decimal        @db.Decimal(5, 4)
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@id([userId, interestId])
+  @@map("user_interests")
+}
+
+// ============================================================================
+// 6.3 Events, Sports & Provenance
+// ============================================================================
+
+model Event {
+  id                    String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizerId           String?                  @map("organizer_id") @db.Uuid
+  externalOrganizerName String?                  @map("external_organizer_name") @db.VarChar(160)
+  title                 String                   @db.VarChar(200)
+  slug                  String?                  @db.VarChar(160)
+  description           String?
+  descriptionIsAi       Boolean                  @default(false) @map("description_is_ai")
+  flyerUrl              String?                  @map("flyer_url")
+  categoryId            String                   @map("category_id") @db.Uuid
+  status                EventStatus              @default(draft)
+  source                EventSource              @default(native)
+  externalId            String?                  @map("external_id") @db.VarChar(255)
+  externalUrl           String?                  @map("external_url")
+  rawPayload            Json?                    @map("raw_payload")
+  lastSyncedAt          DateTime?                @map("last_synced_at") @db.Timestamptz(6)
+  startsAt              DateTime                 @map("starts_at") @db.Timestamptz(6)
+  endsAt                DateTime?                @map("ends_at") @db.Timestamptz(6)
+  timezone              String?                  @db.VarChar(64)
+  venueName             String?                  @map("venue_name") @db.VarChar(160)
+  address               String?
+  city                  String?                  @db.VarChar(120)
+  lat                   Float?
+  lng                   Float?
+  googlePlaceId         String?                  @map("google_place_id")
+  priceMin              Decimal?                 @map("price_min") @db.Decimal(10, 2)
+  priceMax              Decimal?                 @map("price_max") @db.Decimal(10, 2)
+  isFree                Boolean                  @default(false) @map("is_free")
+  currency              String                   @default("USD") @db.Char(3)
+  capacity              Int?
+  ageMin                Int?                     @map("age_min") @db.SmallInt
+  ageLabel              String?                  @map("age_label") @db.VarChar(20)
+  isSports              Boolean                  @default(false) @map("is_sports")
+  rsvpCount             Int                      @default(0) @map("rsvp_count")
+  saveCount             Int                      @default(0) @map("save_count")
+  viewCount             Int                      @default(0) @map("view_count")
+  // GENERATED tsvector — created via raw SQL in the migration; tracked here as
+  // Unsupported so Prisma keeps the column across later diffs.
+  searchDocument        Unsupported("tsvector")? @map("search_document")
+  publishedAt           DateTime?                @map("published_at") @db.Timestamptz(6)
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organizer         User?                      @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  category          Category                   @relation(fields: [categoryId], references: [id])
+  tags              EventTag[]
+  sportsDetail      SportsDetail?
+  rosterEntries     RosterEntry[]
+  rsvps             Rsvp[]
+  savedEvents       SavedEvent[]
+  interactions      InteractionEvent[]
+  clickedInSearches SearchQuery[]              @relation("SearchClickedEvent")
+  embedding         EventEmbedding?
+  recImpressions    RecommendationImpression[]
+  aiLogs            AiGenerationLog[]
+  comments          Comment[]
+  posts             Post[]
+  stories           Story[]
+  notifications     Notification[]
+  reminders         EventReminder[]
+  analyticsDaily    EventAnalyticsDaily[]
+  reportedInFeedback Feedback[]                @relation("FeedbackReportedEvent")
+
+  @@unique([source, externalId])
+  @@index([status, startsAt])
+  @@index([categoryId, city, startsAt])
+  @@index([organizerId])
+  @@map("events")
+}
+
+model EventTag {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId    String    @map("event_id") @db.Uuid
+  slug       String    @db.VarChar(60)
+  label      String    @db.VarChar(80)
+  source     TagSource
+  confidence Decimal?  @db.Decimal(5, 4)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, slug])
+  @@map("event_tags")
+}
+
+model SportsDetail {
+  eventId         String       @id @map("event_id") @db.Uuid
+  sport           String       @db.VarChar(60)
+  skillLevel      SkillLevel   @map("skill_level")
+  venueSetting    VenueSetting @map("venue_setting")
+  playersNeeded   Int          @map("players_needed")
+  playersSignedUp Int          @default(0) @map("players_signed_up")
+  durationMinutes Int?         @map("duration_minutes")
+  defaultPosition String?      @map("default_position") @db.VarChar(60)
+  notes           String?
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  event         Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  positions     SportsPosition[]
+  rosterEntries RosterEntry[]
+
+  @@map("sports_details")
+}
+
+model SportsPosition {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sportsDetailId String      @map("sports_detail_id") @db.Uuid
+  label          String      @db.VarChar(60)
+  capacity       Int
+  skillLevel     SkillLevel? @map("skill_level")
+  sortOrder      Int         @map("sort_order")
+
+  sportsDetail  SportsDetail  @relation(fields: [sportsDetailId], references: [eventId], onDelete: Cascade)
+  rosterEntries RosterEntry[]
+
+  @@unique([sportsDetailId, label])
+  @@map("sports_positions")
+}
+
+model RosterEntry {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId          String       @map("event_id") @db.Uuid
+  sportsDetailId   String       @map("sports_detail_id") @db.Uuid
+  sportsPositionId String?      @map("sports_position_id") @db.Uuid
+  userId           String       @map("user_id") @db.Uuid
+  slotNumber       Int?         @map("slot_number") @db.SmallInt
+  status           RosterStatus
+  waitlistPosition Int?         @map("waitlist_position")
+  claimedAt        DateTime     @default(now()) @map("claimed_at") @db.Timestamptz(6)
+  cancelledAt      DateTime?    @map("cancelled_at") @db.Timestamptz(6)
+  checkedInAt      DateTime?    @map("checked_in_at") @db.Timestamptz(6)
+
+  event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  sportsDetail   SportsDetail    @relation(fields: [sportsDetailId], references: [eventId], onDelete: Cascade)
+  sportsPosition SportsPosition? @relation(fields: [sportsPositionId], references: [id], onDelete: SetNull)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, status])
+  @@index([userId])
+  @@map("roster_entries")
+}
+
+// ============================================================================
+// 6.4 Engagement & Behavioral Signals
+// ============================================================================
+
+model Rsvp {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String     @map("user_id") @db.Uuid
+  eventId     String     @map("event_id") @db.Uuid
+  status      RsvpStatus
+  guestsCount Int        @default(0) @map("guests_count")
+  attended    Boolean    @default(false)
+  checkedInAt DateTime?  @map("checked_in_at") @db.Timestamptz(6)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@map("rsvps")
+}
+
+model SavedEvent {
+  userId  String   @map("user_id") @db.Uuid
+  eventId String   @map("event_id") @db.Uuid
+  savedAt DateTime @default(now()) @map("saved_at") @db.Timestamptz(6)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([userId, eventId])
+  @@map("saved_events")
+}
+
+model Follow {
+  followerId String   @map("follower_id") @db.Uuid
+  followeeId String   @map("followee_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  follower User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followee User @relation("Followee", fields: [followeeId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followeeId])
+  @@map("follows")
+}
+
+model InteractionEvent {
+  id               BigInt             @id @default(autoincrement())
+  userId           String?            @map("user_id") @db.Uuid
+  sessionId        String?            @map("session_id") @db.Uuid
+  eventId          String?            @map("event_id") @db.Uuid
+  categoryId       String?            @map("category_id") @db.Uuid
+  targetUserId     String?            @map("target_user_id") @db.Uuid
+  interactionType  InteractionType    @map("interaction_type")
+  surface          InteractionSurface
+  weight           Decimal            @default(1.0) @db.Decimal(6, 4)
+  dwellMs          Int?               @map("dwell_ms")
+  feedPosition     Int?               @map("feed_position")
+  tag              String?            @db.VarChar(60)
+  recommendationId String?            @map("recommendation_id") @db.Uuid
+  searchQueryId    String?            @map("search_query_id") @db.Uuid
+  metadata         Json?
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user           User?                     @relation("InteractionActor", fields: [userId], references: [id], onDelete: Cascade)
+  session        UserSession?              @relation(fields: [sessionId], references: [id])
+  event          Event?                    @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  category       Category?                 @relation(fields: [categoryId], references: [id])
+  targetUser     User?                     @relation("InteractionTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  recommendation RecommendationImpression? @relation(fields: [recommendationId], references: [id])
+  searchQuery    SearchQuery?              @relation(fields: [searchQueryId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([eventId, interactionType])
+  @@index([interactionType])
+  @@map("interaction_events")
+}
+
+model SearchQuery {
+  id             String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String?                     @map("user_id") @db.Uuid
+  sessionId      String?                     @map("session_id") @db.Uuid
+  rawQuery       String                      @map("raw_query")
+  parsedFilters  Json?                       @map("parsed_filters")
+  surface        InteractionSurface
+  queryEmbedding Unsupported("vector(384)")? @map("query_embedding")
+  resultCount    Int?                        @map("result_count")
+  clickedEventId String?                     @map("clicked_event_id") @db.Uuid
+  latencyMs      Int?                        @map("latency_ms")
+  createdAt      DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user         User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  session      UserSession?       @relation(fields: [sessionId], references: [id])
+  clickedEvent Event?             @relation("SearchClickedEvent", fields: [clickedEventId], references: [id], onDelete: SetNull)
+  interactions InteractionEvent[]
+
+  @@map("search_queries")
+}
+
+model UserCategoryAffinity {
+  userId          String   @map("user_id") @db.Uuid
+  categoryId      String   @map("category_id") @db.Uuid
+  score           Decimal  @db.Decimal(8, 4)
+  positiveSignals Int      @map("positive_signals")
+  impressionCount Int      @map("impression_count")
+  lastSignalAt    DateTime @map("last_signal_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@id([userId, categoryId])
+  @@map("user_category_affinities")
+}
+
+// ============================================================================
+// 6.5 AI & Vectorization
+// ============================================================================
+
+model EventEmbedding {
+  eventId       String                     @id @map("event_id") @db.Uuid
+  embedding     Unsupported("vector(384)")
+  model         String                     @db.VarChar(80)
+  contentHash   String                     @map("content_hash")
+  vectorVersion Int                        @map("vector_version")
+  updatedAt     DateTime                   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("event_embeddings")
+}
+
+model UserPreferenceVector {
+  userId            String                     @id @map("user_id") @db.Uuid
+  embedding         Unsupported("vector(384)")
+  model             String                     @db.VarChar(80)
+  vectorVersion     Int                        @map("vector_version")
+  signalCount       Int                        @default(0) @map("signal_count")
+  decayHalfLifeDays Int?                       @map("decay_half_life_days")
+  lastBuiltFrom     DateTime?                  @map("last_built_from") @db.Timestamptz(6)
+  lastComputedAt    DateTime?                  @map("last_computed_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preference_vectors")
+}
+
+model RecommendationImpression {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String             @map("user_id") @db.Uuid
+  eventId         String             @map("event_id") @db.Uuid
+  feedRunId       String             @map("feed_run_id") @db.Uuid
+  rank            Int
+  score           Decimal            @db.Decimal(8, 6)
+  rationaleText   String?            @map("rationale_text") @db.VarChar(168)
+  rationaleSignal InteractionType?   @map("rationale_signal")
+  modelVersion    String?            @map("model_version") @db.VarChar(80)
+  surface         InteractionSurface
+  shownAt         DateTime           @default(now()) @map("shown_at") @db.Timestamptz(6)
+  clicked         Boolean            @default(false)
+  clickedAt       DateTime?          @map("clicked_at") @db.Timestamptz(6)
+  converted       Boolean            @default(false)
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event        Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  interactions InteractionEvent[]
+
+  @@map("recommendation_impressions")
+}
+
+model AiGenerationLog {
+  id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type       AiGenerationType
+  eventId    String?          @map("event_id") @db.Uuid
+  userId     String?          @map("user_id") @db.Uuid
+  model      String           @db.VarChar(80)
+  prompt     String?
+  output     Json?
+  tokensUsed Int?             @map("tokens_used")
+  latencyMs  Int?             @map("latency_ms")
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("ai_generation_logs")
+}
+
+model AiConversation {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  title     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String        @map("conversation_id") @db.Uuid
+  role           AiMessageRole
+  content        String
+  eventRefs      Json?         @map("event_refs")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("ai_messages")
+}
+
+// ============================================================================
+// 6.6 Social Layer
+// ============================================================================
+
+model Comment {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authorId        String    @map("author_id") @db.Uuid
+  eventId         String?   @map("event_id") @db.Uuid
+  postId          String?   @map("post_id") @db.Uuid
+  parentCommentId String?   @map("parent_comment_id") @db.Uuid
+  body            String
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  editedAt        DateTime? @map("edited_at") @db.Timestamptz(6)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  author  User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  event   Event?    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  post    Post?     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentThread", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentThread")
+
+  @@map("comments")
+}
+
+model Post {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authorId     String   @map("author_id") @db.Uuid
+  eventId      String?  @map("event_id") @db.Uuid
+  kind         PostKind
+  imageUrl     String?  @map("image_url")
+  caption      String?
+  likeCount    Int      @default(0) @map("like_count")
+  commentCount Int      @default(0) @map("comment_count")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  author   User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  event    Event?     @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  likes    PostLike[]
+  comments Comment[]
+
+  @@map("posts")
+}
+
+model PostLike {
+  postId    String   @map("post_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@map("post_likes")
+}
+
+model Story {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  eventId   String?  @map("event_id") @db.Uuid
+  mediaUrl  String   @map("media_url")
+  caption   String?  @db.VarChar(160)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+
+  author User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  event  Event?      @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  views  StoryView[]
+
+  @@map("stories")
+}
+
+model StoryView {
+  storyId  String   @map("story_id") @db.Uuid
+  viewerId String   @map("viewer_id") @db.Uuid
+  viewedAt DateTime @default(now()) @map("viewed_at") @db.Timestamptz(6)
+
+  story  Story @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  viewer User  @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@id([storyId, viewerId])
+  @@map("story_views")
+}
+
+// ============================================================================
+// 6.7 Notifications & Reminders
+// ============================================================================
+
+model Notification {
+  id        String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String              @map("user_id") @db.Uuid
+  type      NotificationType
+  channel   NotificationChannel
+  actorId   String?             @map("actor_id") @db.Uuid
+  eventId   String?             @map("event_id") @db.Uuid
+  title     String              @db.VarChar(160)
+  body      String?
+  metadata  Json?
+  isRead    Boolean             @default(false) @map("is_read")
+  readAt    DateTime?           @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user  User   @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor User?  @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model EventReminder {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String              @map("user_id") @db.Uuid
+  eventId       String              @map("event_id") @db.Uuid
+  offsetMinutes Int                 @map("offset_minutes")
+  remindAt      DateTime            @map("remind_at") @db.Timestamptz(6)
+  channel       NotificationChannel
+  status        ReminderStatus      @default(scheduled)
+  sentAt        DateTime?           @map("sent_at") @db.Timestamptz(6)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId, remindAt])
+  @@map("event_reminders")
+}
+
+// ============================================================================
+// 6.8 Organizer Analytics & Feedback
+// ============================================================================
+
+model EventAnalyticsDaily {
+  eventId String   @map("event_id") @db.Uuid
+  date    DateTime @db.Date
+  views   Int      @default(0)
+  saves   Int      @default(0)
+  rsvps   Int      @default(0)
+  shares  Int      @default(0)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, date])
+  @@map("event_analytics_daily")
+}
+
+model Feedback {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String?        @map("user_id") @db.Uuid
+  type            FeedbackType
+  status          FeedbackStatus @default(new)
+  subject         String?        @db.VarChar(160)
+  message         String
+  rating          Int?           @db.SmallInt
+  email           String?        @db.Citext
+  screen          String?        @db.VarChar(80)
+  appVersion      String?        @map("app_version") @db.VarChar(20)
+  userAgent       String?        @map("user_agent")
+  reportedEventId String?        @map("reported_event_id") @db.Uuid
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  resolvedAt      DateTime?      @map("resolved_at") @db.Timestamptz(6)
+
+  user          User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reportedEvent Event? @relation("FeedbackReportedEvent", fields: [reportedEventId], references: [id], onDelete: SetNull)
+
+  @@map("feedback")
+}

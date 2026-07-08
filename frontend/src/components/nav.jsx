@@ -27,7 +27,7 @@ export function TopNav() {
   const { isLoggedIn, user, role } = useApp()
   const canCreate = role === 'organizer'
 
-  const linkClass = (active: boolean) =>
+  const linkClass = (active) =>
     cn(
       'rounded-button px-4 py-2 text-sm transition-colors',
       active ? 'font-semibold text-primary' : 'font-medium text-text-secondary hover:text-ink',
@@ -107,7 +107,7 @@ export function BottomBar() {
   const { role } = useApp()
   const canCreate = role === 'organizer'
 
-  const tab = (to: string, Icon: typeof Home, label: string) => {
+  const tab = (to, Icon, label) => {
     const active = pathname.startsWith(to)
     return (
       <Link

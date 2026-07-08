@@ -2,7 +2,7 @@
  * Sprint-0 Lane-B spike: confirm the Groq (LLM) and Hugging Face (embeddings)
  * keys actually work. Throwaway diagnostic — safe to delete after it passes.
  *
- *   npx tsx backend/scripts/spike-ai.ts
+ *   node backend/scripts/spike-ai.js
  *
  * Reads keys from backend/.env (no dependency on dotenv — parsed inline).
  */
@@ -13,9 +13,9 @@ import { dirname, join } from 'node:path'
 const HERE = dirname(fileURLToPath(import.meta.url))
 
 // --- tiny .env reader (avoids adding a dep for a throwaway script) ---
-function loadEnv(): Record<string, string> {
+function loadEnv() {
   const path = join(HERE, '..', '.env')
-  const out: Record<string, string> = {}
+  const out = {}
   for (const line of readFileSync(path, 'utf8').split('\n')) {
     const t = line.trim()
     if (!t || t.startsWith('#')) continue
@@ -59,7 +59,7 @@ async function testGroq() {
     console.log(`  ✓ reply: ${JSON.stringify(json.choices?.[0]?.message?.content)}`)
     return true
   } catch (e) {
-    console.log(`  ✗ request failed: ${(e as Error).message}`)
+    console.log(`  ✗ request failed: ${e.message}`)
     return false
   }
 }
@@ -88,7 +88,7 @@ async function testHF() {
       console.log(`  ✗ HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`)
       return false
     }
-    const vec = (await res.json()) as number[]
+    const vec = await res.json()
     const dim = Array.isArray(vec) ? vec.length : -1
     console.log(`  ✓ got vector, dim = ${dim}  (expected 384)`)
     console.log(
@@ -100,7 +100,7 @@ async function testHF() {
     if (dim !== 384) console.log(`  ⚠ dim ${dim} ≠ 384 — the pinned DIM would need to change!`)
     return dim === 384
   } catch (e) {
-    console.log(`  ✗ request failed: ${(e as Error).message}`)
+    console.log(`  ✗ request failed: ${e.message}`)
     return false
   }
 }

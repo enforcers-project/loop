@@ -2,14 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, X, Send } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Event } from '../lib/types'
 import { cn } from '../lib/utils'
-
-interface ChatMsg {
-  role: 'user' | 'assistant'
-  text: string
-  events?: Event[]
-}
 
 const SUGGESTIONS = [
   'Free events this weekend',
@@ -18,7 +11,7 @@ const SUGGESTIONS = [
 ]
 
 /* Mini event result card rendered inline in the drawer. */
-function MiniEventCard({ event, onClick }: { event: Event; onClick: () => void }) {
+function MiniEventCard({ event, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -41,14 +34,14 @@ export function AIAssistant() {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
-  const [messages, setMessages] = useState<ChatMsg[]>([
+  const [messages, setMessages] = useState([
     {
       role: 'assistant',
       text: "Hey! I'm Loop AI. Tell me what you're in the mood for and I'll find events near you.",
     },
   ])
 
-  const ask = async (q: string) => {
+  const ask = async (q) => {
     const query = q.trim()
     if (!query) return
     setInput('')

@@ -1,13 +1,12 @@
 import { useNavigate } from 'react-router-dom'
 import { Calendar, MapPin } from 'lucide-react'
-import type { Event } from '../lib/types'
 import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
 import { useApp } from '../context/AppContext'
 import { EventImage } from './EventImage'
 import { AIChip, AlmostFullBadge, GoingStack, RSVPBtn, SaveBtn, VerifiedBadge } from './primitives'
 
 /* CategoryBadge — the top-left tint pill when there's no AI rationale. */
-function CategoryBadge({ category }: { category: Event['category'] }) {
+function CategoryBadge({ category }) {
   return (
     <span
       className="rounded-pill px-2.5 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur-sm"
@@ -18,15 +17,7 @@ function CategoryBadge({ category }: { category: Event['category'] }) {
   )
 }
 
-export function EventCard({
-  event,
-  showRationale = false,
-  onClick,
-}: {
-  event: Event
-  showRationale?: boolean
-  onClick?: () => void
-}) {
+export function EventCard({ event, showRationale = false, onClick }) {
   const navigate = useNavigate()
   const { savedIds, goingIds, toggleSaved, toggleGoing } = useApp()
   const saved = savedIds.has(event.id)
@@ -136,7 +127,7 @@ export function EventCard({
 
 /* Responsive event grid — 1 col mobile · 2 tablet · 3 medium desktop · 4 large.
    Uses CSS grid so every cell is equal width with consistent gaps. */
-export function EventGrid({ events, showRationale }: { events: Event[]; showRationale?: boolean }) {
+export function EventGrid({ events, showRationale }) {
   return (
     <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {events.map((e) => (

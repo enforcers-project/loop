@@ -2,7 +2,7 @@
 
 > AI-powered local-events discovery. This document is the single source of truth for our capstone plan. It is built section by section; the **Data Model (§6)** is the source of truth our Prisma schema is generated from.
 >
-> **Stack:** React + HTML/CSS/JS (TypeScript optional) · PostgreSQL + Prisma · External event APIs: Ticketmaster Discovery + SeatGeek · Google Maps (location / "near me") · Responsive mobile web.
+> **Stack:** React + HTML/CSS/JS (plain JavaScript / JSX) · PostgreSQL + Prisma · External event APIs: Ticketmaster Discovery + SeatGeek · Google Maps (location / "near me") · Responsive mobile web.
 >
 > **Sections:** (1) Team & Pod Members · (2) Problem Statement & Solution · (3) User Roles & Personas · (4) User Stories · (5) Wireframes · (6) Data Model · (7) API Contracts · (8) State Architecture · (9) AI Feature Specification · (10) Decisions Log.
 

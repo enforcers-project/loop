@@ -1,31 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bookmark, CalendarHeart, Sparkles, type LucideIcon } from 'lucide-react'
+import { Bookmark, CalendarHeart, Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Event, Interest } from '../lib/types'
 import { useApp } from '../context/AppContext'
 import { cn } from '../lib/utils'
 import { RoleBadge } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
 
-type Tab = 'Saved' | 'Going' | 'Interests'
-
 /* Designed empty state — icon, heading, description and a routed CTA. Sized to
    fill the tab area so an empty profile never looks broken. */
-function EmptyState({
-  Icon,
-  title,
-  description,
-  cta,
-  onCta,
-}: {
-  Icon: LucideIcon
-  title: string
-  description: string
-  cta: string
-  onCta: () => void
-}) {
+function EmptyState({ Icon, title, description, cta, onCta }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-card border border-dashed border-border-light bg-surface/50 px-6 py-16 text-center">
       <span className="grid h-16 w-16 place-items-center rounded-full bg-primary-light text-primary">
@@ -49,9 +34,9 @@ export function UserProfile() {
   // Two logic roles + the host capability drive the display RoleBadge:
   // an organizer-host shows the green "Sports Host" tint (per planning §5).
   const roleLabel = role === 'organizer' ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
-  const [tab, setTab] = useState<Tab>('Saved')
-  const [events, setEvents] = useState<Event[]>([])
-  const [allInterests, setAllInterests] = useState<Interest[]>([])
+  const [tab, setTab] = useState('Saved')
+  const [events, setEvents] = useState([])
+  const [allInterests, setAllInterests] = useState([])
 
   useEffect(() => {
     api.events().then(setEvents)
@@ -112,7 +97,7 @@ export function UserProfile() {
 
         {/* tabs */}
         <div className="mt-8 flex gap-7 border-b border-border-light">
-          {(['Saved', 'Going', 'Interests'] as Tab[]).map((t) => (
+          {['Saved', 'Going', 'Interests'].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}

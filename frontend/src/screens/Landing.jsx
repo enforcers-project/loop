@@ -2,11 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Search, Sparkles, Compass, Users } from 'lucide-react'
 import { api } from '../lib/api'
-import type { Event } from '../lib/types'
 import { CATEGORY_COLOR } from '../lib/utils'
 
 /* Mini preview card used below the hero CTAs. */
-function PreviewCard({ event }: { event: Event }) {
+function PreviewCard({ event }) {
   return (
     <Link
       to={event.isSports ? `/sports/${event.id}` : `/event/${event.id}`}
@@ -54,7 +53,7 @@ const VALUE_PROPS = [
 ]
 
 export function Landing() {
-  const [events, setEvents] = useState<Event[]>([])
+  const [events, setEvents] = useState([])
   useEffect(() => {
     api.events({ sort: 'popular' }).then(setEvents)
   }, [])

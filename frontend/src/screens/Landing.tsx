@@ -85,8 +85,8 @@ export function Landing() {
               Find your next <span className="text-primary">night out.</span>
             </h1>
             <p className="mx-auto mt-5 max-w-xl text-base text-white/60 md:text-lg">
-              The events near you, ranked by what you actually love. Parties, pickup
-              runs, food markets and more.
+              The events near you, ranked by what you actually love. Parties, pickup runs, food
+              markets and more.
             </p>
 
             {/* CTAs */}

@@ -11,7 +11,7 @@ export const CATEGORIES: CategoryDef[] = [
   { name: 'Networking', color: '#2D8CFF' },
   { name: 'Food', color: '#FFB020' },
   { name: 'Campus', color: '#FF7A45' },
-];
+]
 
 /** 24 interest chips for onboarding (Figma: INTERESTS 24 items) */
 export const INTERESTS: Interest[] = [
@@ -39,7 +39,7 @@ export const INTERESTS: Interest[] = [
   { id: 'greek', label: 'Greek Life', category: 'Campus' },
   { id: 'clubs-orgs', label: 'Clubs & Orgs', category: 'Campus' },
   { id: 'study-jams', label: 'Study Jams', category: 'Campus' },
-];
+]
 
 export const AVATARS: string[] = [
   'https://i.pravatar.cc/150?img=1',
@@ -54,7 +54,7 @@ export const AVATARS: string[] = [
   'https://i.pravatar.cc/150?img=48',
   'https://i.pravatar.cc/150?img=51',
   'https://i.pravatar.cc/150?img=60',
-];
+]
 
 export const ORGANIZERS: Organizer[] = [
   {
@@ -66,8 +66,7 @@ export const ORGANIZERS: Organizer[] = [
     role: 'Promoter',
     followers: 8420,
     bio: 'Bringing the biggest Afrobeats & Amapiano nights to the Bay. Rooftops, warehouses, good vibes only.',
-    cover:
-      'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=1200&q=80',
+    cover: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=1200&q=80',
   },
   {
     id: 'org-hoops',
@@ -78,8 +77,7 @@ export const ORGANIZERS: Organizer[] = [
     role: 'Sports Host',
     followers: 2130,
     bio: 'Pickup runs 5 days a week. All skill levels. Just show up and ball.',
-    cover:
-      'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=1200&q=80',
+    cover: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=1200&q=80',
   },
   {
     id: 'org-techbay',
@@ -90,8 +88,7 @@ export const ORGANIZERS: Organizer[] = [
     role: 'Organizer',
     followers: 5610,
     bio: 'Founder mixers, demo nights and career fairs for the next generation of builders.',
-    cover:
-      'https://images.unsplash.com/photo-1515187029135-18ee286d815b?w=1200&q=80',
+    cover: 'https://images.unsplash.com/photo-1515187029135-18ee286d815b?w=1200&q=80',
   },
   {
     id: 'org-tasteof',
@@ -102,8 +99,7 @@ export const ORGANIZERS: Organizer[] = [
     role: 'Organizer',
     followers: 1980,
     bio: 'Food halls, night markets and tasting pop-ups across the city.',
-    cover:
-      'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=1200&q=80',
+    cover: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=1200&q=80',
   },
   {
     id: 'org-campus',
@@ -114,13 +110,11 @@ export const ORGANIZERS: Organizer[] = [
     role: 'Organizer',
     followers: 3400,
     bio: 'Official student union events — mixers, study jams, game nights.',
-    cover:
-      'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1200&q=80',
+    cover: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1200&q=80',
   },
-];
+]
 
-const IMG = (id: string, w = 800) =>
-  `https://images.unsplash.com/${id}?w=${w}&q=80`;
+const IMG = (id: string, w = 800) => `https://images.unsplash.com/${id}?w=${w}&q=80`
 
 export const EVENTS: Event[] = [
   {
@@ -212,18 +206,90 @@ export const EVENTS: Event[] = [
       { label: 'Forward', capacity: 4, filled: 3 },
     ],
     roster: [
-      { name: 'Marcus B.', avatar: AVATARS[6], position: 'Goalkeeper', skill: 'Intermediate', status: 'claimed' },
-      { name: 'Dele A.', avatar: AVATARS[7], position: 'Defender', skill: 'Advanced', status: 'claimed' },
-      { name: 'Sam T.', avatar: AVATARS[8], position: 'Defender', skill: 'Beginner', status: 'claimed' },
-      { name: 'Chris O.', avatar: AVATARS[9], position: 'Defender', skill: 'Intermediate', status: 'claimed' },
-      { name: 'Jordan K.', avatar: AVATARS[10], position: 'Midfielder', skill: 'Advanced', status: 'claimed' },
-      { name: 'Tolu M.', avatar: AVATARS[11], position: 'Midfielder', skill: 'Intermediate', status: 'claimed' },
-      { name: 'Ade F.', avatar: AVATARS[0], position: 'Midfielder', skill: 'Beginner', status: 'claimed' },
-      { name: 'Nate W.', avatar: AVATARS[1], position: 'Midfielder', skill: 'Intermediate', status: 'claimed' },
-      { name: 'Kevin L.', avatar: AVATARS[2], position: 'Forward', skill: 'Advanced', status: 'claimed' },
-      { name: 'Femi B.', avatar: AVATARS[3], position: 'Forward', skill: 'Intermediate', status: 'claimed' },
-      { name: 'Ryan P.', avatar: AVATARS[4], position: 'Forward', skill: 'Beginner', status: 'claimed' },
-      { name: 'Omar S.', avatar: AVATARS[5], position: 'Forward', skill: 'Intermediate', status: 'waitlist' },
+      {
+        name: 'Marcus B.',
+        avatar: AVATARS[6],
+        position: 'Goalkeeper',
+        skill: 'Intermediate',
+        status: 'claimed',
+      },
+      {
+        name: 'Dele A.',
+        avatar: AVATARS[7],
+        position: 'Defender',
+        skill: 'Advanced',
+        status: 'claimed',
+      },
+      {
+        name: 'Sam T.',
+        avatar: AVATARS[8],
+        position: 'Defender',
+        skill: 'Beginner',
+        status: 'claimed',
+      },
+      {
+        name: 'Chris O.',
+        avatar: AVATARS[9],
+        position: 'Defender',
+        skill: 'Intermediate',
+        status: 'claimed',
+      },
+      {
+        name: 'Jordan K.',
+        avatar: AVATARS[10],
+        position: 'Midfielder',
+        skill: 'Advanced',
+        status: 'claimed',
+      },
+      {
+        name: 'Tolu M.',
+        avatar: AVATARS[11],
+        position: 'Midfielder',
+        skill: 'Intermediate',
+        status: 'claimed',
+      },
+      {
+        name: 'Ade F.',
+        avatar: AVATARS[0],
+        position: 'Midfielder',
+        skill: 'Beginner',
+        status: 'claimed',
+      },
+      {
+        name: 'Nate W.',
+        avatar: AVATARS[1],
+        position: 'Midfielder',
+        skill: 'Intermediate',
+        status: 'claimed',
+      },
+      {
+        name: 'Kevin L.',
+        avatar: AVATARS[2],
+        position: 'Forward',
+        skill: 'Advanced',
+        status: 'claimed',
+      },
+      {
+        name: 'Femi B.',
+        avatar: AVATARS[3],
+        position: 'Forward',
+        skill: 'Intermediate',
+        status: 'claimed',
+      },
+      {
+        name: 'Ryan P.',
+        avatar: AVATARS[4],
+        position: 'Forward',
+        skill: 'Beginner',
+        status: 'claimed',
+      },
+      {
+        name: 'Omar S.',
+        avatar: AVATARS[5],
+        position: 'Forward',
+        skill: 'Intermediate',
+        status: 'waitlist',
+      },
     ],
   },
   {
@@ -312,14 +378,62 @@ export const EVENTS: Event[] = [
       { label: 'Center', capacity: 4, filled: 1 },
     ],
     roster: [
-      { name: 'Tyrese J.', avatar: AVATARS[1], position: 'Guard', skill: 'Advanced', status: 'claimed' },
-      { name: 'Andre M.', avatar: AVATARS[4], position: 'Guard', skill: 'Intermediate', status: 'claimed' },
-      { name: 'Deshawn P.', avatar: AVATARS[7], position: 'Guard', skill: 'Beginner', status: 'claimed' },
-      { name: 'Malik R.', avatar: AVATARS[2], position: 'Forward', skill: 'Advanced', status: 'claimed' },
-      { name: 'Chris L.', avatar: AVATARS[5], position: 'Forward', skill: 'Intermediate', status: 'claimed' },
-      { name: 'Jamal K.', avatar: AVATARS[8], position: 'Forward', skill: 'Intermediate', status: 'claimed' },
-      { name: 'Devin W.', avatar: AVATARS[10], position: 'Forward', skill: 'Beginner', status: 'claimed' },
-      { name: 'Big Mike', avatar: AVATARS[11], position: 'Center', skill: 'Advanced', status: 'claimed' },
+      {
+        name: 'Tyrese J.',
+        avatar: AVATARS[1],
+        position: 'Guard',
+        skill: 'Advanced',
+        status: 'claimed',
+      },
+      {
+        name: 'Andre M.',
+        avatar: AVATARS[4],
+        position: 'Guard',
+        skill: 'Intermediate',
+        status: 'claimed',
+      },
+      {
+        name: 'Deshawn P.',
+        avatar: AVATARS[7],
+        position: 'Guard',
+        skill: 'Beginner',
+        status: 'claimed',
+      },
+      {
+        name: 'Malik R.',
+        avatar: AVATARS[2],
+        position: 'Forward',
+        skill: 'Advanced',
+        status: 'claimed',
+      },
+      {
+        name: 'Chris L.',
+        avatar: AVATARS[5],
+        position: 'Forward',
+        skill: 'Intermediate',
+        status: 'claimed',
+      },
+      {
+        name: 'Jamal K.',
+        avatar: AVATARS[8],
+        position: 'Forward',
+        skill: 'Intermediate',
+        status: 'claimed',
+      },
+      {
+        name: 'Devin W.',
+        avatar: AVATARS[10],
+        position: 'Forward',
+        skill: 'Beginner',
+        status: 'claimed',
+      },
+      {
+        name: 'Big Mike',
+        avatar: AVATARS[11],
+        position: 'Center',
+        skill: 'Advanced',
+        status: 'claimed',
+      },
     ],
   },
   {
@@ -373,7 +487,7 @@ export const EVENTS: Event[] = [
     almostFull: false,
     rationale: 'Because you like Campus Life',
   },
-];
+]
 
 /** Instagram-style social posts derived from events (Figma SocialFeed). */
 export const POSTS: Post[] = [
@@ -411,4 +525,4 @@ export const POSTS: Post[] = [
     comments: [{ id: 'c4', author: 'foodie_sf', text: 'The dumpling stall better be back' }],
     timeAgo: '1d',
   },
-];
+]

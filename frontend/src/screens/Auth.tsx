@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp, type Role } from '../context/AppContext'
 import { cn } from '../lib/utils'
@@ -23,10 +23,6 @@ export function Auth() {
   const [role, setRole] = useState<Role>('attendee')
   const [isHost, setIsHost] = useState(false)
 
-  useMemo(() => {
-    if (params.get('mode') === 'login') setMode('login')
-  }, [params])
-
   // Hosting is organizer-only; drop the flag if they aren't signing up as one.
   const wantsHost = role === 'organizer' && isHost
 
@@ -44,7 +40,10 @@ export function Auth() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-5 py-10">
       <div className="w-full max-w-md">
-        <Link to="/" className="mb-6 flex items-center justify-center gap-2 font-display text-2xl font-bold text-ink">
+        <Link
+          to="/"
+          className="mb-6 flex items-center justify-center gap-2 font-display text-2xl font-bold text-ink"
+        >
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary">
             <span className="block h-3.5 w-3.5 rounded-full border-[3px] border-white" />
           </span>
@@ -75,12 +74,13 @@ export function Auth() {
               Continue with Google
             </button>
             <button className="flex w-full items-center justify-center gap-2 rounded-button border border-border-light bg-white py-2.5 text-sm font-semibold text-ink hover:bg-surface">
-               Continue with Apple
+              Continue with Apple
             </button>
           </div>
 
           <div className="my-5 flex items-center gap-3 text-xs text-text-muted">
-            <span className="h-px flex-1 bg-border-light" /> or {mode === 'signup' ? 'sign up' : 'log in'} with email
+            <span className="h-px flex-1 bg-border-light" /> or{' '}
+            {mode === 'signup' ? 'sign up' : 'log in'} with email
             <span className="h-px flex-1 bg-border-light" />
           </div>
 

@@ -1,12 +1,6 @@
 // Shared domain types — mirror the backend seed shape.
 
-export type Category =
-  | 'Music'
-  | 'Nightlife'
-  | 'Sports'
-  | 'Networking'
-  | 'Food'
-  | 'Campus'
+export type Category = 'Music' | 'Nightlife' | 'Sports' | 'Networking' | 'Food' | 'Campus'
 
 export type Role = 'Attendee' | 'Organizer' | 'Promoter' | 'Sports Host'
 

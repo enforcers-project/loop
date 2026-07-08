@@ -77,7 +77,9 @@ export function OrganizerProfile() {
               onClick={() => setTab(t)}
               className={cn(
                 'border-b-2 pb-3 text-sm font-semibold capitalize transition-colors',
-                tab === t ? 'border-primary text-primary' : 'border-transparent text-text-secondary',
+                tab === t
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-text-secondary',
               )}
             >
               {t}

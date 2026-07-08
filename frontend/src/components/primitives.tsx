@@ -6,18 +6,10 @@ import type { Role } from '../lib/types'
 /* --------------------------------------------------------------------------
    FormField — label (13px Inter 500 #6B6B76) above child
 -------------------------------------------------------------------------- */
-export function FormField({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactNode
-}) {
+export function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
-        {label}
-      </span>
+      <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">{label}</span>
       {children}
     </label>
   )

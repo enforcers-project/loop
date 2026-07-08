@@ -95,9 +95,7 @@ export function SportsPickupDetail() {
                   {signed}
                   <span className="text-text-muted">/{needed}</span>
                 </span>
-                <span className="text-sm font-medium text-text-secondary">
-                  {event.price} entry
-                </span>
+                <span className="text-sm font-medium text-text-secondary">{event.price} entry</span>
               </div>
               <p className="mt-1 text-sm text-text-secondary">players signed up</p>
 
@@ -151,7 +149,11 @@ export function SportsPickupDetail() {
                       : 'cursor-not-allowed bg-surface text-text-muted',
                 )}
               >
-                {joined ? 'You’re in ✓ — leave run' : position ? `Join as ${position}` : 'Pick a position'}
+                {joined
+                  ? 'You’re in ✓ — leave run'
+                  : position
+                    ? `Join as ${position}`
+                    : 'Pick a position'}
               </button>
             </div>
           </div>

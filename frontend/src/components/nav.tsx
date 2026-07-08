@@ -30,9 +30,7 @@ export function TopNav() {
   const linkClass = (active: boolean) =>
     cn(
       'rounded-button px-4 py-2 text-sm transition-colors',
-      active
-        ? 'font-semibold text-primary'
-        : 'font-medium text-text-secondary hover:text-ink',
+      active ? 'font-semibold text-primary' : 'font-medium text-text-secondary hover:text-ink',
     )
 
   return (

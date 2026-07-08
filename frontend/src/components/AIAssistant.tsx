@@ -56,10 +56,7 @@ export function AIAssistant() {
     setThinking(true)
     const res = await api.aiSearch(query)
     setThinking(false)
-    setMessages((m) => [
-      ...m,
-      { role: 'assistant', text: res.reply, events: res.events },
-    ])
+    setMessages((m) => [...m, { role: 'assistant', text: res.reply, events: res.events }])
   }
 
   return (

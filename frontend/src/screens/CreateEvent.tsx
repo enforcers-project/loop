@@ -50,15 +50,10 @@ export function CreateEvent() {
     id: 'preview',
     title: title || 'Your event title',
     category,
-    poster:
-      flyer ||
-      'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=800&q=80',
+    poster: flyer || 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=800&q=80',
     price: price ? `$${price}` : 'Free',
     isFree: !price || price === '0',
-    date:
-      date || time
-        ? `${date || 'Date'} · ${time || 'Time'}`
-        : 'Date · Time',
+    date: date || time ? `${date || 'Date'} · ${time || 'Time'}` : 'Date · Time',
     isoDate: '',
     venueName: location || 'Venue',
     city: 'Oakland',
@@ -137,7 +132,9 @@ export function CreateEvent() {
 
           {/* category chips */}
           <div>
-            <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">Category</span>
+            <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
+              Category
+            </span>
             <div className="flex flex-wrap gap-2">
               {CATEGORIES.map((c) => (
                 <button
@@ -149,7 +146,11 @@ export function CreateEvent() {
                       ? 'border-primary bg-primary text-white'
                       : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
                   )}
-                  style={category === c ? { backgroundColor: CATEGORY_COLOR[c], borderColor: CATEGORY_COLOR[c] } : undefined}
+                  style={
+                    category === c
+                      ? { backgroundColor: CATEGORY_COLOR[c], borderColor: CATEGORY_COLOR[c] }
+                      : undefined
+                  }
                 >
                   {c}
                 </button>
@@ -166,7 +167,10 @@ export function CreateEvent() {
                   placeholder="Sat, Jul 12"
                   className={cn(inputClass, 'pr-10')}
                 />
-                <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <Calendar
+                  size={16}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
+                />
               </div>
             </FormField>
             <FormField label="Time">
@@ -187,19 +191,37 @@ export function CreateEvent() {
                 placeholder="Skyline Rooftop, Oakland"
                 className={cn(inputClass, 'pr-10')}
               />
-              <MapPin size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              <MapPin
+                size={16}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
+              />
             </div>
           </FormField>
 
           <div className="grid grid-cols-3 gap-4">
             <FormField label="Price ($)">
-              <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0" className={inputClass} />
+              <input
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="0"
+                className={inputClass}
+              />
             </FormField>
             <FormField label="Capacity">
-              <input value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="100" className={inputClass} />
+              <input
+                value={capacity}
+                onChange={(e) => setCapacity(e.target.value)}
+                placeholder="100"
+                className={inputClass}
+              />
             </FormField>
             <FormField label="Min age">
-              <input value={age} onChange={(e) => setAge(e.target.value)} placeholder="18" className={inputClass} />
+              <input
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                placeholder="18"
+                className={inputClass}
+              />
             </FormField>
           </div>
 
@@ -249,72 +271,74 @@ export function CreateEvent() {
 
           {/* sports toggle — host capability only */}
           {isHost && (
-          <div className="rounded-card border border-border-light p-4">
-            <label className="flex cursor-pointer items-center justify-between">
-              <div>
-                <span className="text-sm font-semibold text-ink">This is a pickup run</span>
-                <p className="text-xs text-text-secondary">Add roster, positions & skill level.</p>
-              </div>
-              <input
-                type="checkbox"
-                checked={isSports}
-                onChange={(e) => setIsSports(e.target.checked)}
-                className="peer sr-only"
-              />
-              <span className="relative h-6 w-11 rounded-full bg-border-light transition-colors peer-checked:bg-primary">
-                <span
-                  className={cn(
-                    'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform',
-                    isSports ? 'translate-x-5' : 'translate-x-0.5',
-                  )}
+            <div className="rounded-card border border-border-light p-4">
+              <label className="flex cursor-pointer items-center justify-between">
+                <div>
+                  <span className="text-sm font-semibold text-ink">This is a pickup run</span>
+                  <p className="text-xs text-text-secondary">
+                    Add roster, positions & skill level.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={isSports}
+                  onChange={(e) => setIsSports(e.target.checked)}
+                  className="peer sr-only"
                 />
-              </span>
-            </label>
+                <span className="relative h-6 w-11 rounded-full bg-border-light transition-colors peer-checked:bg-primary">
+                  <span
+                    className={cn(
+                      'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform',
+                      isSports ? 'translate-x-5' : 'translate-x-0.5',
+                    )}
+                  />
+                </span>
+              </label>
 
-            {isSports && (
-              <div className="mt-4 space-y-4 border-t border-border-light pt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField label="Players needed">
+              {isSports && (
+                <div className="mt-4 space-y-4 border-t border-border-light pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField label="Players needed">
+                      <input
+                        value={playersNeeded}
+                        onChange={(e) => setPlayersNeeded(e.target.value)}
+                        placeholder="14"
+                        className={inputClass}
+                      />
+                    </FormField>
+                    <FormField label="Skill level">
+                      <select
+                        value={skill}
+                        onChange={(e) => setSkill(e.target.value)}
+                        className={inputClass}
+                      >
+                        <option>All Levels</option>
+                        <option>Beginner</option>
+                        <option>Intermediate</option>
+                        <option>Advanced</option>
+                      </select>
+                    </FormField>
+                  </div>
+                  <FormField label="Positions (comma separated)">
                     <input
-                      value={playersNeeded}
-                      onChange={(e) => setPlayersNeeded(e.target.value)}
-                      placeholder="14"
+                      value={positions}
+                      onChange={(e) => setPositions(e.target.value)}
+                      placeholder={POSITION_TEMPLATE}
                       className={inputClass}
                     />
                   </FormField>
-                  <FormField label="Skill level">
-                    <select
-                      value={skill}
-                      onChange={(e) => setSkill(e.target.value)}
-                      className={inputClass}
-                    >
-                      <option>All Levels</option>
-                      <option>Beginner</option>
-                      <option>Intermediate</option>
-                      <option>Advanced</option>
-                    </select>
-                  </FormField>
+                  <label className="flex items-center gap-2 text-sm text-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={indoor}
+                      onChange={(e) => setIndoor(e.target.checked)}
+                      className="h-4 w-4 rounded border-border-light text-primary"
+                    />
+                    Indoor court/field
+                  </label>
                 </div>
-                <FormField label="Positions (comma separated)">
-                  <input
-                    value={positions}
-                    onChange={(e) => setPositions(e.target.value)}
-                    placeholder={POSITION_TEMPLATE}
-                    className={inputClass}
-                  />
-                </FormField>
-                <label className="flex items-center gap-2 text-sm text-text-secondary">
-                  <input
-                    type="checkbox"
-                    checked={indoor}
-                    onChange={(e) => setIndoor(e.target.checked)}
-                    className="h-4 w-4 rounded border-border-light text-primary"
-                  />
-                  Indoor court/field
-                </label>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
           )}
 
           <button className="w-full rounded-button bg-accent py-3.5 text-sm font-semibold text-white transition-transform active:scale-95">

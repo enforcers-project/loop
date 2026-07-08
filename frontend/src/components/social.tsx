@@ -57,8 +57,7 @@ export function PostCard({ post }: { post: Post }) {
   const [saved, setSaved] = useState(false)
   const org = post.organizer
 
-  const iconBtn =
-    'grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-surface'
+  const iconBtn = 'grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-surface'
 
   return (
     <article className="overflow-hidden rounded-card border border-border-light bg-white shadow-card">
@@ -91,7 +90,12 @@ export function PostCard({ post }: { post: Post }) {
 
       {/* action row — even spacing, larger tap targets */}
       <div className="flex items-center gap-1 px-3 pt-2.5">
-        <button onClick={() => setLiked((v) => !v)} className={iconBtn} aria-label="Like" aria-pressed={liked}>
+        <button
+          onClick={() => setLiked((v) => !v)}
+          className={iconBtn}
+          aria-label="Like"
+          aria-pressed={liked}
+        >
           <Heart
             size={22}
             className={cn('transition-colors', liked ? 'fill-accent text-accent' : 'text-ink')}

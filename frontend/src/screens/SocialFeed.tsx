@@ -75,11 +75,7 @@ export function SocialFeed() {
             <SidebarCard title="Your upcoming RSVPs">
               <div className="space-y-3.5">
                 {upcoming.map((e) => (
-                  <Link
-                    key={e.id}
-                    to={`/event/${e.id}`}
-                    className="group flex items-center gap-3"
-                  >
+                  <Link key={e.id} to={`/event/${e.id}`} className="group flex items-center gap-3">
                     <Thumb event={e} size={44} />
                     <div className="min-w-0">
                       <p className="truncate text-[13px] font-semibold text-ink group-hover:text-primary">

@@ -33,10 +33,7 @@ export function formatCount(n: number): string {
  * label — never long enough to truncate or overflow. Falls back to the
  * event category so "Because you like …" stays specific but concise.
  */
-export function recommendationLabel(
-  rationale: string | undefined,
-  category?: Category,
-): string {
+export function recommendationLabel(rationale: string | undefined, category?: Category): string {
   if (!rationale) return 'Recommended'
   const r = rationale.toLowerCase()
   if (r.includes('saved')) return 'Similar to saved'

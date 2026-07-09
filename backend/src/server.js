@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { EVENTS, ORGANIZERS, CATEGORIES, INTERESTS, AVATARS, POSTS } from './data/seed.js'
+import adminSyncRouter from './sync/routes.js'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3000
@@ -178,6 +179,9 @@ app.post('/api/ai/search', (req, res) => {
     : `I couldn't find an exact match, but here are some popular events near you:`
   ok(res, { reply, events: events.length ? events : EVENTS.slice(0, 3).map(withOrganizer) })
 })
+
+// --- Admin sync routes (§7.7) ------------------------------------------------
+app.use('/api/admin', adminSyncRouter)
 
 app.listen(PORT, () => {
   console.log(`Loop backend listening on http://localhost:${PORT}`)

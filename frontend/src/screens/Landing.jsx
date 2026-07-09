@@ -185,11 +185,8 @@ function LandingNav() {
   return (
     <div className="border-b border-white/10">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5">
-        <Link to="/" className="flex items-center gap-2 font-display text-xl font-bold text-white">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary">
-            <span className="block h-3 w-3 rounded-full border-[3px] border-white" />
-          </span>
-          Loop
+        <Link to="/" className="flex items-center">
+          <img src="/logo.png" alt="Loop" className="h-7 w-auto" />
         </Link>
         <div className="flex items-center gap-3">
           <Link

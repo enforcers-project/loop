@@ -3,14 +3,7 @@ import { Bell, Compass, Home, PlusCircle, Users, Search, User } from 'lucide-rea
 import { cn } from '../lib/utils'
 import { useApp } from '../context/AppContext'
 
-const LOGO = (
-  <span className="flex items-center gap-2 font-display text-xl font-bold text-ink">
-    <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary">
-      <span className="block h-3 w-3 rounded-full border-[3px] border-white" />
-    </span>
-    Loop
-  </span>
-)
+const LOGO = <img src="/logo.png" alt="Loop" className="h-7 w-auto" />
 
 const NAV_LINKS = [
   { label: 'For You', to: '/feed' },

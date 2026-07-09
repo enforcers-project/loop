@@ -38,14 +38,8 @@ export function Auth() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-5 py-10">
       <div className="w-full max-w-md">
-        <Link
-          to="/"
-          className="mb-6 flex items-center justify-center gap-2 font-display text-2xl font-bold text-ink"
-        >
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary">
-            <span className="block h-3.5 w-3.5 rounded-full border-[3px] border-white" />
-          </span>
-          Loop
+        <Link to="/" className="mb-6 flex items-center justify-center">
+          <img src="/logo.png" alt="Loop" className="h-8 w-auto" />
         </Link>
 
         <div className="rounded-card border border-border-light bg-white p-6 shadow-card sm:p-8">

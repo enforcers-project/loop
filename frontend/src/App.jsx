@@ -1,5 +1,7 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import { AppProvider, useApp } from './context/AppContext'
+import { ToastProvider } from './context/ToastContext'
+import { ModalProvider } from './context/ModalContext'
 import { TopNav, BottomBar } from './components/nav'
 import { AIAssistant } from './components/AIAssistant'
 import { Landing } from './screens/Landing'
@@ -51,9 +53,16 @@ function Shell() {
 }
 
 export default function App() {
+  // ModalProvider is inside BrowserRouter (from main.jsx) so it can navigate;
+  // ToastProvider + ModalProvider wrap AppProvider so any screen can raise
+  // toasts and dialogs. QueryClientProvider lives at the root in main.jsx.
   return (
-    <AppProvider>
-      <Shell />
-    </AppProvider>
+    <ToastProvider>
+      <ModalProvider>
+        <AppProvider>
+          <Shell />
+        </AppProvider>
+      </ModalProvider>
+    </ToastProvider>
   )
 }

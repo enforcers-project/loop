@@ -2,6 +2,8 @@ import express from 'express'
 import cors from 'cors'
 import { EVENTS, ORGANIZERS, CATEGORIES, INTERESTS, AVATARS, POSTS } from './data/seed.js'
 import adminSyncRouter from './sync/routes.js'
+import adminJobsRouter from './jobs/routes.js'
+import { startScheduler } from './jobs/index.js'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3000
@@ -183,6 +185,11 @@ app.post('/api/ai/search', (req, res) => {
 // --- Admin sync routes (§7.7) ------------------------------------------------
 app.use('/api/admin', adminSyncRouter)
 
+// --- Admin job runner routes (#5b) -------------------------------------------
+app.use('/api/admin', adminJobsRouter)
+
+// --- Start --------------------------------------------------------------------
 app.listen(PORT, () => {
   console.log(`Loop backend listening on http://localhost:${PORT}`)
+  startScheduler()
 })

@@ -1,0 +1,57 @@
+import { registerJob } from './scheduler.js'
+
+// Each stub logs and returns a summary. Real implementations replace these in later sprints.
+
+registerJob('sync-external-events', {
+  schedule: '0 */4 * * *', // every 4 hours
+  handler: async () => {
+    console.log('[job:sync-external-events] stub — would pull Ticketmaster + SeatGeek')
+    return { stub: true }
+  },
+})
+
+registerJob('flip-past-events', {
+  schedule: '*/15 * * * *', // every 15 minutes
+  handler: async () => {
+    console.log(
+      '[job:flip-past-events] stub — would set status=past for events where starts_at < now()',
+    )
+    return { stub: true }
+  },
+})
+
+registerJob('rebuild-user-vectors', {
+  schedule: '*/15 * * * *', // every 15 minutes (watermark-driven)
+  handler: async () => {
+    console.log(
+      '[job:rebuild-user-vectors] stub — would rebuild preference vectors + category affinities',
+    )
+    return { stub: true }
+  },
+})
+
+registerJob('embed-pending-events', {
+  schedule: '*/5 * * * *', // every 5 minutes
+  handler: async () => {
+    console.log(
+      '[job:embed-pending-events] stub — would generate embeddings for un-embedded events',
+    )
+    return { stub: true }
+  },
+})
+
+registerJob('dispatch-reminders', {
+  schedule: '* * * * *', // every minute
+  handler: async () => {
+    console.log('[job:dispatch-reminders] stub — would scan due reminders and emit notifications')
+    return { stub: true }
+  },
+})
+
+registerJob('expire-stories', {
+  schedule: '0 * * * *', // every hour
+  handler: async () => {
+    console.log('[job:expire-stories] stub — would mark stories older than 24h as expired')
+    return { stub: true }
+  },
+})

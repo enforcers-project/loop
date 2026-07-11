@@ -301,11 +301,45 @@ pipeline (same endpoint contract): PRE-FILTER (SQL: status/date-window/category/
 going/saved/recently-shown — NO price/age/free predicates, per the fix) → RANK (pgvector cosine <=> on
 event_embeddings; LEFT JOIN so un-embedded candidates fall back to affinity/popularity, not vanish) →
 RE-RANK (the coefficient blend incl. popularity = rsvp_count + players_signed_up + 2*save_count; MMR
-diversity, disabled below ~30 candidates) → persist recommendation_impressions + templated rationale
-(gated: only "Because you X" when a real active signal backs it, else neutral; hard-capped to fit the
-AIChip). Wire POST /recommendations/:id/feedback (click/dismiss/convert) and the interactions back-writes.
+diversity, disabled below ~30 candidates; PLUS the social-graph + proximity boosts below) → persist
+recommendation_impressions + templated rationale (gated: only "Because you X" when a real active signal
+backs it, else neutral; hard-capped to fit the AIChip). Wire POST /recommendations/:id/feedback
+(click/dismiss/convert) and the interactions back-writes.
+
+SOCIAL-GRAPH BOOST — add these as additive re-rank coefficients (relational, not vectorized):
+  1. friends_going: count of users I follow who RSVP'd 'going' to this event (high weight)
+  2. friends_saved: count of users I follow who saved this event (medium weight)
+  3. followed_organizer: binary — do I follow this event's organizer? (high weight)
+  4. organizer_followed_by_friends: count of people I follow who follow this organizer (low-medium)
+  5. interest_overlap: how many of this event's tags match interests of users I follow who are going (low — "your crowd is into this")
+  6. repeat_attendees: did people who went to events I attended also RSVP here? (medium — implicit taste similarity without explicit friendship)
+  7. geographic_affinity: is the venue in an area where people I follow frequently attend events? (low)
+  8. shared_category_momentum: are multiple people in my graph RSVPing to the same *category* this week? (low — "your friends are on a hiking kick")
+
+PROXIMITY BOOST — distance from the user's location to the event venue:
+  9. proximity_score: inverse distance decay — closer events score higher. Use Haversine distance
+     from user's city center (or device location if granted) to event lat/lng.
+     Formula: proximity_score = 1 / (1 + distance_km / decay_km), where decay_km ~5 for urban.
+     Events within ~2 km get near-max boost; events >20 km get negligible boost.
+     Fallback: if user has no location, skip this signal (don't penalize, just omit).
+     Also expose raw distance on the card: "0.3 mi away" / "2.1 mi" for rationale/UI.
+
+Compute at query time via SQL joins against follows + rsvps + saved_events + Haversine on lat/lng.
+Cache per-user for ~5 min (invalidate on follow/unfollow/rsvp; proximity recalc on location change).
+The final re-rank formula becomes:
+  score = w_cos * cosine + w_pop * popularity + w_social * social_boost
+        + w_prox * proximity_score + w_recency * recency
+where social_boost = weighted_sum(signals 1–8 above), normalized 0–1.
+
+Rationale chips for social + proximity signals (only when the backing signal is real + active):
+  - "3 friends are going"
+  - "Followed by [organizer you follow]"
+  - "Popular with people you follow"
+  - "People from [past event you attended] are going"
+  - "0.5 mi from you"
+  - "Walking distance"
 ```
-**Verify:** the feed is now vector-personalized; rationale chips cite real signals; a dismiss reorders next run.
+**Verify:** the feed is now vector-personalized; rationale chips cite real signals; social-graph boost visibly promotes events your network engages with; a dismiss reorders next run.
 - [ ] Done
 
 ### Step 3.4 — Natural-language search  *(work-plan #22)*

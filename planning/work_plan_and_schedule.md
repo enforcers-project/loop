@@ -109,6 +109,8 @@ Lane A/B are backend-heavy (that's where the unbuilt work is); Lane C is mostly 
 | #19 | `event_embeddings` pipeline (composed text, `content_hash` skip-guard, HNSW; run on publish/sync/edit + tag change) | **B** | MVP |
 | #20 | `user_preference_vectors` builder (single replay source; reversal=supersede; decay H=30d; seed blend α=min(1,signal/8)) | **B** | MVP |
 | #21 | Recommendation engine proper (PRE-FILTER → pgvector kNN → RE-RANK + MMR + rationale + feedback loop) | **B** | MVP |
+| #21a | ↳ Social-graph boost: friends_going, friends_saved, followed_organizer, organizer_followed_by_friends, interest_overlap, repeat_attendees, geographic_affinity, shared_category_momentum — SQL joins at query time, 5-min cache | **B** | MVP |
+| #21b | ↳ Proximity boost: Haversine distance decay score + raw distance on card ("0.5 mi away") | **B** | MVP |
 | #22 | Natural-language search (LLM parse → `parsed_filters` as hard constraints; pgvector re-rank; removable pills) | **A** | MVP |
 | #23 | Sports roster + SportsPickupDetail (join/release/waitlist/promote, capacity trigger, host manage) | **A (backend) + C (screen)** | MVP |
 | #24 | AI auto-tag (`confidence ≥ 0.6`, removable "×" panel) | **A** | nice-to-have |
@@ -118,7 +120,7 @@ Lane A/B are backend-heavy (that's where the unbuilt work is); Lane C is mostly 
 
 **Cut order if short on time:** #25 → #24 → #27 (all nice-to-have). Keep #19–#23 (the headline features).
 
-**Done when:** the feed is vector-personalized (save an event → next feed reorders, rationale cites a real signal); "free events this weekend" returns free weekend events and **never leaks a paid event**; two users claim spots and a third waitlists at capacity, a release auto-promotes. **Tag `sprint-3`.**
+**Done when:** the feed is vector-personalized (save an event → next feed reorders, rationale cites a real signal); social-graph boost visibly promotes events friends are attending ("3 friends are going"); proximity boost shows distance and favors nearby events; "free events this weekend" returns free weekend events and **never leaks a paid event**; two users claim spots and a third waitlists at capacity, a release auto-promotes. **Tag `sprint-3`.**
 
 ---
 

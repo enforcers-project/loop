@@ -12,15 +12,21 @@ const pillUnselected = 'bg-white text-text-secondary border-border-light hover:b
 -------------------------------------------------------------------------- */
 const CATS = ['All', 'Music', 'Nightlife', 'Sports', 'Networking', 'Food', 'Campus']
 
-export function CatRow({ active, onChange }) {
+// Single-select by default (feed tabs: `active` is a string). Pass `multi` with
+// an array `active` for Discover's behavior — toggle any number of categories;
+// "All" reads as selected only when nothing else is (and clears on click).
+export function CatRow({ active, onChange, multi = false }) {
+  const isOn = (c) =>
+    multi ? (c === 'All' ? active.length === 0 : active.includes(c)) : active === c
+
   return (
     <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
       {CATS.map((c) => (
         <button
           key={c}
           onClick={() => onChange(c)}
-          aria-pressed={active === c}
-          className={cn(pillBase, active === c ? pillSelected : pillUnselected)}
+          aria-pressed={isOn(c)}
+          className={cn(pillBase, isOn(c) ? pillSelected : pillUnselected)}
         >
           {c}
         </button>
@@ -64,6 +70,8 @@ export function SearchBar({
   value,
   onChange,
   onSubmit,
+  onLocation,
+  locating = false,
   showMic = true,
   showLocation = true,
   city = 'Oakland',
@@ -82,11 +90,14 @@ export function SearchBar({
       />
       {showLocation && (
         <button
-          className="hidden h-8 items-center gap-1 rounded-pill bg-surface px-3 text-xs font-semibold text-text-secondary transition-colors hover:text-ink sm:flex"
-          aria-label={`Location: ${city}`}
+          type="button"
+          onClick={onLocation}
+          disabled={locating}
+          className="hidden h-8 items-center gap-1 rounded-pill bg-surface px-3 text-xs font-semibold text-text-secondary transition-colors hover:text-ink disabled:opacity-60 sm:flex"
+          aria-label={`Location: ${city}. Tap to use your current location.`}
         >
           <MapPin size={14} className="text-text-muted" />
-          {city}
+          {locating ? 'Locating…' : city}
         </button>
       )}
       {showMic && (

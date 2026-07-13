@@ -8,6 +8,7 @@ import eventsRouter from './events/routes.js'
 import interactionsRouter from './interactions/routes.js'
 import authRouter from './auth/routes.js'
 import { attachSession } from './auth/middleware.js'
+import recommendationsRouter from './recommendations/routes.js'
 import { startScheduler } from './jobs/index.js'
 
 const app = express()
@@ -47,29 +48,8 @@ app.get('/api/avatars', (_req, res) => ok(res, AVATARS))
 // --- Events (Prisma-backed, cursor-paginated) --------------------------------
 app.use('/api/events', eventsRouter)
 
-// --- Recommendations (basic fallback path, planning §9.1 #1–2) --------------
-// POST /api/recommendations { interests?: string[] }
-app.post('/api/recommendations', (req, res) => {
-  const interests = Array.isArray(req.body?.interests) ? req.body.interests : []
-  const interestCats = new Set(
-    INTERESTS.filter((i) => interests.includes(i.id)).map((i) => i.category),
-  )
-
-  const scored = EVENTS.map(withOrganizer)
-    .map((e) => {
-      const affinity = interestCats.has(e.category) ? 1 : 0
-      const popularity = e.rsvpCount + 2 * e.saveCount
-      return { e, score: affinity * 100000 + popularity }
-    })
-    .sort((a, b) => b.score - a.score)
-    .map(({ e }) =>
-      interestCats.size && !interestCats.has(e.category)
-        ? { ...e, rationale: 'Popular near you' }
-        : e,
-    )
-
-  ok(res, scored)
-})
+// --- Recommendations (Prisma-backed affinity/popularity ranking) -------------
+app.use('/api', recommendationsRouter)
 
 // --- Organizers -------------------------------------------------------------
 app.get('/api/organizers/:id', (req, res) => {

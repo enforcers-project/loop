@@ -7,6 +7,7 @@ import adminJobsRouter from './jobs/routes.js'
 import eventsRouter from './events/routes.js'
 import interactionsRouter from './interactions/routes.js'
 import authRouter from './auth/routes.js'
+import usersRouter from './users/routes.js'
 import { attachSession } from './auth/middleware.js'
 import recommendationsRouter from './recommendations/routes.js'
 import { startScheduler } from './jobs/index.js'
@@ -72,6 +73,9 @@ app.get('/api/posts', (_req, res) => {
 // --- Auth (JWT HttpOnly cookie, Prisma-backed; §7.1) ------------------------
 // signup / login / logout / refresh / me — see src/auth/routes.js.
 app.use('/api/auth', authRouter)
+
+// --- Users (profile: onboarding interest commit; §7, work-plan #7) ----------
+app.use('/api/users', usersRouter)
 
 // --- AI assistant / NL search stub (grounded in real events) ----------------
 // POST /api/ai/search { q } -> { reply, events: Event[] }

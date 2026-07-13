@@ -3,6 +3,7 @@ import cors from 'cors'
 import { EVENTS, ORGANIZERS, CATEGORIES, INTERESTS, AVATARS, POSTS } from './data/seed.js'
 import adminSyncRouter from './sync/routes.js'
 import adminJobsRouter from './jobs/routes.js'
+import eventsRouter from './events/routes.js'
 import { startScheduler } from './jobs/index.js'
 
 const app = express()
@@ -33,60 +34,8 @@ app.get('/api/categories', (_req, res) => ok(res, CATEGORIES))
 app.get('/api/interests', (_req, res) => ok(res, INTERESTS))
 app.get('/api/avatars', (_req, res) => ok(res, AVATARS))
 
-// --- Events -----------------------------------------------------------------
-// GET /api/events?category=&isFree=&isSports=&q=&sort=
-app.get('/api/events', (req, res) => {
-  const { category, isFree, isSports, q, sort } = req.query
-  let list = EVENTS.map(withOrganizer)
-
-  if (category && category !== 'All') {
-    list = list.filter((e) => e.category === category)
-  }
-  if (isFree === 'true') list = list.filter((e) => e.isFree)
-  if (isSports === 'true') list = list.filter((e) => e.isSports)
-  if (typeof q === 'string' && q.trim()) {
-    const needle = q.toLowerCase()
-    list = list.filter(
-      (e) =>
-        e.title.toLowerCase().includes(needle) ||
-        e.description.toLowerCase().includes(needle) ||
-        e.tags.some((t) => t.toLowerCase().includes(needle)) ||
-        e.city.toLowerCase().includes(needle) ||
-        e.category.toLowerCase().includes(needle),
-    )
-  }
-  if (sort === 'popular') {
-    list = [...list].sort((a, b) => b.rsvpCount + 2 * b.saveCount - (a.rsvpCount + 2 * a.saveCount))
-  } else if (sort === 'date') {
-    list = [...list].sort((a, b) => a.isoDate.localeCompare(b.isoDate))
-  }
-
-  ok(res, list)
-})
-
-// GET /api/events/:id
-app.get('/api/events/:id', (req, res) => {
-  const ev = EVENTS.find((e) => e.id === req.params.id)
-  if (!ev) return fail(res, 404, 'Event not found')
-  ok(res, withOrganizer(ev))
-})
-
-// GET /api/events/:id/related — same category, excluding self.
-app.get('/api/events/:id/related', (req, res) => {
-  const ev = EVENTS.find((e) => e.id === req.params.id)
-  if (!ev) return fail(res, 404, 'Event not found')
-  const related = EVENTS.filter((e) => e.id !== ev.id && e.category === ev.category).map(
-    withOrganizer,
-  )
-  ok(
-    res,
-    related.length
-      ? related
-      : EVENTS.filter((e) => e.id !== ev.id)
-          .slice(0, 3)
-          .map(withOrganizer),
-  )
-})
+// --- Events (Prisma-backed, cursor-paginated) --------------------------------
+app.use('/api/events', eventsRouter)
 
 // --- Recommendations (basic fallback path, planning §9.1 #1–2) --------------
 // POST /api/recommendations { interests?: string[] }

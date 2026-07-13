@@ -4,6 +4,7 @@ import { EVENTS, ORGANIZERS, CATEGORIES, INTERESTS, AVATARS, POSTS } from './dat
 import adminSyncRouter from './sync/routes.js'
 import adminJobsRouter from './jobs/routes.js'
 import eventsRouter from './events/routes.js'
+import interactionsRouter from './interactions/routes.js'
 import { startScheduler } from './jobs/index.js'
 
 const app = express()
@@ -130,6 +131,9 @@ app.post('/api/ai/search', (req, res) => {
     : `I couldn't find an exact match, but here are some popular events near you:`
   ok(res, { reply, events: events.length ? events : EVENTS.slice(0, 3).map(withOrganizer) })
 })
+
+// --- Interactions (behavior-signal beacon, §7.7) -----------------------------
+app.use('/api', interactionsRouter)
 
 // --- Admin sync routes (§7.7) ------------------------------------------------
 app.use('/api/admin', adminSyncRouter)

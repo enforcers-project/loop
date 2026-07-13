@@ -1,4 +1,5 @@
 import { registerJob } from './scheduler.js'
+import { embedPendingEvents } from '../embeddings/pipeline.js'
 
 // Each stub logs and returns a summary. Real implementations replace these in later sprints.
 
@@ -33,10 +34,10 @@ registerJob('rebuild-user-vectors', {
 registerJob('embed-pending-events', {
   schedule: '*/5 * * * *', // every 5 minutes
   handler: async () => {
-    console.log(
-      '[job:embed-pending-events] stub — would generate embeddings for un-embedded events',
-    )
-    return { stub: true }
+    console.log('[job:embed-pending-events] embedding un-embedded published events...')
+    const result = await embedPendingEvents()
+    console.log(`[job:embed-pending-events] done — processed ${result.processed} event(s)`)
+    return result
   },
 })
 

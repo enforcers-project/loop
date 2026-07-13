@@ -10,6 +10,7 @@ import authRouter from './auth/routes.js'
 import usersRouter from './users/routes.js'
 import { attachSession } from './auth/middleware.js'
 import recommendationsRouter from './recommendations/routes.js'
+import embeddingsRouter from './embeddings/routes.js'
 import { startScheduler } from './jobs/index.js'
 
 const app = express()
@@ -103,6 +104,9 @@ app.post('/api/ai/search', (req, res) => {
 
 // --- Interactions (behavior-signal beacon, §7.7) -----------------------------
 app.use('/api', interactionsRouter)
+
+// --- AI / Embeddings routes (§9.2B) ------------------------------------------
+app.use('/api/ai', embeddingsRouter)
 
 // --- Admin sync routes (§7.7) ------------------------------------------------
 app.use('/api/admin', adminSyncRouter)

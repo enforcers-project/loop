@@ -1,10 +1,13 @@
 import express from 'express'
 import cors from 'cors'
+import cookieParser from 'cookie-parser'
 import { EVENTS, ORGANIZERS, CATEGORIES, INTERESTS, AVATARS, POSTS } from './data/seed.js'
 import adminSyncRouter from './sync/routes.js'
 import adminJobsRouter from './jobs/routes.js'
 import eventsRouter from './events/routes.js'
 import interactionsRouter from './interactions/routes.js'
+import authRouter from './auth/routes.js'
+import { attachSession } from './auth/middleware.js'
 import { startScheduler } from './jobs/index.js'
 
 const app = express()
@@ -12,6 +15,12 @@ const PORT = Number(process.env.PORT) || 3000
 
 app.use(cors({ origin: true, credentials: true }))
 app.use(express.json())
+app.use(cookieParser())
+
+// Resolve the caller on every request: attach req.user from the JWT cookie, and
+// upsert an anonymous user_sessions row for a first-touch client id so behavior
+// signals always have a valid session_id FK (planning §6 anonymous-session fix).
+app.use(attachSession)
 
 // Standard error/response envelope (planning §7 Conventions).
 function ok(res, data) {
@@ -80,33 +89,9 @@ app.get('/api/posts', (_req, res) => {
   ok(res, list)
 })
 
-// --- Auth stub (session lives client-side in this build) --------------------
-// The Figma prototype uses local state; this returns a plausible SelfUser so
-// the frontend can flip to a logged-in shell without a real password store.
-app.post('/api/auth/signup', (req, res) => {
-  const { email, name, role } = req.body ?? {}
-  if (!email) return fail(res, 400, 'Email is required')
-  ok(res, {
-    id: 'user-demo',
-    email,
-    name: name || 'New User',
-    role: role || 'attendee',
-    handle: '@' + String(email).split('@')[0],
-    avatar: AVATARS[0],
-  })
-})
-app.post('/api/auth/login', (req, res) => {
-  const { email } = req.body ?? {}
-  if (!email) return fail(res, 400, 'Email is required')
-  ok(res, {
-    id: 'user-demo',
-    email,
-    name: 'Demo User',
-    role: 'attendee',
-    handle: '@' + String(email).split('@')[0],
-    avatar: AVATARS[0],
-  })
-})
+// --- Auth (JWT HttpOnly cookie, Prisma-backed; §7.1) ------------------------
+// signup / login / logout / refresh / me — see src/auth/routes.js.
+app.use('/api/auth', authRouter)
 
 // --- AI assistant / NL search stub (grounded in real events) ----------------
 // POST /api/ai/search { q } -> { reply, events: Event[] }

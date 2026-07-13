@@ -5,16 +5,43 @@ const prisma = new PrismaClient()
 const router = Router()
 
 const VALID_TYPES = new Set([
-  'impression', 'view', 'click', 'dwell', 'save', 'unsave',
-  'rsvp', 'rsvp_cancel', 'attend', 'search', 'search_result_click',
-  'follow', 'unfollow', 'share', 'category_click', 'tag_click',
-  'comment', 'post_like', 'claim_spot', 'release_spot',
-  'ai_query', 'rec_impression', 'rec_click', 'rec_dismiss',
+  'impression',
+  'view',
+  'click',
+  'dwell',
+  'save',
+  'unsave',
+  'rsvp',
+  'rsvp_cancel',
+  'attend',
+  'search',
+  'search_result_click',
+  'follow',
+  'unfollow',
+  'share',
+  'category_click',
+  'tag_click',
+  'comment',
+  'post_like',
+  'claim_spot',
+  'release_spot',
+  'ai_query',
+  'rec_impression',
+  'rec_click',
+  'rec_dismiss',
 ])
 
 const VALID_SURFACES = new Set([
-  'for_you', 'discover', 'search', 'event_detail', 'social',
-  'organizer_profile', 'user_profile', 'assistant', 'landing', 'notification',
+  'for_you',
+  'discover',
+  'search',
+  'event_detail',
+  'social',
+  'organizer_profile',
+  'user_profile',
+  'assistant',
+  'landing',
+  'notification',
 ])
 
 const DEFAULT_WEIGHTS = {
@@ -55,7 +82,9 @@ router.post('/interactions', async (req, res) => {
   }
 
   if (events.length > MAX_BATCH_SIZE) {
-    return res.status(400).json({ error: { message: `Batch exceeds max size of ${MAX_BATCH_SIZE}` } })
+    return res
+      .status(400)
+      .json({ error: { message: `Batch exceeds max size of ${MAX_BATCH_SIZE}` } })
   }
 
   // Validate each event in the batch
@@ -87,8 +116,8 @@ router.post('/interactions', async (req, res) => {
           where: { id: sid },
           create: { id: sid, userId },
           update: {},
-        })
-      )
+        }),
+      ),
     )
 
     // Step 2: Insert interaction_events rows
@@ -118,28 +147,34 @@ router.post('/interactions', async (req, res) => {
     for (const ev of events) {
       if (ev.interaction_type === 'search_result_click' && ev.search_query_id && ev.event_id) {
         sideEffects.push(
-          prisma.searchQuery.update({
-            where: { id: ev.search_query_id },
-            data: { clickedEventId: ev.event_id },
-          }).catch(() => {})
+          prisma.searchQuery
+            .update({
+              where: { id: ev.search_query_id },
+              data: { clickedEventId: ev.event_id },
+            })
+            .catch(() => {}),
         )
       }
 
       if (ev.interaction_type === 'rec_click' && ev.recommendation_id) {
         sideEffects.push(
-          prisma.recommendationImpression.update({
-            where: { id: ev.recommendation_id },
-            data: { clicked: true, clickedAt: new Date() },
-          }).catch(() => {})
+          prisma.recommendationImpression
+            .update({
+              where: { id: ev.recommendation_id },
+              data: { clicked: true, clickedAt: new Date() },
+            })
+            .catch(() => {}),
         )
       }
 
       if (ev.interaction_type === 'rec_dismiss' && ev.recommendation_id) {
         sideEffects.push(
-          prisma.recommendationImpression.update({
-            where: { id: ev.recommendation_id },
-            data: { clicked: false },
-          }).catch(() => {})
+          prisma.recommendationImpression
+            .update({
+              where: { id: ev.recommendation_id },
+              data: { clicked: false },
+            })
+            .catch(() => {}),
         )
       }
     }
@@ -152,7 +187,10 @@ router.post('/interactions', async (req, res) => {
 
     if (err.code === 'P2003') {
       return res.status(400).json({
-        error: { message: 'Foreign key constraint failed — check event_id, category_id, or recommendation_id' },
+        error: {
+          message:
+            'Foreign key constraint failed — check event_id, category_id, or recommendation_id',
+        },
       })
     }
 

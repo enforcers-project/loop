@@ -125,13 +125,20 @@ export function EventCard({ event, showRationale = false, onClick }) {
   )
 }
 
-/* Responsive event grid — 1 col mobile · 2 tablet · 3 medium desktop · 4 large.
-   Uses CSS grid so every cell is equal width with consistent gaps. */
+/* Responsive event grid — the spec's flex-wrap system (project_knowledge.md
+   §gridSystem): 1 col mobile · 2 tablet · 3 desktop · 4 large. Each card sits in
+   a width-controlled wrapper so a short last row centers (justify-center),
+   stepping to left-aligned only on xl. gap-4 → 8/11/12px width offsets. */
 export function EventGrid({ events, showRationale }) {
   return (
-    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="flex flex-wrap justify-center gap-4 xl:justify-start">
       {events.map((e) => (
-        <EventCard key={e.id} event={e} showRationale={showRationale} />
+        <div
+          key={e.id}
+          className="w-full sm:w-[calc(50%-8px)] lg:w-[calc(33.333%-11px)] xl:w-[calc(25%-12px)]"
+        >
+          <EventCard event={e} showRationale={showRationale} />
+        </div>
       ))}
     </div>
   )

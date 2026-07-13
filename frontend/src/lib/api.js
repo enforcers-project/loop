@@ -123,6 +123,17 @@ export const api = {
       })),
     ),
 
+  // Publish a new event. Targets POST /api/events (issue #9, not built yet);
+  // until that lands the request 404s and we fall back to echoing the draft
+  // back with a generated id + `pending: true` so the UI can flow end-to-end.
+  // Swap the fallback out — no caller change — the moment #9 ships.
+  createEvent: (draft) =>
+    post('/events', draft, () => ({
+      ...draft,
+      id: `draft-${draft.title?.toLowerCase().replace(/\s+/g, '-') || 'event'}`,
+      pending: true,
+    })),
+
   aiSearch: (q) =>
     post('/ai/search', { q }, () => {
       let matches = MOCK_EVENTS.map(withOrganizer)

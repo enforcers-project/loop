@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { Calendar, ImagePlus, MapPin, Sparkles, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Calendar, ImagePlus, Lock, MapPin, Sparkles } from 'lucide-react'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
 import { FormField, inputClass } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
 import { useApp } from '../context/AppContext'
+import { useToast } from '../context/ToastContext'
+import { api } from '../lib/api'
 
 const CATEGORIES = ['Music', 'Nightlife', 'Sports', 'Networking', 'Food', 'Campus']
-const AI_DESCRIPTION =
-  'Get ready for an unforgettable night. Doors open early, the energy is high, and the lineup is stacked. Grab your crew, dress the part, and come make some memories — this is the one everyone will be talking about.'
-const AI_TAGS = ['#Afrobeats', '#21+', '#Nightlife', '#Oakland', '#RooftopParty']
 
 const POSITION_TEMPLATE = 'Goalkeeper, Defender, Midfielder, Forward'
 
@@ -16,6 +17,10 @@ export function CreateEvent() {
   // Posting a pickup run requires the host sub-capability (organizer + is_host).
   // Non-hosts can create ordinary events but never see the Sports toggle.
   const { isHost } = useApp()
+  const toast = useToast()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('Nightlife')
   const [date, setDate] = useState('')
@@ -26,8 +31,6 @@ export function CreateEvent() {
   const [age, setAge] = useState('')
   const [description, setDescription] = useState('')
   const [flyer, setFlyer] = useState(null)
-  const [writing, setWriting] = useState(false)
-  const [tags, setTags] = useState([])
 
   // sports
   const [isSports, setIsSports] = useState(false)
@@ -35,15 +38,6 @@ export function CreateEvent() {
   const [skill, setSkill] = useState('All Levels')
   const [positions, setPositions] = useState('')
   const [indoor, setIndoor] = useState(false)
-
-  const writeWithAI = () => {
-    setWriting(true)
-    setTimeout(() => {
-      setDescription(AI_DESCRIPTION)
-      setTags(AI_TAGS)
-      setWriting(false)
-    }, 1400)
-  }
 
   const previewEvent = {
     id: 'preview',
@@ -71,7 +65,7 @@ export function CreateEvent() {
       cover: '',
     },
     description,
-    tags,
+    tags: [],
     goingCount: 0,
     goingAvatars: [],
     capacity: Number(capacity) || 100,
@@ -84,6 +78,55 @@ export function CreateEvent() {
     playersSignedUp: isSports ? 0 : undefined,
     skillLevel: isSports ? skill : undefined,
     indoor,
+  }
+
+  // Minimum fields to publish. Sports runs also need a player count.
+  const missing = []
+  if (!title.trim()) missing.push('title')
+  if (!date.trim()) missing.push('date')
+  if (!location.trim()) missing.push('location')
+  if (isSports && !Number(playersNeeded)) missing.push('players needed')
+  const canPublish = missing.length === 0
+
+  const publish = useMutation({
+    mutationFn: () =>
+      api.createEvent({
+        title: title.trim(),
+        category,
+        date: date.trim(),
+        time: time.trim(),
+        location: location.trim(),
+        price: price ? Number(price) : 0,
+        capacity: Number(capacity) || null,
+        ageRestriction: age ? Number(age) : null,
+        description: description.trim(),
+        flyer,
+        isSports,
+        playersNeeded: isSports ? Number(playersNeeded) : null,
+        skillLevel: isSports ? skill : null,
+        positions: isSports ? positions.trim() : null,
+        indoor: isSports ? indoor : null,
+      }),
+    onSuccess: (created) => {
+      // Refresh any event lists so the new event shows once #9 persists it.
+      queryClient.invalidateQueries({ queryKey: ['events'] })
+      if (created?.pending) {
+        // Backend publish endpoint (#9) isn't live yet — the draft didn't persist.
+        toast.info('Draft looks good! Publishing goes live once the events API lands.')
+      } else {
+        toast.success('Event published!')
+        navigate(`/event/${created.id}`)
+      }
+    },
+    onError: () => toast.error('Could not publish — please try again.'),
+  })
+
+  const onPublish = () => {
+    if (!canPublish) {
+      toast.error(`Add a ${missing[0]} before publishing.`)
+      return
+    }
+    publish.mutate()
   }
 
   return (
@@ -228,13 +271,18 @@ export function CreateEvent() {
           <div>
             <div className="mb-1.5 flex items-center justify-between">
               <span className="text-[13px] font-medium text-text-secondary">Description</span>
+              {/* AI assist ships in Sprint 3 (#25). Disabled placeholder for now. */}
               <button
-                onClick={writeWithAI}
-                disabled={writing}
-                className="flex items-center gap-1.5 rounded-pill bg-primary-light px-3 py-1 text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-60"
+                type="button"
+                disabled
+                title="Coming soon"
+                className="flex cursor-not-allowed items-center gap-1.5 rounded-pill bg-surface px-3 py-1 text-xs font-semibold text-text-muted"
               >
                 <Sparkles size={13} />
-                {writing ? 'Writing…' : 'Write with AI'}
+                Write with AI
+                <span className="ml-0.5 flex items-center gap-0.5 text-[10px] font-medium text-text-muted">
+                  <Lock size={9} /> Soon
+                </span>
               </button>
             </div>
             <textarea
@@ -246,27 +294,18 @@ export function CreateEvent() {
             />
           </div>
 
-          {/* AI tags panel */}
-          {tags.length > 0 && (
-            <div className="rounded-card border border-primary-light bg-primary-light/50 p-4">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-primary">
-                <Sparkles size={13} /> AI-suggested tags
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {tags.map((t) => (
-                  <span
-                    key={t}
-                    className="flex items-center gap-1 rounded-pill bg-white px-3 py-1 text-xs font-medium text-primary shadow-sm"
-                  >
-                    {t}
-                    <button onClick={() => setTags((prev) => prev.filter((x) => x !== t))}>
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* AI auto-tag panel — disabled placeholder; real tagging is #24 (Sprint 3). */}
+          <div className="rounded-card border border-dashed border-border-light bg-surface p-4">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-text-muted">
+              <Sparkles size={13} /> AI-suggested tags
+              <span className="ml-1 flex items-center gap-0.5 rounded-pill bg-white px-2 py-0.5 text-[10px] text-text-muted">
+                <Lock size={9} /> Coming soon
+              </span>
+            </p>
+            <p className="mt-1.5 text-xs text-text-muted">
+              We’ll auto-suggest tags from your description once AI tagging ships.
+            </p>
+          </div>
 
           {/* sports toggle — host capability only */}
           {isHost && (
@@ -340,8 +379,13 @@ export function CreateEvent() {
             </div>
           )}
 
-          <button className="w-full rounded-button bg-accent py-3.5 text-sm font-semibold text-white transition-transform active:scale-95">
-            Publish event
+          <button
+            type="button"
+            onClick={onPublish}
+            disabled={publish.isPending}
+            className="w-full rounded-button bg-accent py-3.5 text-sm font-semibold text-white transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {publish.isPending ? 'Publishing…' : 'Publish event'}
           </button>
         </div>
 

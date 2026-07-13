@@ -41,6 +41,22 @@ async function post(path, body, fallback) {
   }
 }
 
+async function put(path, body, fallback) {
+  try {
+    const res = await fetch(`/api${path}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(String(res.status))
+    const json = await res.json()
+    return json.data
+  } catch {
+    return fallback()
+  }
+}
+
 function mockFilter({ category, isFree, isSports, q }) {
   let list = MOCK_EVENTS.map(withOrganizer)
   if (category && category !== 'All') list = list.filter((e) => e.category === category)
@@ -63,6 +79,18 @@ function mockFilter({ category, isFree, isSports, q }) {
 export const api = {
   categories: () => get('/categories', () => MOCK_CATEGORIES),
   interests: () => get('/interests', () => MOCK_INTERESTS),
+
+  // Commit the user's onboarding interest picks (PUT /users/:id/interests).
+  // The endpoint requires auth; when onboarding runs before login (no userId)
+  // or the network is down, we fall back to echoing the picks with
+  // `pending: true` so onboarding still completes and the UI can notify.
+  saveInterests: (userId, interestIds) =>
+    userId
+      ? put(`/users/${userId}/interests`, { interest_ids: interestIds }, () => ({
+          interest_ids: interestIds,
+          pending: true,
+        }))
+      : Promise.resolve({ interest_ids: interestIds, pending: true }),
 
   events: (filters = {}) => {
     const qs = new URLSearchParams()

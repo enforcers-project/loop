@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MapPin, Navigation, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
+import { useToast } from '../context/ToastContext'
 import { cn } from '../lib/utils'
 
 const CITIES = [
@@ -16,12 +17,14 @@ const CITIES = [
 
 export function Onboarding() {
   const navigate = useNavigate()
-  const { setInterests } = useApp()
+  const { user, setInterests } = useApp()
+  const toast = useToast()
   const [step, setStep] = useState(1)
   const [interests, setInterestList] = useState([])
   const [picked, setPicked] = useState(new Set())
   const [citySearch, setCitySearch] = useState('')
   const [city, setCity] = useState(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     api.interests().then(setInterestList)
@@ -38,9 +41,21 @@ export function Onboarding() {
   const canContinue = picked.size >= 3
   const cities = CITIES.filter((c) => c.toLowerCase().includes(citySearch.toLowerCase()))
 
-  const finish = () => {
-    setInterests([...picked])
-    navigate('/feed')
+  const finish = async () => {
+    if (saving) return
+    const ids = [...picked]
+    setSaving(true)
+    // Update local state immediately so the feed reflects the picks even if the
+    // persistence call is still in flight (or the endpoint isn't live yet).
+    setInterests(ids)
+    try {
+      const res = await api.saveInterests(user?.id, ids)
+      if (res?.pending) toast.info('Interests saved locally — syncing when you sign in.')
+      navigate('/feed')
+    } catch {
+      toast.error("Couldn't save your interests. Please try again.")
+      setSaving(false)
+    }
   }
 
   return (
@@ -157,16 +172,16 @@ export function Onboarding() {
 
           <div className="mt-auto pt-10">
             <button
-              disabled={!city}
+              disabled={!city || saving}
               onClick={finish}
               className={cn(
                 'w-full rounded-button py-3.5 text-sm font-semibold transition-colors',
-                city
+                city && !saving
                   ? 'bg-accent text-white active:scale-95'
                   : 'cursor-not-allowed bg-surface text-text-muted',
               )}
             >
-              Finish — take me to my feed
+              {saving ? 'Saving…' : 'Finish — take me to my feed'}
             </button>
           </div>
         </div>

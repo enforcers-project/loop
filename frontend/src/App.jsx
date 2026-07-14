@@ -19,6 +19,19 @@ import { UserProfile } from './screens/UserProfile'
 /* Routes that render standalone (no app chrome / bars / assistant). */
 const BARE_ROUTES = ['/', '/auth', '/onboarding']
 
+/* Gate a member-only route. While the session is still resolving (authReady
+   false) we render nothing rather than redirect, so a logged-in user who
+   refreshes on /profile isn't bounced to /auth before me() comes back. */
+function ProtectedRoute({ children }) {
+  const { isLoggedIn, authReady } = useApp()
+  const { pathname } = useLocation()
+  if (!authReady) return null
+  if (!isLoggedIn) {
+    return <Navigate to={`/auth?mode=login&next=${encodeURIComponent(pathname)}`} replace />
+  }
+  return children
+}
+
 function Shell() {
   const { pathname } = useLocation()
   const { isLoggedIn } = useApp()
@@ -38,9 +51,23 @@ function Shell() {
           <Route path="/event/:id" element={<EventDetail />} />
           <Route path="/sports/:id" element={<SportsPickupDetail />} />
           <Route path="/social" element={<SocialFeed />} />
-          <Route path="/create" element={<CreateEvent />} />
+          <Route
+            path="/create"
+            element={
+              <ProtectedRoute>
+                <CreateEvent />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/organizer/:id" element={<OrganizerProfile />} />
-          <Route path="/profile" element={<UserProfile />} />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <UserProfile />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

@@ -21,14 +21,17 @@ export const inputClass =
 /* --------------------------------------------------------------------------
    PasswordField — text input with show/hide eye toggle
 -------------------------------------------------------------------------- */
-export function PasswordField({ placeholder = '••••••••' }) {
+export function PasswordField({ value, onChange, placeholder = '••••••••', ...rest }) {
   const [show, setShow] = useState(false)
   return (
     <div className="relative">
       <input
         type={show ? 'text' : 'password'}
+        value={value}
+        onChange={onChange ? (e) => onChange(e.target.value) : undefined}
         placeholder={placeholder}
         className={cn(inputClass, 'pr-11')}
+        {...rest}
       />
       <button
         type="button"

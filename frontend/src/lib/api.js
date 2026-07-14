@@ -57,6 +57,31 @@ async function put(path, body, fallback) {
   }
 }
 
+// Auth has NO mock fallback: a login must genuinely succeed or fail, never be
+// faked. This helper surfaces the backend's error envelope as a thrown Error
+// (with .status) so the UI can show a real message.
+async function request(path, { method = 'GET', body } = {}) {
+  const res = await fetch(`/api${path}`, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    credentials: 'include',
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (res.status === 204) return null
+  let json = null
+  try {
+    json = await res.json()
+  } catch {
+    // Non-JSON (proxy/network error page) — fall through to the guard below.
+  }
+  if (!res.ok) {
+    const err = new Error(json?.error?.message || `Request failed (${res.status})`)
+    err.status = res.status
+    throw err
+  }
+  return json?.data
+}
+
 function mockFilter({ category, isFree, isSports, q }) {
   let list = MOCK_EVENTS.map(withOrganizer)
   if (category && category !== 'All') list = list.filter((e) => e.category === category)
@@ -76,9 +101,45 @@ function mockFilter({ category, isFree, isSports, q }) {
   return list
 }
 
+// Map the backend's snake_case SelfUser (auth/serialize.js) onto the camelCase
+// shape the UI reads. Falls back to a derived handle/avatar so the nav + profile
+// always have something to render.
+export function toClientUser(u) {
+  if (!u) return null
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.display_name || u.email?.split('@')[0] || 'You',
+    handle: u.handle ? `@${u.handle}` : `@${u.email?.split('@')[0] || 'you'}`,
+    avatar: u.avatar_url || 'https://i.pravatar.cc/150?img=1',
+    role: u.role,
+    isHost: u.is_host,
+    isVerified: u.is_verified,
+    onboardingCompletedAt: u.onboarding_completed_at,
+  }
+}
+
 export const api = {
   categories: () => get('/categories', () => MOCK_CATEGORIES),
   interests: () => get('/interests', () => MOCK_INTERESTS),
+
+  // --- Auth (real endpoints, no mock fallback; backend #6) ------------------
+  auth: {
+    signup: (payload) => request('/auth/signup', { method: 'POST', body: payload }),
+    login: (email, password) =>
+      request('/auth/login', { method: 'POST', body: { email, password } }),
+    logout: () => request('/auth/logout', { method: 'POST' }),
+    // Resolve the current session; returns null when not authenticated (401)
+    // instead of throwing, so callers can treat "logged out" as a normal state.
+    me: async () => {
+      try {
+        return await request('/auth/me')
+      } catch (err) {
+        if (err.status === 401) return null
+        throw err
+      }
+    },
+  },
 
   // Commit the user's onboarding interest picks (PUT /users/:id/interests).
   // The endpoint requires auth; when onboarding runs before login (no userId)

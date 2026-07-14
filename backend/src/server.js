@@ -11,6 +11,7 @@ import usersRouter from './users/routes.js'
 import { attachSession } from './auth/middleware.js'
 import recommendationsRouter from './recommendations/routes.js'
 import embeddingsRouter from './embeddings/routes.js'
+import preferencesRouter from './preferences/routes.js'
 import { startScheduler } from './jobs/index.js'
 
 const app = express()
@@ -107,6 +108,9 @@ app.use('/api', interactionsRouter)
 
 // --- AI / Embeddings routes (§9.2B) ------------------------------------------
 app.use('/api/ai', embeddingsRouter)
+
+// --- Preference vectors (§9.2C, issue #20) -----------------------------------
+app.use('/api', preferencesRouter)
 
 // --- Admin sync routes (§7.7) ------------------------------------------------
 app.use('/api/admin', adminSyncRouter)

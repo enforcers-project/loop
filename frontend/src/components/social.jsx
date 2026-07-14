@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Bookmark, Heart, MessageCircle, Plus, Send } from 'lucide-react'
 import { cn, formatCount } from '../lib/utils'
+import { useApp } from '../context/AppContext'
 import { VerifiedBadge } from './primitives'
 import { EventImage } from './EventImage'
 
@@ -48,11 +49,17 @@ export function StoriesRow({ stories }) {
    PostCard — Instagram-style: header + full image + action row + comments
 -------------------------------------------------------------------------- */
 export function PostCard({ post }) {
+  const { requireAuth } = useApp()
   const [liked, setLiked] = useState(false)
   const [saved, setSaved] = useState(false)
   const org = post.organizer
 
   const iconBtn = 'grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-surface'
+
+  // Like / comment / save are member actions — gate logged-out users to /auth.
+  const onLike = () => requireAuth() && setLiked((v) => !v)
+  const onSave = () => requireAuth() && setSaved((v) => !v)
+  const onComment = () => requireAuth()
 
   return (
     <article className="overflow-hidden rounded-card border border-border-light bg-white shadow-card">
@@ -85,25 +92,20 @@ export function PostCard({ post }) {
 
       {/* action row — even spacing, larger tap targets */}
       <div className="flex items-center gap-1 px-3 pt-2.5">
-        <button
-          onClick={() => setLiked((v) => !v)}
-          className={iconBtn}
-          aria-label="Like"
-          aria-pressed={liked}
-        >
+        <button onClick={onLike} className={iconBtn} aria-label="Like" aria-pressed={liked}>
           <Heart
             size={22}
             className={cn('transition-colors', liked ? 'fill-accent text-accent' : 'text-ink')}
           />
         </button>
-        <button className={iconBtn} aria-label="Comment">
+        <button onClick={onComment} className={iconBtn} aria-label="Comment">
           <MessageCircle size={22} className="text-ink" />
         </button>
         <button className={iconBtn} aria-label="Share">
           <Send size={20} className="text-ink" />
         </button>
         <button
-          onClick={() => setSaved((v) => !v)}
+          onClick={onSave}
           className={cn(iconBtn, 'ml-auto')}
           aria-label={saved ? 'Remove bookmark' : 'Bookmark'}
           aria-pressed={saved}

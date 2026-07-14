@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
+import { useToast } from '../context/ToastContext'
 import { cn } from '../lib/utils'
 import { FormField, PasswordField, inputClass } from '../components/primitives'
 
@@ -14,25 +15,49 @@ const ROLES = [
 export function Auth() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { login } = useApp()
+  const { login, signup } = useApp()
+  const toast = useToast()
   const [mode, setMode] = useState(params.get('mode') === 'login' ? 'login' : 'signup')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState('attendee')
   const [isHost, setIsHost] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   // Hosting is organizer-only; drop the flag if they aren't signing up as one.
   const wantsHost = role === 'organizer' && isHost
 
-  const submit = () => {
-    const handle = '@' + (email.split('@')[0] || 'you')
-    const avatar = 'https://i.pravatar.cc/150?img=1'
-    const self =
-      mode === 'signup'
-        ? { id: 'user-demo', email, name: name || 'Alex Carter', role, handle, avatar }
-        : { id: 'user-demo', email, name: 'Alex Carter', role: 'attendee', handle, avatar }
-    login(self, mode === 'signup' ? role : 'attendee', mode === 'signup' && wantsHost)
-    navigate(mode === 'signup' ? '/onboarding' : '/feed')
+  const submit = async () => {
+    if (submitting) return
+    // Client-side guard mirrors the backend contract (email + 8-char password).
+    if (!email.trim()) return toast.error('Enter your email.')
+    if (password.length < 8) return toast.error('Password must be at least 8 characters.')
+
+    // A gated redirect (ProtectedRoute / authGate) parks the intended path in
+    // ?next=; return there after login, else the sensible default per mode.
+    const next = params.get('next')
+    setSubmitting(true)
+    try {
+      if (mode === 'signup') {
+        await signup({
+          email: email.trim(),
+          password,
+          role,
+          display_name: name.trim() || undefined,
+          organizer_kind: role === 'organizer' ? 'organizer' : undefined,
+          is_host: wantsHost,
+        })
+        navigate(next || '/onboarding')
+      } else {
+        await login(email.trim(), password)
+        navigate(next || '/feed')
+      }
+    } catch (err) {
+      // Surface the backend's real message (bad credentials, email taken, …).
+      toast.error(err.message || 'Something went wrong. Please try again.')
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -92,13 +117,20 @@ export function Auth() {
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submit()}
                 type="email"
+                autoComplete="email"
                 placeholder="you@example.com"
                 className={inputClass}
               />
             </FormField>
             <FormField label="Password">
-              <PasswordField />
+              <PasswordField
+                value={password}
+                onChange={setPassword}
+                onKeyDown={(e) => e.key === 'Enter' && submit()}
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              />
             </FormField>
 
             {/* role selector — signup only */}
@@ -156,9 +188,16 @@ export function Auth() {
 
             <button
               onClick={submit}
-              className="w-full rounded-button bg-accent py-3 text-sm font-semibold text-white transition-transform active:scale-95"
+              disabled={submitting}
+              className="w-full rounded-button bg-accent py-3 text-sm font-semibold text-white transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {mode === 'signup' ? 'Create account' : 'Log in'}
+              {submitting
+                ? mode === 'signup'
+                  ? 'Creating account…'
+                  : 'Logging in…'
+                : mode === 'signup'
+                  ? 'Create account'
+                  : 'Log in'}
             </button>
           </div>
         </div>

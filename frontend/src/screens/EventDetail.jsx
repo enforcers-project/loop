@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Calendar, Clock, MapPin, Users } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
+import { useToast } from '../context/ToastContext'
 import { CATEGORY_COLOR } from '../lib/utils'
 import { FollowBtn, GoingStack, RSVPBtn, SaveBtn, VerifiedBadge } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
@@ -25,9 +26,22 @@ const DEMO_COMMENTS = [
 export function EventDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { savedIds, goingIds, followingIds, toggleSaved, toggleGoing, toggleFollow } = useApp()
+  const { savedIds, goingIds, followingIds, toggleSaved, toggleGoing, toggleFollow, requireAuth } =
+    useApp()
+  const toast = useToast()
   const [event, setEvent] = useState(null)
   const [related, setRelated] = useState([])
+  const [comment, setComment] = useState('')
+
+  // Commenting is a member action: gate logged-out users to /auth first.
+  const postComment = () => {
+    if (!requireAuth()) return
+    if (!comment.trim()) return
+    // Persisting comments is a later issue; for now confirm the gated action
+    // works end-to-end and clear the box.
+    toast.success('Comment posted.')
+    setComment('')
+  }
 
   useEffect(() => {
     if (!id) return
@@ -178,10 +192,15 @@ export function EventDetail() {
               ))}
               <div className="flex items-center gap-2 rounded-input border border-border-light px-4 py-2.5">
                 <input
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && postComment()}
                   placeholder="Add a comment…"
                   className="flex-1 bg-transparent text-sm outline-none placeholder:text-placeholder"
                 />
-                <button className="text-sm font-semibold text-primary">Post</button>
+                <button onClick={postComment} className="text-sm font-semibold text-primary">
+                  Post
+                </button>
               </div>
             </div>
           </div>

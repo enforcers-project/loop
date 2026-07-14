@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Compass, Home, PlusCircle, Users, Search, User } from 'lucide-react'
+import { Bell, Compass, Home, PlusCircle, Users, Search, User, LogOut } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useApp } from '../context/AppContext'
 
@@ -17,8 +17,13 @@ const NAV_LINKS = [
 export function TopNav() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { isLoggedIn, user, role } = useApp()
+  const { isLoggedIn, user, role, logout } = useApp()
   const canCreate = role === 'organizer'
+
+  const onLogout = async () => {
+    await logout()
+    navigate('/')
+  }
 
   const linkClass = (active) =>
     cn(
@@ -68,6 +73,13 @@ export function TopNav() {
                   alt=""
                   className="h-9 w-9 rounded-full border border-border-light bg-surface object-cover"
                 />
+              </button>
+              <button
+                onClick={onLogout}
+                aria-label="Log out"
+                className="grid h-10 w-10 place-items-center rounded-button text-text-secondary transition-colors hover:bg-surface hover:text-ink"
+              >
+                <LogOut size={19} />
               </button>
             </>
           ) : (

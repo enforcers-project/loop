@@ -33,7 +33,7 @@ async function openSession(userId, req) {
 
 // --- POST /api/auth/signup ---------------------------------------------------
 router.post('/signup', async (req, res) => {
-  const { email, password, role, organizer_kind, display_name, handle } = req.body ?? {}
+  const { email, password, role, organizer_kind, is_host, display_name, handle } = req.body ?? {}
 
   if (!email || !EMAIL_RE.test(email)) {
     return fail(res, 422, 'VALIDATION_ERROR', 'A valid email is required')
@@ -52,6 +52,10 @@ router.post('/signup', async (req, res) => {
   if (organizer_kind && organizer_kind !== 'organizer' && organizer_kind !== 'promoter') {
     return fail(res, 422, 'VALIDATION_ERROR', 'organizer_kind must be "organizer" or "promoter"')
   }
+  // Hosting pickup runs is an organizer-only capability (planning §3/§10).
+  if (is_host && resolvedRole !== 'organizer') {
+    return fail(res, 422, 'VALIDATION_ERROR', 'is_host is only valid for organizers')
+  }
   if (handle && !HANDLE_RE.test(handle)) {
     return fail(res, 422, 'VALIDATION_ERROR', 'handle must be 3–30 chars (letters, numbers, _)')
   }
@@ -64,6 +68,7 @@ router.post('/signup', async (req, res) => {
         passwordHash,
         role: resolvedRole,
         organizerKind: resolvedRole === 'organizer' ? (organizer_kind ?? null) : null,
+        isHost: resolvedRole === 'organizer' ? !!is_host : false,
         displayName: display_name ?? null,
         handle: handle ?? null,
       },

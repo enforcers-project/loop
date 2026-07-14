@@ -34,13 +34,15 @@ export function formatCount(n) {
 export function recommendationLabel(rationale, category) {
   if (!rationale) return 'Recommended'
   const r = rationale.toLowerCase()
+  if (r.includes('friend')) return rationale.length <= 28 ? rationale : 'Friends going'
+  if (r.includes('hosted by')) return 'From someone you follow'
   if (r.includes('saved')) return 'Similar to saved'
   if (r.includes('trending')) return 'Trending nearby'
   if (r.includes('popular')) return 'Popular near you'
   if (r.includes('follow')) return 'Recommended for you'
+  if (r.includes('into this lately')) return 'Friends are into this'
   if (r.startsWith('because you like')) {
     return category ? `Because you like ${category}` : 'Recommended for you'
   }
-  // Anything already short (≤ 22 chars) passes through; otherwise generalize.
-  return rationale.length <= 22 ? rationale : 'Recommended for you'
+  return rationale.length <= 28 ? rationale : 'Recommended for you'
 }

@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma.js'
-import { generateEmbedding, MODEL, VECTOR_DIM } from '../embeddings/embed.js'
+import { MODEL, VECTOR_DIM } from '../embeddings/embed.js'
 
 const DECAY_HALF_LIFE_DAYS = 30
 const SEED_BLEND_THRESHOLD = 8
@@ -10,22 +10,6 @@ const REVERSAL_PAIRS = {
   unfollow: 'follow',
   release_spot: 'claim_spot',
 }
-
-const POSITIVE_TYPES = new Set([
-  'attend',
-  'rsvp',
-  'claim_spot',
-  'save',
-  'follow',
-  'share',
-  'search_result_click',
-  'category_click',
-  'tag_click',
-  'rec_click',
-  'click',
-  'view',
-  'dwell',
-])
 
 function applySupersede(signals) {
   const reversalTypes = new Set(Object.keys(REVERSAL_PAIRS))

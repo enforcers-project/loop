@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import prisma from '../lib/prisma.js'
 import { toEventCard } from '../events/serialize.js'
 import { computeSocialScores } from './social.js'
+import { haversine, proximityScore } from './proximity.js'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
@@ -13,20 +14,22 @@ const COLD_START_THRESHOLD = 5
 
 const WEIGHTS = {
   normal: {
-    cosSim: 0.48,
-    affinity: 0.14,
-    recency: 0.11,
-    popularity: 0.09,
-    freshness: 0.07,
+    cosSim: 0.43,
+    affinity: 0.12,
+    recency: 0.10,
+    popularity: 0.08,
+    freshness: 0.06,
     social: 0.11,
+    proximity: 0.10,
   },
   coldStart: {
-    cosSim: 0.35,
-    affinity: 0.12,
-    recency: 0.13,
-    popularity: 0.15,
-    freshness: 0.07,
-    social: 0.18,
+    cosSim: 0.30,
+    affinity: 0.10,
+    recency: 0.12,
+    popularity: 0.13,
+    freshness: 0.06,
+    social: 0.16,
+    proximity: 0.13,
   },
 }
 
@@ -95,7 +98,10 @@ export async function generateRecommendations(userId, options = {}) {
 
   const socialScores = await computeSocialScores(userId, ranked)
 
-  const reRanked = reRank(ranked, affinityMap, maxAffinity, w, socialScores)
+  const userLat = user?.homeLat ? Number(user.homeLat) : null
+  const userLng = user?.homeLng ? Number(user.homeLng) : null
+
+  const reRanked = reRank(ranked, affinityMap, maxAffinity, w, socialScores, userLat, userLng)
 
   const diverse = applyMMR(reRanked, limit)
 
@@ -110,6 +116,7 @@ export async function generateRecommendations(userId, options = {}) {
       rank: idx + 1,
       rationale,
       feedRunId,
+      distanceMiles: item.distanceMiles,
     }
   })
 
@@ -121,6 +128,7 @@ export async function generateRecommendations(userId, options = {}) {
       score: r.score,
       rationale: r.rationale,
       recommendationId: r.impressionId,
+      distanceMiles: r.distanceMiles,
     })),
     feedRunId,
     nextCursor: null,
@@ -284,7 +292,15 @@ async function knnRank(userEmbeddingText, candidates) {
   return ranked
 }
 
-function reRank(candidates, affinityMap, maxAffinity, w, socialScores = new Map()) {
+function reRank(
+  candidates,
+  affinityMap,
+  maxAffinity,
+  w,
+  socialScores = new Map(),
+  userLat = null,
+  userLng = null,
+) {
   const maxPopularity = Math.max(
     1,
     ...candidates.map((c) => c.rsvpCount + c.playersSignedUp + 2 * c.saveCount),
@@ -306,6 +322,13 @@ function reRank(candidates, affinityMap, maxAffinity, w, socialScores = new Map(
 
       const social = socialScores.get(c.event.id)?.score ?? 0
 
+      let proximity = 0.5
+      let distanceMiles = null
+      if (userLat != null && userLng != null && c.event.lat != null && c.event.lng != null) {
+        distanceMiles = haversine(userLat, userLng, c.event.lat, c.event.lng)
+        proximity = proximityScore(distanceMiles)
+      }
+
       const isExploration = Math.random() < EXPLORATION_RATE
       const epsilon = isExploration ? EXPLORATION_BUMP : 0
 
@@ -316,9 +339,10 @@ function reRank(candidates, affinityMap, maxAffinity, w, socialScores = new Map(
         w.popularity * popularity +
         w.freshness * freshness +
         w.social * social +
+        w.proximity * proximity +
         epsilon
 
-      return { ...c, finalScore: score, affinity, recency, popularity, social }
+      return { ...c, finalScore: score, affinity, recency, popularity, social, proximity, distanceMiles }
     })
     .sort((a, b) => b.finalScore - a.finalScore)
 }

@@ -5,12 +5,13 @@ import { describe, it, expect } from 'vitest'
 
 describe('re-rank scoring', () => {
   const WEIGHTS_NORMAL = {
-    cosSim: 0.48,
-    affinity: 0.14,
-    recency: 0.11,
-    popularity: 0.09,
-    freshness: 0.07,
+    cosSim: 0.43,
+    affinity: 0.12,
+    recency: 0.10,
+    popularity: 0.08,
+    freshness: 0.06,
     social: 0.11,
+    proximity: 0.10,
   }
 
   function computeScore(
@@ -20,6 +21,7 @@ describe('re-rank scoring', () => {
     popularity,
     freshness,
     social = 0,
+    proximity = 0.5,
     w = WEIGHTS_NORMAL,
   ) {
     return (
@@ -28,7 +30,8 @@ describe('re-rank scoring', () => {
       w.recency * recency +
       w.popularity * popularity +
       w.freshness * freshness +
-      w.social * social
+      w.social * social +
+      w.proximity * proximity
     )
   }
 
@@ -39,37 +42,57 @@ describe('re-rank scoring', () => {
 
   it('weights sum to 1.0 for cold-start mode', () => {
     const WEIGHTS_COLD = {
-      cosSim: 0.35,
-      affinity: 0.12,
-      recency: 0.13,
-      popularity: 0.15,
-      freshness: 0.07,
-      social: 0.18,
+      cosSim: 0.30,
+      affinity: 0.10,
+      recency: 0.12,
+      popularity: 0.13,
+      freshness: 0.06,
+      social: 0.16,
+      proximity: 0.13,
     }
     const sum = Object.values(WEIGHTS_COLD).reduce((a, b) => a + b, 0)
     expect(sum).toBeCloseTo(1.0, 10)
   })
 
   it('high cosine similarity dominates the score', () => {
-    const highCos = computeScore(0.95, 0.2, 0.5, 0.3, 1.0, 0)
-    const lowCos = computeScore(0.1, 0.9, 0.9, 0.9, 1.0, 0)
+    const highCos = computeScore(0.95, 0.2, 0.5, 0.3, 1.0, 0, 0.5)
+    const lowCos = computeScore(0.1, 0.9, 0.9, 0.9, 1.0, 0, 0.5)
     expect(highCos).toBeGreaterThan(lowCos)
   })
 
   it('perfect scores across all signals yield maximum', () => {
-    const maxScore = computeScore(1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
+    const maxScore = computeScore(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
     expect(maxScore).toBeCloseTo(1.0, 10)
   })
 
   it('zero across all signals yields zero', () => {
-    const minScore = computeScore(0, 0, 0, 0, 0, 0)
+    const minScore = computeScore(0, 0, 0, 0, 0, 0, 0)
     expect(minScore).toBe(0)
   })
 
   it('social boost can promote lower-cosSim events', () => {
-    const noSocial = computeScore(0.7, 0.5, 0.5, 0.3, 1.0, 0)
-    const withSocial = computeScore(0.6, 0.5, 0.5, 0.3, 1.0, 0.9)
+    const noSocial = computeScore(0.7, 0.5, 0.5, 0.3, 1.0, 0, 0.5)
+    const withSocial = computeScore(0.6, 0.5, 0.5, 0.3, 1.0, 0.9, 0.5)
     expect(withSocial).toBeGreaterThan(noSocial)
+  })
+
+  it('proximity boost promotes nearby events over distant ones', () => {
+    const nearby = computeScore(0.6, 0.5, 0.5, 0.3, 1.0, 0, 0.95)
+    const far = computeScore(0.6, 0.5, 0.5, 0.3, 1.0, 0, 0.05)
+    expect(nearby).toBeGreaterThan(far)
+  })
+
+  it('proximity alone cannot override very high cosSim', () => {
+    const highCosButFar = computeScore(0.95, 0.5, 0.5, 0.5, 1.0, 0.5, 0.05)
+    const lowCosButClose = computeScore(0.2, 0.5, 0.5, 0.5, 1.0, 0.5, 1.0)
+    expect(highCosButFar).toBeGreaterThan(lowCosButClose)
+  })
+
+  it('proximity makes a meaningful difference for equal events', () => {
+    const close = computeScore(0.7, 0.5, 0.5, 0.5, 1.0, 0.3, 0.9)
+    const far = computeScore(0.7, 0.5, 0.5, 0.5, 1.0, 0.3, 0.1)
+    const diff = close - far
+    expect(diff).toBeGreaterThan(0.05)
   })
 })
 

@@ -227,14 +227,14 @@ async function upsertVector(userId, vector, signalCount, now) {
   const vectorLiteral = `[${vector.join(',')}]`
 
   const existing = await prisma.$queryRawUnsafe(
-    `SELECT vector_version FROM user_preference_vectors WHERE user_id = $1`,
+    `SELECT vector_version FROM user_preference_vectors WHERE user_id = $1::uuid`,
     userId,
   )
   const nextVersion = existing.length > 0 ? existing[0].vector_version + 1 : 1
 
   await prisma.$executeRawUnsafe(
     `INSERT INTO user_preference_vectors (user_id, embedding, model, vector_version, signal_count, decay_half_life_days, last_built_from, last_computed_at)
-     VALUES ($1, $2::vector, $3, $4, $5, $6, $7, $7)
+     VALUES ($1::uuid, $2::vector, $3, $4, $5, $6, $7, $7)
      ON CONFLICT (user_id)
      DO UPDATE SET embedding = $2::vector, model = $3, vector_version = $4, signal_count = $5, decay_half_life_days = $6, last_built_from = $7, last_computed_at = $7`,
     userId,

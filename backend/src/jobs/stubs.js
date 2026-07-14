@@ -1,5 +1,6 @@
 import { registerJob } from './scheduler.js'
 import { embedPendingEvents } from '../embeddings/pipeline.js'
+import { rebuildStaleVectors } from '../preferences/builder.js'
 
 // Each stub logs and returns a summary. Real implementations replace these in later sprints.
 
@@ -24,10 +25,12 @@ registerJob('flip-past-events', {
 registerJob('rebuild-user-vectors', {
   schedule: '*/15 * * * *', // every 15 minutes (watermark-driven)
   handler: async () => {
+    console.log('[job:rebuild-user-vectors] rebuilding stale user preference vectors...')
+    const result = await rebuildStaleVectors()
     console.log(
-      '[job:rebuild-user-vectors] stub — would rebuild preference vectors + category affinities',
+      `[job:rebuild-user-vectors] done — ${result.built} built, ${result.skipped} skipped, ${result.errors} errors`,
     )
-    return { stub: true }
+    return result
   },
 })
 

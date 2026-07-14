@@ -5,20 +5,30 @@ import { describe, it, expect } from 'vitest'
 
 describe('re-rank scoring', () => {
   const WEIGHTS_NORMAL = {
-    cosSim: 0.55,
-    affinity: 0.15,
-    recency: 0.12,
-    popularity: 0.1,
-    freshness: 0.08,
+    cosSim: 0.48,
+    affinity: 0.14,
+    recency: 0.11,
+    popularity: 0.09,
+    freshness: 0.07,
+    social: 0.11,
   }
 
-  function computeScore(cosSim, affinity, recency, popularity, freshness, w = WEIGHTS_NORMAL) {
+  function computeScore(
+    cosSim,
+    affinity,
+    recency,
+    popularity,
+    freshness,
+    social = 0,
+    w = WEIGHTS_NORMAL,
+  ) {
     return (
       w.cosSim * cosSim +
       w.affinity * affinity +
       w.recency * recency +
       w.popularity * popularity +
-      w.freshness * freshness
+      w.freshness * freshness +
+      w.social * social
     )
   }
 
@@ -29,30 +39,37 @@ describe('re-rank scoring', () => {
 
   it('weights sum to 1.0 for cold-start mode', () => {
     const WEIGHTS_COLD = {
-      cosSim: 0.42,
-      affinity: 0.15,
-      recency: 0.15,
-      popularity: 0.2,
-      freshness: 0.08,
+      cosSim: 0.35,
+      affinity: 0.12,
+      recency: 0.13,
+      popularity: 0.15,
+      freshness: 0.07,
+      social: 0.18,
     }
     const sum = Object.values(WEIGHTS_COLD).reduce((a, b) => a + b, 0)
     expect(sum).toBeCloseTo(1.0, 10)
   })
 
   it('high cosine similarity dominates the score', () => {
-    const highCos = computeScore(0.95, 0.2, 0.5, 0.3, 1.0)
-    const lowCos = computeScore(0.1, 0.9, 0.9, 0.9, 1.0)
+    const highCos = computeScore(0.95, 0.2, 0.5, 0.3, 1.0, 0)
+    const lowCos = computeScore(0.1, 0.9, 0.9, 0.9, 1.0, 0)
     expect(highCos).toBeGreaterThan(lowCos)
   })
 
   it('perfect scores across all signals yield maximum', () => {
-    const maxScore = computeScore(1.0, 1.0, 1.0, 1.0, 1.0)
+    const maxScore = computeScore(1.0, 1.0, 1.0, 1.0, 1.0, 1.0)
     expect(maxScore).toBeCloseTo(1.0, 10)
   })
 
   it('zero across all signals yields zero', () => {
-    const minScore = computeScore(0, 0, 0, 0, 0)
+    const minScore = computeScore(0, 0, 0, 0, 0, 0)
     expect(minScore).toBe(0)
+  })
+
+  it('social boost can promote lower-cosSim events', () => {
+    const noSocial = computeScore(0.7, 0.5, 0.5, 0.3, 1.0, 0)
+    const withSocial = computeScore(0.6, 0.5, 0.5, 0.3, 1.0, 0.9)
+    expect(withSocial).toBeGreaterThan(noSocial)
   })
 })
 

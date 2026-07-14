@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import prisma from '../lib/prisma.js'
 import { toEventCard } from '../events/serialize.js'
+import { computeSocialScores } from './social.js'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
@@ -11,8 +12,22 @@ const CHURN_GUARD_DAYS = 3
 const COLD_START_THRESHOLD = 5
 
 const WEIGHTS = {
-  normal: { cosSim: 0.55, affinity: 0.15, recency: 0.12, popularity: 0.1, freshness: 0.08 },
-  coldStart: { cosSim: 0.42, affinity: 0.15, recency: 0.15, popularity: 0.2, freshness: 0.08 },
+  normal: {
+    cosSim: 0.48,
+    affinity: 0.14,
+    recency: 0.11,
+    popularity: 0.09,
+    freshness: 0.07,
+    social: 0.11,
+  },
+  coldStart: {
+    cosSim: 0.35,
+    affinity: 0.12,
+    recency: 0.13,
+    popularity: 0.15,
+    freshness: 0.07,
+    social: 0.18,
+  },
 }
 
 const EXPLORATION_RATE = 0.1
@@ -32,6 +47,15 @@ const RATIONALE_TEMPLATES = {
   tag_click: (label) => `Because you're into ${label}`,
   share: (label) => `Because you shared ${label}`,
   claim_spot: (label) => `Because you joined ${label}`,
+}
+
+const SOCIAL_RATIONALE = {
+  friends_going: (count) => `${count} friend${count > 1 ? 's' : ''} going`,
+  friends_saved: (count) => `${count} friend${count > 1 ? 's' : ''} saved this`,
+  followed_organizer: () => 'Hosted by someone you follow',
+  org_followed_by_friends: (count) => `${count} friend${count > 1 ? 's' : ''} follow the host`,
+  repeat_attendees: (count) => `${count} friend${count > 1 ? 's' : ''} you've been out with`,
+  shared_category_momentum: () => 'Your friends are into this lately',
 }
 
 export async function generateRecommendations(userId, options = {}) {
@@ -69,7 +93,9 @@ export async function generateRecommendations(userId, options = {}) {
   const isColdStart = signalCount < COLD_START_THRESHOLD
   const w = isColdStart ? WEIGHTS.coldStart : WEIGHTS.normal
 
-  const reRanked = reRank(ranked, affinityMap, maxAffinity, w)
+  const socialScores = await computeSocialScores(userId, ranked)
+
+  const reRanked = reRank(ranked, affinityMap, maxAffinity, w, socialScores)
 
   const diverse = applyMMR(reRanked, limit)
 
@@ -77,7 +103,7 @@ export async function generateRecommendations(userId, options = {}) {
   const topSignals = await fetchTopSignals(userId)
 
   const results = diverse.map((item, idx) => {
-    const rationale = generateRationale(item, affinityMap, topSignals)
+    const rationale = generateRationale(item, affinityMap, topSignals, socialScores)
     return {
       event: item.event,
       score: item.finalScore,
@@ -258,7 +284,7 @@ async function knnRank(userEmbeddingText, candidates) {
   return ranked
 }
 
-function reRank(candidates, affinityMap, maxAffinity, w) {
+function reRank(candidates, affinityMap, maxAffinity, w, socialScores = new Map()) {
   const maxPopularity = Math.max(
     1,
     ...candidates.map((c) => c.rsvpCount + c.playersSignedUp + 2 * c.saveCount),
@@ -278,6 +304,8 @@ function reRank(candidates, affinityMap, maxAffinity, w) {
 
       const freshness = 1.0
 
+      const social = socialScores.get(c.event.id)?.score ?? 0
+
       const isExploration = Math.random() < EXPLORATION_RATE
       const epsilon = isExploration ? EXPLORATION_BUMP : 0
 
@@ -287,9 +315,10 @@ function reRank(candidates, affinityMap, maxAffinity, w) {
         w.recency * recency +
         w.popularity * popularity +
         w.freshness * freshness +
+        w.social * social +
         epsilon
 
-      return { ...c, finalScore: score, affinity, recency, popularity }
+      return { ...c, finalScore: score, affinity, recency, popularity, social }
     })
     .sort((a, b) => b.finalScore - a.finalScore)
 }
@@ -375,8 +404,18 @@ async function fetchTopSignals(userId) {
   return rows
 }
 
-function generateRationale(item, affinityMap, topSignals) {
+function generateRationale(item, affinityMap, topSignals, socialScores = new Map()) {
   const eventCategoryId = item.categoryId
+  const socialData = socialScores.get(item.event.id)
+
+  if (socialData && socialData.topSignal && socialData.score > 0.1) {
+    const templateFn = SOCIAL_RATIONALE[socialData.topSignal]
+    if (templateFn) {
+      const count = socialData.raw[signalKeyFromTop(socialData.topSignal)] ?? 1
+      const text = templateFn(count)
+      return { text, signal: null, socialSignal: socialData.topSignal }
+    }
+  }
 
   const matchingSignal = topSignals.find((s) => {
     if (s.eventId === item.event.id) return true
@@ -408,6 +447,18 @@ function generateRationale(item, affinityMap, topSignals) {
   }
 
   return { text: 'Popular near you', signal: null }
+}
+
+function signalKeyFromTop(topSignal) {
+  const map = {
+    friends_going: 'friendsGoing',
+    friends_saved: 'friendsSaved',
+    followed_organizer: 'followedOrganizer',
+    org_followed_by_friends: 'orgFollowedByFriends',
+    repeat_attendees: 'repeatAttendees',
+    shared_category_momentum: 'sharedCategoryMomentum',
+  }
+  return map[topSignal] ?? 'friendsGoing'
 }
 
 async function persistImpressions(userId, results, feedRunId, signalCount) {

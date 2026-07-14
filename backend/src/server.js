@@ -5,6 +5,7 @@ import { EVENTS, ORGANIZERS, CATEGORIES, INTERESTS, AVATARS, POSTS } from './dat
 import adminSyncRouter from './sync/routes.js'
 import adminJobsRouter from './jobs/routes.js'
 import eventsRouter from './events/routes.js'
+import engagementRouter from './engagement/routes.js'
 import interactionsRouter from './interactions/routes.js'
 import authRouter from './auth/routes.js'
 import usersRouter from './users/routes.js'
@@ -50,6 +51,9 @@ app.get('/api/avatars', (_req, res) => ok(res, AVATARS))
 
 // --- Events (Prisma-backed, cursor-paginated) --------------------------------
 app.use('/api/events', eventsRouter)
+
+// --- Engagement: save + RSVP (§7.4, #15) -------------------------------------
+app.use('/api/events', engagementRouter)
 
 // --- Recommendations (Prisma-backed affinity/popularity ranking) -------------
 app.use('/api', recommendationsRouter)

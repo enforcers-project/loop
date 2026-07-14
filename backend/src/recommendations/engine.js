@@ -16,15 +16,15 @@ const WEIGHTS = {
   normal: {
     cosSim: 0.43,
     affinity: 0.12,
-    recency: 0.10,
+    recency: 0.1,
     popularity: 0.08,
     freshness: 0.06,
     social: 0.11,
-    proximity: 0.10,
+    proximity: 0.1,
   },
   coldStart: {
-    cosSim: 0.30,
-    affinity: 0.10,
+    cosSim: 0.3,
+    affinity: 0.1,
     recency: 0.12,
     popularity: 0.13,
     freshness: 0.06,
@@ -342,7 +342,16 @@ function reRank(
         w.proximity * proximity +
         epsilon
 
-      return { ...c, finalScore: score, affinity, recency, popularity, social, proximity, distanceMiles }
+      return {
+        ...c,
+        finalScore: score,
+        affinity,
+        recency,
+        popularity,
+        social,
+        proximity,
+        distanceMiles,
+      }
     })
     .sort((a, b) => b.finalScore - a.finalScore)
 }

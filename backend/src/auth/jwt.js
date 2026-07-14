@@ -18,6 +18,14 @@ export const REFRESH_COOKIE = 'loop_refresh'
 
 const isProd = process.env.NODE_ENV === 'production'
 
+// The deployed frontend lives on a different origin than the API (e.g. a static
+// host + Render), so the auth cookie is sent cross-site. Browsers only attach a
+// cross-site cookie when it is `SameSite=None`, and they reject `SameSite=None`
+// unless it is also `Secure` — which holds in prod (secure: isProd, over HTTPS).
+// In dev everything is same-origin through the Vite proxy, so keep the stricter
+// `Lax`. If you ever move to a same-origin deploy, `Lax` in prod is safe too.
+const SAME_SITE = isProd ? 'none' : 'lax'
+
 /** Sign an access token embedding the user id + session id. */
 export function signAccessToken({ userId, sessionId }) {
   return jwt.sign({ sub: userId, sid: sessionId, typ: 'access' }, JWT_SECRET, {
@@ -37,12 +45,12 @@ export function verifyToken(token) {
   return jwt.verify(token, JWT_SECRET)
 }
 
-/** Shared cookie options — HttpOnly + Secure(prod) + SameSite=Lax. */
+/** Shared cookie options — HttpOnly + Secure(prod) + SameSite None(prod)/Lax(dev). */
 function cookieOpts(maxAgeSeconds) {
   return {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'lax',
+    sameSite: SAME_SITE,
     path: '/',
     maxAge: maxAgeSeconds * 1000,
   }
@@ -60,7 +68,7 @@ export function setAuthCookies(res, { userId, sessionId }) {
 
 /** Clear both auth cookies (logout). */
 export function clearAuthCookies(res) {
-  const base = { httpOnly: true, secure: isProd, sameSite: 'lax', path: '/' }
+  const base = { httpOnly: true, secure: isProd, sameSite: SAME_SITE, path: '/' }
   res.clearCookie(ACCESS_COOKIE, base)
   res.clearCookie(REFRESH_COOKIE, base)
 }

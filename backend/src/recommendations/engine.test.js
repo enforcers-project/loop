@@ -4,10 +4,22 @@ import { describe, it, expect } from 'vitest'
 // We test re-ranking weights, MMR diversity, and rationale generation in isolation.
 
 describe('re-rank scoring', () => {
-  const WEIGHTS_NORMAL = { cosSim: 0.55, affinity: 0.15, recency: 0.12, popularity: 0.10, freshness: 0.08 }
+  const WEIGHTS_NORMAL = {
+    cosSim: 0.55,
+    affinity: 0.15,
+    recency: 0.12,
+    popularity: 0.1,
+    freshness: 0.08,
+  }
 
   function computeScore(cosSim, affinity, recency, popularity, freshness, w = WEIGHTS_NORMAL) {
-    return w.cosSim * cosSim + w.affinity * affinity + w.recency * recency + w.popularity * popularity + w.freshness * freshness
+    return (
+      w.cosSim * cosSim +
+      w.affinity * affinity +
+      w.recency * recency +
+      w.popularity * popularity +
+      w.freshness * freshness
+    )
   }
 
   it('weights sum to 1.0 for normal mode', () => {
@@ -16,14 +28,20 @@ describe('re-rank scoring', () => {
   })
 
   it('weights sum to 1.0 for cold-start mode', () => {
-    const WEIGHTS_COLD = { cosSim: 0.42, affinity: 0.15, recency: 0.15, popularity: 0.20, freshness: 0.08 }
+    const WEIGHTS_COLD = {
+      cosSim: 0.42,
+      affinity: 0.15,
+      recency: 0.15,
+      popularity: 0.2,
+      freshness: 0.08,
+    }
     const sum = Object.values(WEIGHTS_COLD).reduce((a, b) => a + b, 0)
     expect(sum).toBeCloseTo(1.0, 10)
   })
 
   it('high cosine similarity dominates the score', () => {
     const highCos = computeScore(0.95, 0.2, 0.5, 0.3, 1.0)
-    const lowCos = computeScore(0.10, 0.9, 0.9, 0.9, 1.0)
+    const lowCos = computeScore(0.1, 0.9, 0.9, 0.9, 1.0)
     expect(highCos).toBeGreaterThan(lowCos)
   })
 
@@ -41,7 +59,7 @@ describe('re-rank scoring', () => {
 describe('MMR diversity logic', () => {
   const MMR_LAMBDA = 0.7
   const MAX_CONSECUTIVE = 3
-  const MAX_SHARE = 0.40
+  const MAX_SHARE = 0.4
 
   function computeMMR(score, maxSimToSelected) {
     return MMR_LAMBDA * score - (1 - MMR_LAMBDA) * maxSimToSelected

@@ -11,16 +11,16 @@ const CHURN_GUARD_DAYS = 3
 const COLD_START_THRESHOLD = 5
 
 const WEIGHTS = {
-  normal: { cosSim: 0.55, affinity: 0.15, recency: 0.12, popularity: 0.10, freshness: 0.08 },
-  coldStart: { cosSim: 0.42, affinity: 0.15, recency: 0.15, popularity: 0.20, freshness: 0.08 },
+  normal: { cosSim: 0.55, affinity: 0.15, recency: 0.12, popularity: 0.1, freshness: 0.08 },
+  coldStart: { cosSim: 0.42, affinity: 0.15, recency: 0.15, popularity: 0.2, freshness: 0.08 },
 }
 
-const EXPLORATION_RATE = 0.10
+const EXPLORATION_RATE = 0.1
 const EXPLORATION_BUMP = 0.15
 
 const MMR_LAMBDA = 0.7
 const MAX_CONSECUTIVE_SAME_CATEGORY = 3
-const MAX_CATEGORY_SHARE = 0.40
+const MAX_CATEGORY_SHARE = 0.4
 
 const RATIONALE_TEMPLATES = {
   save: (label) => `Because you saved ${label}`,
@@ -35,7 +35,7 @@ const RATIONALE_TEMPLATES = {
 }
 
 export async function generateRecommendations(userId, options = {}) {
-  const { context = {}, limit: rawLimit, cursor } = options
+  const { context = {}, limit: rawLimit } = options
   const limit = Math.min(Math.max(Number(rawLimit) || DEFAULT_LIMIT, 1), MAX_LIMIT)
 
   const userVector = await fetchUserVector(userId)
@@ -215,9 +215,10 @@ function rowToCandidate(row) {
       description: row.description,
       category: { slug: row.cat_slug, name: row.cat_name, colorHex: row.cat_color_hex },
       organizer: null,
-      sportsDetail: row.players_needed != null
-        ? { playersNeeded: row.players_needed, playersSignedUp: row.players_signed_up }
-        : null,
+      sportsDetail:
+        row.players_needed != null
+          ? { playersNeeded: row.players_needed, playersSignedUp: row.players_signed_up }
+          : null,
     },
     categoryId: row.category_id,
     rsvpCount: row.rsvp_count ?? 0,
@@ -264,31 +265,33 @@ function reRank(candidates, affinityMap, maxAffinity, w) {
   )
   const now = Date.now()
 
-  return candidates.map((c) => {
-    const recencyDays = Math.max(0, (c.startsAt.getTime() - now) / (1000 * 60 * 60 * 24))
-    const recency = Math.exp(-recencyDays / 14)
+  return candidates
+    .map((c) => {
+      const recencyDays = Math.max(0, (c.startsAt.getTime() - now) / (1000 * 60 * 60 * 24))
+      const recency = Math.exp(-recencyDays / 14)
 
-    const rawAffinity = affinityMap.get(c.categoryId) ?? 0
-    const affinity = maxAffinity > 0 ? rawAffinity / maxAffinity : 0
+      const rawAffinity = affinityMap.get(c.categoryId) ?? 0
+      const affinity = maxAffinity > 0 ? rawAffinity / maxAffinity : 0
 
-    const rawPop = c.rsvpCount + c.playersSignedUp + 2 * c.saveCount
-    const popularity = Math.log1p(rawPop) / Math.log1p(maxPopularity)
+      const rawPop = c.rsvpCount + c.playersSignedUp + 2 * c.saveCount
+      const popularity = Math.log1p(rawPop) / Math.log1p(maxPopularity)
 
-    const freshness = 1.0
+      const freshness = 1.0
 
-    const isExploration = Math.random() < EXPLORATION_RATE
-    const epsilon = isExploration ? EXPLORATION_BUMP : 0
+      const isExploration = Math.random() < EXPLORATION_RATE
+      const epsilon = isExploration ? EXPLORATION_BUMP : 0
 
-    const score =
-      w.cosSim * c.cosSim +
-      w.affinity * affinity +
-      w.recency * recency +
-      w.popularity * popularity +
-      w.freshness * freshness +
-      epsilon
+      const score =
+        w.cosSim * c.cosSim +
+        w.affinity * affinity +
+        w.recency * recency +
+        w.popularity * popularity +
+        w.freshness * freshness +
+        epsilon
 
-    return { ...c, finalScore: score, affinity, recency, popularity }
-  }).sort((a, b) => b.finalScore - a.finalScore)
+      return { ...c, finalScore: score, affinity, recency, popularity }
+    })
+    .sort((a, b) => b.finalScore - a.finalScore)
 }
 
 function applyMMR(candidates, limit) {
@@ -310,7 +313,8 @@ function applyMMR(candidates, limit) {
       const catId = candidate.categoryId
       const catTotal = categoryCount.get(catId) ?? 0
       if (catTotal >= Math.ceil(limit * MAX_CATEGORY_SHARE)) continue
-      if (catId === lastCategoryId && consecutiveSameCategory >= MAX_CONSECUTIVE_SAME_CATEGORY) continue
+      if (catId === lastCategoryId && consecutiveSameCategory >= MAX_CONSECUTIVE_SAME_CATEGORY)
+        continue
 
       let maxSimToSelected = 0
       if (selected.length > 0) {
@@ -351,7 +355,18 @@ async function fetchTopSignals(userId) {
   const rows = await prisma.interactionEvent.findMany({
     where: {
       userId,
-      interactionType: { in: ['save', 'rsvp', 'follow', 'click', 'share', 'claim_spot', 'category_click', 'tag_click'] },
+      interactionType: {
+        in: [
+          'save',
+          'rsvp',
+          'follow',
+          'click',
+          'share',
+          'claim_spot',
+          'category_click',
+          'tag_click',
+        ],
+      },
     },
     orderBy: { createdAt: 'desc' },
     take: 50,

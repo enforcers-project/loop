@@ -28,7 +28,7 @@ export async function embedEvent(eventId, { force = false } = {}) {
 
   if (!force) {
     const existing = await prisma.$queryRawUnsafe(
-      `SELECT content_hash, vector_version FROM event_embeddings WHERE event_id = $1`,
+      `SELECT content_hash, vector_version FROM event_embeddings WHERE event_id = $1::uuid`,
       eventId,
     )
 
@@ -44,14 +44,14 @@ export async function embedEvent(eventId, { force = false } = {}) {
   const vectorLiteral = `[${vector.join(',')}]`
 
   const currentVersion = await prisma.$queryRawUnsafe(
-    `SELECT vector_version FROM event_embeddings WHERE event_id = $1`,
+    `SELECT vector_version FROM event_embeddings WHERE event_id = $1::uuid`,
     eventId,
   )
   const nextVersion = currentVersion.length > 0 ? currentVersion[0].vector_version + 1 : 1
 
   await prisma.$executeRawUnsafe(
     `INSERT INTO event_embeddings (event_id, embedding, model, content_hash, vector_version, updated_at)
-     VALUES ($1, $2::vector, $3, $4, $5, NOW())
+     VALUES ($1::uuid, $2::vector, $3, $4, $5, NOW())
      ON CONFLICT (event_id)
      DO UPDATE SET embedding = $2::vector, model = $3, content_hash = $4, vector_version = $5, updated_at = NOW()`,
     eventId,

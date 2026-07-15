@@ -68,21 +68,10 @@ export function Auth() {
         </Link>
 
         <div className="rounded-card border border-border-light bg-white p-6 shadow-card sm:p-8">
-          {/* mode toggle */}
-          <div className="mb-6 flex rounded-button bg-surface p-1">
-            {['signup', 'login'].map((m) => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={cn(
-                  'flex-1 rounded-[8px] py-2 text-sm font-semibold transition-colors',
-                  mode === m ? 'bg-white text-ink shadow-sm' : 'text-text-secondary',
-                )}
-              >
-                {m === 'signup' ? 'Sign up' : 'Log in'}
-              </button>
-            ))}
-          </div>
+          {/* current-mode heading — one operation at a time; switch via the link below */}
+          <h1 className="mb-6 text-center text-xl font-semibold text-ink">
+            {mode === 'signup' ? 'Sign up' : 'Log in'}
+          </h1>
 
           {/* social auth */}
           <div className="space-y-2.5">

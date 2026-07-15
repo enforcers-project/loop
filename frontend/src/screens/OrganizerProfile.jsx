@@ -20,7 +20,9 @@ function toOrganizerShape(p) {
     name: p.display_name || p.handle || 'Organizer',
     handle: p.handle ? `@${p.handle}` : '',
     avatar: p.avatar_url || 'https://i.pravatar.cc/150?img=1',
-    cover: p.cover_image_url || 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=1200&q=80',
+    cover:
+      p.cover_image_url ||
+      'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=1200&q=80',
     verified: p.is_verified,
     role: p.organizer_kind || p.role,
     followers: p.follower_count ?? 0,

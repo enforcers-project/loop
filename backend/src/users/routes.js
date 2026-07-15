@@ -152,7 +152,10 @@ router.get('/:id/events', async (req, res) => {
 
     const events = await prisma.event.findMany({
       where,
-      orderBy: status === 'past' ? [{ startsAt: 'desc' }, { id: 'asc' }] : [{ startsAt: 'asc' }, { id: 'asc' }],
+      orderBy:
+        status === 'past'
+          ? [{ startsAt: 'desc' }, { id: 'asc' }]
+          : [{ startsAt: 'asc' }, { id: 'asc' }],
       take: limit + 1,
       include: { category: true, organizer: true, sportsDetail: true },
     })

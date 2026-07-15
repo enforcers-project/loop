@@ -58,6 +58,9 @@ export function Auth() {
   const [role, setRole] = useState('attendee')
   const [isHost, setIsHost] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // Set when a Google *login* found no account and we flipped to signup, so we
+  // can nudge the user to click "Continue with Google" once more to finish.
+  const [googleSignupHint, setGoogleSignupHint] = useState(false)
 
   // Hosting is organizer-only; drop the flag if they aren't signing up as one.
   const wantsHost = role === 'organizer' && isHost
@@ -75,16 +78,26 @@ export function Auth() {
       const next = params.get('next')
       try {
         const { isNew } = await loginWithGoogle(response.credential, {
+          // On the Log in screen, "intent: login" tells the backend to refuse a
+          // brand-new Google identity instead of auto-creating an account.
+          intent: mode === 'login' ? 'login' : 'signup',
           role,
           organizer_kind: role === 'organizer' ? 'organizer' : undefined,
           is_host: wantsHost,
         })
         navigate(next || (isNew ? '/onboarding' : '/feed'))
       } catch (err) {
+        // No account yet while trying to log in → send them to Sign up.
+        if (err.status === 404) {
+          toast.error('No Loop account found — sign up to get started.')
+          setMode('signup')
+          setGoogleSignupHint(true)
+          return
+        }
         toast.error(err.message || 'Google sign-in failed. Please try again.')
       }
     },
-    [loginWithGoogle, navigate, params, role, wantsHost, toast],
+    [loginWithGoogle, navigate, params, mode, role, wantsHost, toast],
   )
 
   // Initialize GSI and render Google's official button into the placeholder once
@@ -153,6 +166,11 @@ export function Auth() {
           {/* social auth — Google renders its own button into this slot */}
           {googleEnabled && (
             <>
+              {mode === 'signup' && googleSignupHint && (
+                <p className="mb-3 rounded-button bg-primary/5 px-3 py-2 text-center text-xs text-text-secondary">
+                  Almost there — tap “Continue with Google” again to finish creating your account.
+                </p>
+              )}
               <div ref={googleBtnRef} className="flex min-h-[44px] justify-center" />
               <div className="my-5 flex items-center gap-3 text-xs text-text-muted">
                 <span className="h-px flex-1 bg-border-light" /> or{' '}
@@ -266,7 +284,10 @@ export function Auth() {
         <p className="mt-4 text-center text-sm text-text-secondary">
           {mode === 'signup' ? 'Already have an account? ' : 'New to Loop? '}
           <button
-            onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')}
+            onClick={() => {
+              setMode(mode === 'signup' ? 'login' : 'signup')
+              setGoogleSignupHint(false) // manual switch clears the finish-signup nudge
+            }}
             className="font-semibold text-primary"
           >
             {mode === 'signup' ? 'Log in' : 'Sign up'}

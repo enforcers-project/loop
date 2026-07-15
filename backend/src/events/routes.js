@@ -52,11 +52,15 @@ router.get('/', async (req, res) => {
       where.city = { equals: city, mode: 'insensitive' }
     }
 
-    // Date range filter
+    // Date range filter. When the caller doesn't pass an explicit range we
+    // hide events whose start time is already in the past — a Home/Search
+    // list should only show things the user can still attend.
     if (dateFrom || dateTo) {
       where.startsAt = {}
       if (dateFrom) where.startsAt.gte = new Date(dateFrom)
       if (dateTo) where.startsAt.lte = new Date(dateTo)
+    } else {
+      where.startsAt = { gte: new Date() }
     }
 
     // Price range filter
@@ -224,6 +228,7 @@ router.get('/:id/related', async (req, res) => {
         categoryId: event.categoryId,
         id: { not: event.id },
         status: 'published',
+        startsAt: { gte: new Date() },
       },
       take: 6,
       orderBy: { startsAt: 'asc' },
@@ -237,7 +242,11 @@ router.get('/:id/related', async (req, res) => {
     // Fallback: if no same-category events, just grab recent ones
     if (related.length === 0) {
       related = await prisma.event.findMany({
-        where: { id: { not: event.id }, status: 'published' },
+        where: {
+          id: { not: event.id },
+          status: 'published',
+          startsAt: { gte: new Date() },
+        },
         take: 3,
         orderBy: { startsAt: 'asc' },
         include: {

@@ -289,6 +289,45 @@ export const api = {
       return { ...o, events: MOCK_EVENTS.filter((e) => e.organizerId === id).map(withOrganizer) }
     }).then((o) => (o ? { ...o, events: (o.events ?? []).map(toEventCardShape) } : o)),
 
+  // Public user/organizer profile (GET /api/users/:id + /:id/events). Real UUID
+  // ids hit Prisma; mock `org-*` ids 404 the profile fetch, so we fall back to
+  // the mock organizer + its events. Returns the backend shape (snake_case) when
+  // real, the mock shape when not — toOrganizerShape() in the screen normalizes.
+  user: async (id, status = 'upcoming') => {
+    const profile = await get(`/users/${id}`, () => {
+      const o = MOCK_ORGANIZERS.find((x) => x.id === id)
+      if (!o) return null
+      return { ...o, _mock: true }
+    })
+    if (!profile) return null
+    if (profile._mock) {
+      const events = MOCK_EVENTS.filter((e) => e.organizerId === id).map(withOrganizer)
+      return { ...profile, events: events.map(toEventCardShape) }
+    }
+    // Real profile: pull the organizer's events for the requested tab.
+    const events = await get(`/users/${id}/events?status=${status}`, () => [])
+    return { ...profile, events: (events ?? []).map(toEventCardShape) }
+  },
+
+  // Follow / unfollow an organizer (no mock fallback — a follow must genuinely
+  // persist). POST returns { is_following, followee: { follower_count } };
+  // DELETE is 204 (request() returns null). Both throw on failure so the caller
+  // can roll back optimistic UI.
+  follow: (id) => request(`/users/${id}/follow`, { method: 'POST' }),
+  unfollow: (id) => request(`/users/${id}/follow`, { method: 'DELETE' }),
+
+  // Who a user follows (GET /api/users/:id/following) — used to hydrate the
+  // FollowBtn state on login/refresh. Returns the id array; [] on any failure
+  // so a hydration hiccup never blocks the app.
+  following: async (id) => {
+    try {
+      const res = await request(`/users/${id}/following`)
+      return (res ?? []).map((row) => row.user?.id).filter(Boolean)
+    } catch {
+      return []
+    }
+  },
+
   posts: () =>
     get('/posts', () =>
       MOCK_POSTS.map((p) => ({

@@ -9,6 +9,15 @@ import {
   POSTS as MOCK_POSTS,
 } from '../data/seed'
 
+// Where the API lives. In dev this is empty, so calls stay relative (`/api/…`)
+// and Vite proxies them to the backend (see vite.config.js). In a deployed
+// build the backend is on another origin, so set VITE_API_BASE_URL (baked in at
+// build time) to that origin — e.g. https://loop-server.onrender.com — and
+// every request targets it directly. A trailing slash is trimmed so we never
+// emit `//api`.
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const apiUrl = (path) => `${API_BASE}/api${path}`
+
 const withOrganizer = (e) => ({
   ...e,
   organizer: MOCK_ORGANIZERS.find((o) => o.id === e.organizerId) ?? null,
@@ -85,7 +94,7 @@ export function toEventCardShape(e) {
 
 async function get(path, fallback) {
   try {
-    const res = await fetch(`/api${path}`, { credentials: 'include' })
+    const res = await fetch(apiUrl(path), { credentials: 'include' })
     if (!res.ok) throw new Error(String(res.status))
     const json = await res.json()
     return json.data
@@ -96,7 +105,7 @@ async function get(path, fallback) {
 
 async function post(path, body, fallback) {
   try {
-    const res = await fetch(`/api${path}`, {
+    const res = await fetch(apiUrl(path), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -112,7 +121,7 @@ async function post(path, body, fallback) {
 
 async function put(path, body, fallback) {
   try {
-    const res = await fetch(`/api${path}`, {
+    const res = await fetch(apiUrl(path), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -130,7 +139,7 @@ async function put(path, body, fallback) {
 // faked. This helper surfaces the backend's error envelope as a thrown Error
 // (with .status) so the UI can show a real message.
 async function request(path, { method = 'GET', body } = {}) {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(apiUrl(path), {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     credentials: 'include',

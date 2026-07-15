@@ -6,6 +6,7 @@
 //   and stamped ended_at on logout (it is NOT the credential store).
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
+import { OAuth2Client } from 'google-auth-library'
 import prisma from '../lib/prisma.js'
 import { toSelfUser, toAuthUser } from './serialize.js'
 import { fail, requireAuth } from './middleware.js'
@@ -22,6 +23,13 @@ const router = Router()
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const HANDLE_RE = /^[a-zA-Z0-9_]{3,30}$/
 const BCRYPT_ROUNDS = 10
+
+// Google Identity: the client sends an id_token (a Google-signed JWT). We verify
+// it against Google's public keys — no network call to Google's API, and the
+// audience MUST equal our own client id so a token minted for another app is
+// rejected. One shared client; verifyIdToken fetches + caches Google's certs.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID)
 
 /** Open an analytics/browsing-session row for a user, return its id. */
 async function openSession(userId, req) {
@@ -114,6 +122,125 @@ router.post('/login', async (req, res) => {
   } catch (err) {
     console.error('POST /api/auth/login error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not log in')
+  }
+})
+
+// --- POST /api/auth/oauth/google ---------------------------------------------
+// Body: { id_token, role?, organizer_kind?, is_host? } — role/kind/host apply
+// ONLY when creating a brand-new user (ignored for returning/linked accounts).
+// Verifies the Google id_token, then resolves to a user in one of three ways:
+//   1. an oauth_accounts(google, sub) row exists   → returning user, log in
+//   2. no oauth row but users.email matches         → link Google to that user
+//   3. neither                                      → create the user (no password)
+// Either way it issues the SAME cookies + session as email login, and returns
+// is_new so the client can route first-timers to onboarding.
+router.post('/oauth/google', async (req, res) => {
+  if (!GOOGLE_CLIENT_ID) {
+    return fail(res, 503, 'NOT_CONFIGURED', 'Google sign-in is not configured')
+  }
+
+  const { id_token, role, organizer_kind, is_host } = req.body ?? {}
+  if (!id_token || typeof id_token !== 'string') {
+    return fail(res, 422, 'VALIDATION_ERROR', 'id_token is required')
+  }
+
+  // 1) Verify the token's signature + audience with Google. Throws on a forged,
+  //    expired, or wrong-audience token.
+  let payload
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: id_token,
+      audience: GOOGLE_CLIENT_ID,
+    })
+    payload = ticket.getPayload()
+  } catch {
+    return fail(res, 401, 'UNAUTHORIZED', 'Invalid Google token')
+  }
+
+  const providerUid = payload?.sub
+  const email = payload?.email
+  if (!providerUid || !email) {
+    return fail(res, 401, 'UNAUTHORIZED', 'Google token missing required claims')
+  }
+  // Only trust a Google-verified email — an unverified one could be spoofed and
+  // would let a Google account hijack an existing password account by email match.
+  if (payload.email_verified === false) {
+    return fail(res, 401, 'UNAUTHORIZED', 'Google email is not verified')
+  }
+
+  // Validate the new-user role knobs up front (same rules as signup), so we
+  // don't create a user in a state the DB CHECKs would reject.
+  const resolvedRole = role ?? 'attendee'
+  if (resolvedRole !== 'attendee' && resolvedRole !== 'organizer') {
+    return fail(res, 422, 'VALIDATION_ERROR', 'role must be "attendee" or "organizer"')
+  }
+  if (organizer_kind && resolvedRole !== 'organizer') {
+    return fail(res, 422, 'VALIDATION_ERROR', 'organizer_kind is only valid for organizers')
+  }
+  if (organizer_kind && organizer_kind !== 'organizer' && organizer_kind !== 'promoter') {
+    return fail(res, 422, 'VALIDATION_ERROR', 'organizer_kind must be "organizer" or "promoter"')
+  }
+  if (is_host && resolvedRole !== 'organizer') {
+    return fail(res, 422, 'VALIDATION_ERROR', 'is_host is only valid for organizers')
+  }
+
+  try {
+    // 2) Resolve to a user + decide whether they're new. Wrapped in a
+    //    transaction so the create+link (case 3) and the link (case 2) are atomic.
+    const { user, isNew } = await prisma.$transaction(async (tx) => {
+      // Case 1: already linked → returning user.
+      const linked = await tx.oauthAccount.findUnique({
+        where: { provider_providerUid: { provider: 'google', providerUid } },
+        include: { user: true },
+      })
+      if (linked) return { user: linked.user, isNew: false }
+
+      // Case 2: an email account exists → link Google to it (account merge).
+      const existing = await tx.user.findUnique({ where: { email } })
+      if (existing) {
+        await tx.oauthAccount.create({
+          data: { userId: existing.id, provider: 'google', providerUid },
+        })
+        return { user: existing, isNew: false }
+      }
+
+      // Case 3: brand-new user. password_hash stays null (social-only account);
+      // seed profile fields from the Google payload where we have them.
+      const created = await tx.user.create({
+        data: {
+          email,
+          passwordHash: null,
+          role: resolvedRole,
+          organizerKind: resolvedRole === 'organizer' ? (organizer_kind ?? null) : null,
+          isHost: resolvedRole === 'organizer' ? !!is_host : false,
+          displayName: payload.name ?? null,
+          avatarUrl: payload.picture ?? null,
+          isVerified: true, // Google-verified email
+          oauthAccounts: {
+            create: { provider: 'google', providerUid },
+          },
+        },
+      })
+      return { user: created, isNew: true }
+    })
+
+    const sessionId = await openSession(user.id, req)
+    setAuthCookies(res, { userId: user.id, sessionId })
+    return res.status(isNew ? 201 : 200).json({
+      data: {
+        user: toAuthUser(user),
+        session: { expires_at: accessExpiresAt() },
+        is_new: isNew,
+      },
+    })
+  } catch (err) {
+    // A concurrent first-login for the same account can collide on the unique
+    // (provider, provider_uid) / email index — surface as a retryable conflict.
+    if (err.code === 'P2002') {
+      return fail(res, 409, 'CONFLICT', 'Account already exists; please try again')
+    }
+    console.error('POST /api/auth/oauth/google error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not sign in with Google')
   }
 })
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
@@ -12,10 +12,44 @@ const ROLES = [
   { id: 'organizer', label: 'Organizer', blurb: 'Create & manage events' },
 ]
 
+// Google OAuth Web client id (same value the backend verifies against). It's not
+// a secret — it ships to the browser — but lives in env for parity/config. When
+// unset, the Google button is hidden and email auth is the only path.
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
+const GSI_SRC = 'https://accounts.google.com/gsi/client'
+
+// Load the Google Identity Services script once (idempotent across mounts) and
+// report `ready` when `window.google.accounts.id` exists. Polls rather than
+// relying on the load event, so it works whether the script is still loading or
+// was already injected by a prior mount.
+function useGoogleScript(enabled) {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    if (!enabled) return
+    if (!document.querySelector(`script[src="${GSI_SRC}"]`)) {
+      const script = document.createElement('script')
+      script.src = GSI_SRC
+      script.async = true
+      script.defer = true
+      document.head.appendChild(script)
+    }
+    // Poll for availability (the callback runs async, so no cascading render).
+    // The first tick fires ~immediately, covering the already-loaded case too.
+    const timer = setInterval(() => {
+      if (window.google?.accounts?.id) {
+        setReady(true)
+        clearInterval(timer)
+      }
+    }, 50)
+    return () => clearInterval(timer)
+  }, [enabled])
+  return ready
+}
+
 export function Auth() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { login, signup } = useApp()
+  const { login, signup, loginWithGoogle } = useApp()
   const toast = useToast()
   const [mode, setMode] = useState(params.get('mode') === 'login' ? 'login' : 'signup')
   const [email, setEmail] = useState('')
@@ -27,6 +61,49 @@ export function Auth() {
 
   // Hosting is organizer-only; drop the flag if they aren't signing up as one.
   const wantsHost = role === 'organizer' && isHost
+
+  // --- Google sign-in ---------------------------------------------------------
+  const googleEnabled = !!GOOGLE_CLIENT_ID
+  const gsiReady = useGoogleScript(googleEnabled)
+  const googleBtnRef = useRef(null)
+
+  // Called with Google's credential (an id_token) once the user picks an account.
+  // The selected role/host flags ride along and are only honored for a brand-new
+  // Google account; a first-timer lands on onboarding, a returning user on /feed.
+  const handleGoogle = useCallback(
+    async (response) => {
+      const next = params.get('next')
+      try {
+        const { isNew } = await loginWithGoogle(response.credential, {
+          role,
+          organizer_kind: role === 'organizer' ? 'organizer' : undefined,
+          is_host: wantsHost,
+        })
+        navigate(next || (isNew ? '/onboarding' : '/feed'))
+      } catch (err) {
+        toast.error(err.message || 'Google sign-in failed. Please try again.')
+      }
+    },
+    [loginWithGoogle, navigate, params, role, wantsHost, toast],
+  )
+
+  // Initialize GSI and render Google's official button into the placeholder once
+  // the script is ready. Google requires their own rendered button to obtain an
+  // id_token in the browser (a custom-styled button can't), so we render theirs.
+  useEffect(() => {
+    if (!googleEnabled || !gsiReady || !googleBtnRef.current) return
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogle,
+    })
+    googleBtnRef.current.replaceChildren() // clear any prior render (mode/role change)
+    window.google.accounts.id.renderButton(googleBtnRef.current, {
+      type: 'standard',
+      theme: 'outline',
+      size: 'large',
+      text: mode === 'signup' ? 'signup_with' : 'signin_with',
+    })
+  }, [googleEnabled, gsiReady, handleGoogle, mode])
 
   const submit = async () => {
     if (submitting) return
@@ -73,22 +150,17 @@ export function Auth() {
             {mode === 'signup' ? 'Sign up' : 'Log in'}
           </h1>
 
-          {/* social auth */}
-          <div className="space-y-2.5">
-            <button className="flex w-full items-center justify-center gap-2 rounded-button border border-border-light bg-white py-2.5 text-sm font-semibold text-ink hover:bg-surface">
-              <img src="https://www.google.com/favicon.ico" alt="" className="h-4 w-4" />
-              Continue with Google
-            </button>
-            <button className="flex w-full items-center justify-center gap-2 rounded-button border border-border-light bg-white py-2.5 text-sm font-semibold text-ink hover:bg-surface">
-              Continue with Apple
-            </button>
-          </div>
-
-          <div className="my-5 flex items-center gap-3 text-xs text-text-muted">
-            <span className="h-px flex-1 bg-border-light" /> or{' '}
-            {mode === 'signup' ? 'sign up' : 'log in'} with email
-            <span className="h-px flex-1 bg-border-light" />
-          </div>
+          {/* social auth — Google renders its own button into this slot */}
+          {googleEnabled && (
+            <>
+              <div ref={googleBtnRef} className="flex min-h-[44px] justify-center" />
+              <div className="my-5 flex items-center gap-3 text-xs text-text-muted">
+                <span className="h-px flex-1 bg-border-light" /> or{' '}
+                {mode === 'signup' ? 'sign up' : 'log in'} with email
+                <span className="h-px flex-1 bg-border-light" />
+              </div>
+            </>
+          )}
 
           {/* form */}
           <div className="space-y-4">

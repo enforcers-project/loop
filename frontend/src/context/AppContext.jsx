@@ -68,6 +68,20 @@ export function AppProvider({ children }) {
     [adopt],
   )
 
+  // Google sign-in: exchange the Google id_token for a Loop session, then adopt.
+  // Returns { user, isNew } so the Auth screen can route a first-time Google user
+  // to onboarding and a returning one to the feed. `extras` (role/is_host) only
+  // matter when the Google account is new; the backend ignores them otherwise.
+  const loginWithGoogle = useCallback(
+    async (idToken, extras) => {
+      const res = await api.auth.google(idToken, extras)
+      const clientUser = toClientUser(res?.user)
+      adopt(clientUser)
+      return { user: clientUser, isNew: !!res?.is_new }
+    },
+    [adopt],
+  )
+
   const logout = useCallback(async () => {
     try {
       await api.auth.logout()
@@ -118,6 +132,7 @@ export function AppProvider({ children }) {
         followingIds,
         login,
         signup,
+        loginWithGoogle,
         logout,
         requireAuth,
         setInterests,

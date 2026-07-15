@@ -206,6 +206,12 @@ export const api = {
     signup: (payload) => request('/auth/signup', { method: 'POST', body: payload }),
     login: (email, password) =>
       request('/auth/login', { method: 'POST', body: { email, password } }),
+    // Exchange a Google id_token for a Loop session (backend verifies + sets the
+    // cookie). `extras` (role/organizer_kind/is_host) apply only when the Google
+    // account is brand-new. Returns { user, is_new } so the caller can route
+    // first-timers to onboarding. No mock fallback — like every auth call.
+    google: (idToken, extras = {}) =>
+      request('/auth/oauth/google', { method: 'POST', body: { id_token: idToken, ...extras } }),
     logout: () => request('/auth/logout', { method: 'POST' }),
     // Resolve the current session; returns null when not authenticated (401)
     // instead of throwing, so callers can treat "logged out" as a normal state.

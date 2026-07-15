@@ -153,6 +153,7 @@ Lane A/B are backend-heavy (that's where the unbuilt work is); Lane C is mostly 
 | #37 | Ticketing / payments + QR check-in | A |
 | #38 | Promoter analytics deep-dive + AI flyer-image generation | B |
 | #39 | TikTok-style vertical social feed | C |
+| #40 | **Google social auth (end-to-end)** — wire the existing "Continue with Google" button ([Auth.jsx](../frontend/src/screens/Auth.jsx)) + build the specced-but-unscheduled OAuth backend: `POST /api/auth/oauth/google` (verify Google `id_token`, upsert `oauth_accounts` + `users` on first login, issue JWT cookie), `GET`/`DELETE /api/auth/oauth-accounts` (see [`project_plan.md` §7.1](project_plan.md), tagged "infra" — no committed issue yet). `oauth_accounts` table already exists (#2). Needs a Google OAuth client ID (backend-only secret, not in the Sprint-0 key list). Apple Sign-In deferred (paid Apple Developer account). Normally cross-lane (A backend + C frontend); **Heartwill owns the full flow.** | **C (Heartwill)** |
 
 Pull one into a sprint **only** after that sprint's MVP + nice-to-haves are merged and green.
 

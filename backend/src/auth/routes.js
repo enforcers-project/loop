@@ -31,6 +31,10 @@ const BCRYPT_ROUNDS = 10
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID)
 
+// Thrown inside the Google OAuth transaction when a login-only request finds no
+// existing account, so we roll back instead of creating one. Mapped to 404.
+class NoAccountError extends Error {}
+
 /** Open an analytics/browsing-session row for a user, return its id. */
 async function openSession(userId, req) {
   const session = await prisma.userSession.create({
@@ -126,12 +130,16 @@ router.post('/login', async (req, res) => {
 })
 
 // --- POST /api/auth/oauth/google ---------------------------------------------
-// Body: { id_token, role?, organizer_kind?, is_host? } — role/kind/host apply
-// ONLY when creating a brand-new user (ignored for returning/linked accounts).
-// Verifies the Google id_token, then resolves to a user in one of three ways:
+// Body: { id_token, intent?, role?, organizer_kind?, is_host? } — role/kind/host
+// apply ONLY when creating a brand-new user (ignored for returning/linked
+// accounts). Verifies the Google id_token, then resolves to a user one of three
+// ways:
 //   1. an oauth_accounts(google, sub) row exists   → returning user, log in
 //   2. no oauth row but users.email matches         → link Google to that user
 //   3. neither                                      → create the user (no password)
+// `intent` gates case 3: 'login' means "sign me in to an existing account", so a
+// brand-new Google identity is rejected 404 NO_ACCOUNT instead of auto-creating —
+// the client then steers them to Sign up. 'signup' (the default) allows creation.
 // Either way it issues the SAME cookies + session as email login, and returns
 // is_new so the client can route first-timers to onboarding.
 router.post('/oauth/google', async (req, res) => {
@@ -139,10 +147,12 @@ router.post('/oauth/google', async (req, res) => {
     return fail(res, 503, 'NOT_CONFIGURED', 'Google sign-in is not configured')
   }
 
-  const { id_token, role, organizer_kind, is_host } = req.body ?? {}
+  const { id_token, intent, role, organizer_kind, is_host } = req.body ?? {}
   if (!id_token || typeof id_token !== 'string') {
     return fail(res, 422, 'VALIDATION_ERROR', 'id_token is required')
   }
+  // Default to signup semantics when the client sends no intent (back-compat).
+  const isLoginOnly = intent === 'login'
 
   // 1) Verify the token's signature + audience with Google. Throws on a forged,
   //    expired, or wrong-audience token.
@@ -204,7 +214,14 @@ router.post('/oauth/google', async (req, res) => {
         return { user: existing, isNew: false }
       }
 
-      // Case 3: brand-new user. password_hash stays null (social-only account);
+      // Case 3: brand-new Google identity. In login-only mode there's nothing to
+      // sign into — refuse rather than silently create, so "Log in with Google"
+      // can't become a backdoor signup. The catch below maps this to 404.
+      if (isLoginOnly) {
+        throw new NoAccountError()
+      }
+
+      // Otherwise create the user. password_hash stays null (social-only account);
       // seed profile fields from the Google payload where we have them.
       const created = await tx.user.create({
         data: {
@@ -234,6 +251,10 @@ router.post('/oauth/google', async (req, res) => {
       },
     })
   } catch (err) {
+    // Login-only mode with no matching account: tell the client to sign up.
+    if (err instanceof NoAccountError) {
+      return fail(res, 404, 'NO_ACCOUNT', 'No Loop account found. Sign up to get started.')
+    }
     // A concurrent first-login for the same account can collide on the unique
     // (provider, provider_uid) / email index — surface as a retryable conflict.
     if (err.code === 'P2002') {

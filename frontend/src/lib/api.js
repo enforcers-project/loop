@@ -161,7 +161,14 @@ async function request(path, { method = 'GET', body } = {}) {
 }
 
 function mockFilter({ category, isFree, isSports, q }) {
-  let list = MOCK_EVENTS.map(withOrganizer)
+  // Match the backend: past events are hidden from Home/Search. Compare on
+  // isoDate (has TZ offset) — an event that has already started is not
+  // something the user can still attend.
+  const now = Date.now()
+  let list = MOCK_EVENTS.map(withOrganizer).filter((e) => {
+    const t = e.isoDate ? Date.parse(e.isoDate) : NaN
+    return isNaN(t) || t >= now
+  })
   if (category && category !== 'All') list = list.filter((e) => e.category === category)
   if (isFree) list = list.filter((e) => e.isFree)
   if (isSports) list = list.filter((e) => e.isSports)

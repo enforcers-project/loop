@@ -137,7 +137,7 @@ async function runTests() {
     _modelAvailable = false
     console.log(`  ⚠ Model not available (${err.message.slice(0, 80)}...)`)
     console.log(
-      '  ⚠ Skipping embedding generation tests — run "node backend/scripts/embed.js" to download the model',
+      '  ⚠ Skipping embedding generation tests — ensure CF_ACCOUNT_ID and CF_API_TOKEN are set',
     )
   }
 

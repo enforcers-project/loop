@@ -1,44 +1,7 @@
 import crypto from 'crypto'
 
-// `@xenova/transformers` is deliberately NOT imported at module load. It pulls
-// in the onnxruntime native addon, whose initialization segfaults on some hosts
-// (e.g. Render's shared instances) — crashing the whole process at startup
-// (exit 139 / SIGSEGV), before any embedding is even requested. We now:
-//   1. load transformers lazily, only when an embedding is actually generated;
-//   2. let a deployment disable embeddings entirely via EMBEDDINGS_ENABLED=false.
-// See getEmbedder() below.
-const EMBEDDINGS_ENABLED = process.env.EMBEDDINGS_ENABLED !== 'false'
-
-const MODEL = 'Xenova/all-MiniLM-L6-v2'
+const MODEL = '@cf/baai/bge-small-en-v1.5'
 const VECTOR_DIM = 384
-
-let embedder = null
-let embedderFailed = false
-
-async function getEmbedder() {
-  if (!EMBEDDINGS_ENABLED) {
-    throw new Error('Embeddings are disabled in this environment (EMBEDDINGS_ENABLED=false)')
-  }
-  if (embedderFailed) {
-    throw new Error(
-      `Embedding model "${MODEL}" is not available. Run the spike script to download it: node backend/scripts/embed.js`,
-    )
-  }
-  if (!embedder) {
-    try {
-      // Dynamic import: the native onnxruntime addon loads here, on first use,
-      // NOT at process startup.
-      const { pipeline: transformersPipeline, env } = await import('@xenova/transformers')
-      env.allowLocalModels = true
-      env.allowRemoteModels = true
-      embedder = await transformersPipeline('feature-extraction', MODEL)
-    } catch (err) {
-      embedderFailed = true
-      throw new Error(`Failed to load embedding model "${MODEL}": ${err.message}`)
-    }
-  }
-  return embedder
-}
 
 export function composeEventText(event) {
   const parts = [event.title]
@@ -74,9 +37,41 @@ export function computeContentHash(text) {
 }
 
 export async function generateEmbedding(text) {
-  const embed = await getEmbedder()
-  const output = await embed(text, { pooling: 'mean', normalize: true })
-  return Array.from(output.data)
+  const accountId = process.env.CF_ACCOUNT_ID
+  const token = process.env.CF_API_TOKEN
+  if (!accountId || !token) {
+    throw new Error('generateEmbedding requires CF_ACCOUNT_ID and CF_API_TOKEN in the environment')
+  }
+
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${MODEL}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ text }),
+  })
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(
+      `Cloudflare embed failed: ${res.status} ${res.statusText} — ${body.slice(0, 300)}`,
+    )
+  }
+
+  const json = await res.json()
+  if (json.success === false) {
+    throw new Error(`Cloudflare embed error: ${JSON.stringify(json.errors ?? json).slice(0, 300)}`)
+  }
+
+  const vec = json.result?.data?.[0]
+  if (!Array.isArray(vec) || vec.length !== VECTOR_DIM) {
+    throw new Error(
+      `Cloudflare embed returned unexpected shape (dim=${vec?.length}, expected ${VECTOR_DIM})`,
+    )
+  }
+  return vec
 }
 
 export { MODEL, VECTOR_DIM }

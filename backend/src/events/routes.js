@@ -185,10 +185,14 @@ router.get('/', async (req, res) => {
 })
 
 // GET /api/events/:id
+// Detail read; increments view_count on each fetch (§7.3, #14). The atomic
+// {increment: 1} update also returns the row + relations, so the response
+// reflects the new count without a second query.
 router.get('/:id', async (req, res) => {
   try {
-    const event = await prisma.event.findUnique({
+    const event = await prisma.event.update({
       where: { id: req.params.id },
+      data: { viewCount: { increment: 1 } },
       include: {
         category: true,
         organizer: true,
@@ -196,12 +200,12 @@ router.get('/:id', async (req, res) => {
       },
     })
 
-    if (!event) {
-      return res.status(404).json({ error: { message: 'Event not found' } })
-    }
-
     res.json({ data: toEventCard(event) })
   } catch (err) {
+    // P2025 = record to update not found → treat as 404.
+    if (err.code === 'P2025') {
+      return res.status(404).json({ error: { message: 'Event not found' } })
+    }
     console.error('GET /api/events/:id error:', err)
     res.status(500).json({ error: { message: 'Failed to fetch event' } })
   }

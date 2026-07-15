@@ -125,5 +125,15 @@ app.use('/api/admin', adminJobsRouter)
 // --- Start --------------------------------------------------------------------
 app.listen(PORT, () => {
   console.log(`Loop backend listening on http://localhost:${PORT}`)
+  // One-time boot diagnostic: confirm which DB host + sslmode the process loaded
+  // (password masked). Lets us verify env changes actually reached this process.
+  try {
+    const u = new URL(process.env.DATABASE_URL ?? '')
+    console.log(
+      `[boot] db host=${u.hostname} sslmode=${u.searchParams.get('sslmode') ?? '(none)'}`,
+    )
+  } catch {
+    console.log('[boot] DATABASE_URL is missing or unparseable')
+  }
   startScheduler()
 })

@@ -1,8 +1,13 @@
-import { pipeline as transformersPipeline, env } from '@xenova/transformers'
 import crypto from 'crypto'
 
-env.allowLocalModels = true
-env.allowRemoteModels = true
+// `@xenova/transformers` is deliberately NOT imported at module load. It pulls
+// in the onnxruntime native addon, whose initialization segfaults on some hosts
+// (e.g. Render's shared instances) — crashing the whole process at startup
+// (exit 139 / SIGSEGV), before any embedding is even requested. We now:
+//   1. load transformers lazily, only when an embedding is actually generated;
+//   2. let a deployment disable embeddings entirely via EMBEDDINGS_ENABLED=false.
+// See getEmbedder() below.
+const EMBEDDINGS_ENABLED = process.env.EMBEDDINGS_ENABLED !== 'false'
 
 const MODEL = 'Xenova/all-MiniLM-L6-v2'
 const VECTOR_DIM = 384
@@ -11,6 +16,9 @@ let embedder = null
 let embedderFailed = false
 
 async function getEmbedder() {
+  if (!EMBEDDINGS_ENABLED) {
+    throw new Error('Embeddings are disabled in this environment (EMBEDDINGS_ENABLED=false)')
+  }
   if (embedderFailed) {
     throw new Error(
       `Embedding model "${MODEL}" is not available. Run the spike script to download it: node backend/scripts/embed.js`,
@@ -18,6 +26,11 @@ async function getEmbedder() {
   }
   if (!embedder) {
     try {
+      // Dynamic import: the native onnxruntime addon loads here, on first use,
+      // NOT at process startup.
+      const { pipeline: transformersPipeline, env } = await import('@xenova/transformers')
+      env.allowLocalModels = true
+      env.allowRemoteModels = true
       embedder = await transformersPipeline('feature-extraction', MODEL)
     } catch (err) {
       embedderFailed = true

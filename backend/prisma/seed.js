@@ -2,6 +2,25 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+// One real organizer User (UUID PK) so the follow graph + OrganizerProfile work
+// end-to-end against the DB (the rest of the demo organizers are mock-only).
+// Fixed id keeps the profile URL stable across reseeds. password_hash null =
+// a seed-only account you can't log into (log in as any other user to follow it).
+const ORGANIZER = {
+  id: '00000000-0000-4000-8000-000000000026',
+  email: 'lagosnights@loop.demo',
+  role: 'organizer',
+  organizerKind: 'promoter',
+  isHost: false,
+  displayName: 'Lagos Nights',
+  handle: 'lagosnights',
+  isVerified: true,
+  avatarUrl: 'https://i.pravatar.cc/150?img=13',
+  coverImageUrl: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=1200&q=80',
+  bio: 'Bringing the biggest Afrobeats & Amapiano nights to the Bay. Rooftops, warehouses, good vibes only.',
+  homeCity: 'San Francisco',
+}
+
 const CATEGORIES = [
   { slug: 'music', name: 'Music', colorHex: '#6D5EFC', icon: 'music-note', sortOrder: 0 },
   { slug: 'nightlife', name: 'Nightlife', colorHex: '#FF2E74', icon: 'moon', sortOrder: 1 },
@@ -1274,6 +1293,15 @@ async function main() {
   const cats = await prisma.category.findMany()
   const catBySlug = Object.fromEntries(cats.map((c) => [c.slug, c.id]))
 
+  console.log('Seeding demo organizer user...')
+  await prisma.user.upsert({
+    where: { id: ORGANIZER.id },
+    update: ORGANIZER,
+    create: ORGANIZER,
+  })
+  // Categories this organizer "owns" — its events show on the profile tabs.
+  const ORGANIZER_CATEGORIES = new Set(['music', 'nightlife'])
+
   console.log('Seeding interests...')
   for (const { category, ...data } of INTERESTS) {
     await prisma.interest.upsert({
@@ -1288,6 +1316,11 @@ async function main() {
   for (const evt of EVENTS) {
     const { category, sportsDetail, positions, ...eventData } = evt
 
+    // Attribute this organizer's categories to the real organizer user so its
+    // profile has events to show; everything else stays organizer-less (synced-
+    // style). organizerId is set in both create + update so reseeds stay correct.
+    const organizerId = ORGANIZER_CATEGORIES.has(category) ? ORGANIZER.id : null
+
     const created = await prisma.event.upsert({
       where: {
         source_externalId: { source: 'native', externalId: evt.slug },
@@ -1295,6 +1328,7 @@ async function main() {
       update: {
         ...eventData,
         categoryId: catBySlug[category],
+        organizerId,
         status: 'published',
         source: 'native',
         externalId: evt.slug,
@@ -1306,6 +1340,7 @@ async function main() {
       create: {
         ...eventData,
         categoryId: catBySlug[category],
+        organizerId,
         status: 'published',
         source: 'native',
         externalId: evt.slug,

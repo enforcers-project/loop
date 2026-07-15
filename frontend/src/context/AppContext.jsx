@@ -1,6 +1,12 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { api, toClientUser } from '../lib/api'
 import { useModal } from './ModalContext'
+import { useToast } from './ToastContext'
+
+// A real user/organizer has a UUID id; the demo `org-*` organizers (mock seed)
+// don't, and can't persist a follow — those toggle in-memory only.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const isUuid = (s) => typeof s === 'string' && UUID_RE.test(s)
 
 // Loop has two roles. Hosting pickup runs is an Organizer sub-capability
 // (`isHost`), not a role — a plain attendee can never host. See planning §3/§10.
@@ -9,13 +15,15 @@ const AppContext = createContext(null)
 
 export function AppProvider({ children }) {
   const { authGate } = useModal()
+  const toast = useToast()
   const [user, setUser] = useState(null)
   const [role, setRole] = useState('attendee')
   const [isHost, setIsHost] = useState(false)
   const [interests, setInterestsState] = useState([])
   const [savedIds, setSavedIds] = useState(new Set())
   const [goingIds, setGoingIds] = useState(new Set())
-  const [followingIds, setFollowingIds] = useState(new Set(['org-lagos']))
+  // Hydrated from GET /users/:id/following on login/refresh (effect below).
+  const [followingIds, setFollowingIds] = useState(new Set())
   // Auth is unknown until the first me() check resolves; guards let route
   // protection wait instead of bouncing a logged-in user on refresh.
   const [authReady, setAuthReady] = useState(false)
@@ -44,6 +52,20 @@ export function AppProvider({ children }) {
       cancelled = true
     }
   }, [adopt])
+
+  // Hydrate the follow set whenever the logged-in user changes (login, refresh,
+  // Google). Keeps FollowBtn state correct across a page reload; clears on
+  // logout (user.id gone). Best-effort — api.following swallows its own errors.
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    api.following(user.id).then((ids) => {
+      if (!cancelled) setFollowingIds(new Set(ids))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   // Real login: POST /auth/login, then adopt the returned user. Throws on bad
   // credentials so the Auth screen can surface the message.
@@ -95,6 +117,7 @@ export function AppProvider({ children }) {
     setInterestsState([])
     setSavedIds(new Set())
     setGoingIds(new Set())
+    setFollowingIds(new Set())
   }, [])
 
   const setInterests = useCallback((ids) => setInterestsState(ids), [])
@@ -118,6 +141,49 @@ export function AppProvider({ children }) {
     })
   }
 
+  // Follow/unfollow with optimistic UI. Flips followingIds immediately, then
+  // persists to the backend for a real (UUID) organizer, rolling back on
+  // failure. Mock `org-*` organizers (SocialFeed suggestions) have no backend
+  // row, so they toggle in-memory only. Returns the new follow state (or null
+  // if the action was gated behind login), so screens can sync a follower count.
+  const setFollowFlag = useCallback((id, on) => {
+    setFollowingIds((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const toggleFollow = useCallback(
+    async (id) => {
+      if (!requireAuth()) return null
+      const wasFollowing = followingIds.has(id)
+      const willFollow = !wasFollowing
+      setFollowFlag(id, willFollow) // optimistic
+
+      // Mock organizers can't persist — leave the optimistic state and return.
+      if (!isUuid(id)) return willFollow
+
+      try {
+        if (willFollow) await api.follow(id)
+        else await api.unfollow(id)
+        return willFollow
+      } catch (err) {
+        setFollowFlag(id, wasFollowing) // roll back
+        // A 409 on follow (or 404 on unfollow) means the server already agrees
+        // with our target state — treat as success rather than a scary error.
+        if ((willFollow && err.status === 409) || (!willFollow && err.status === 404)) {
+          setFollowFlag(id, willFollow)
+          return willFollow
+        }
+        toast.error(err.message || 'Could not update follow. Please try again.')
+        return wasFollowing
+      }
+    },
+    [requireAuth, followingIds, setFollowFlag, toast],
+  )
+
   return (
     <AppContext.Provider
       value={{
@@ -138,7 +204,7 @@ export function AppProvider({ children }) {
         setInterests,
         toggleSaved: toggle(setSavedIds),
         toggleGoing: toggle(setGoingIds),
-        toggleFollow: toggle(setFollowingIds),
+        toggleFollow,
       }}
     >
       {children}

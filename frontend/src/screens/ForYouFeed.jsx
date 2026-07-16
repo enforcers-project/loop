@@ -145,7 +145,7 @@ export function ForYouFeed() {
     <div className="loop-container pb-24 pt-4 md:pb-12">
       {/* sticky search — 32px below the navbar */}
       <div className="sticky top-16 z-20 -mx-4 bg-white/95 px-4 pb-3 pt-2 backdrop-blur-md md:-mx-6 md:px-6">
-        <SearchBar value={query} onChange={setQuery} />
+        <SearchBar value={query} onChange={setQuery} city={user?.homeCity} />
       </div>
 
       {/* tabs — 20px below search */}

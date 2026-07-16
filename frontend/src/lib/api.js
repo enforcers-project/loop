@@ -264,11 +264,13 @@ export const api = {
   // (earth_distance in engine.js), else falls back to city name matching.
   saveLocation: (userId, { city, lat, lng, placeId }) =>
     userId
-      ? put(
-          `/users/${userId}/location`,
-          { city, lat, lng, place_id: placeId },
-          () => ({ city, lat, lng, place_id: placeId, pending: true }),
-        )
+      ? put(`/users/${userId}/location`, { city, lat, lng, place_id: placeId }, () => ({
+          city,
+          lat,
+          lng,
+          place_id: placeId,
+          pending: true,
+        }))
       : Promise.resolve({ city, lat, lng, place_id: placeId, pending: true }),
 
   // GET /api/events. `near` is the caller's home location (from nearForUser());

@@ -129,9 +129,7 @@ export function AppProvider({ children }) {
     async ({ city, lat, lng, placeId }) => {
       const res = await api.saveLocation(user?.id, { city, lat, lng, placeId })
       setUser((prev) =>
-        prev
-          ? { ...prev, homeCity: city, homeLat: lat ?? null, homeLng: lng ?? null }
-          : prev,
+        prev ? { ...prev, homeCity: city, homeLat: lat ?? null, homeLng: lng ?? null } : prev,
       )
       return res
     },

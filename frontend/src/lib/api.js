@@ -335,6 +335,29 @@ export const api = {
     }
   },
 
+  // Notification bell feed (real endpoints, no mock fallback — like auth/follow;
+  // backend #27). list() returns the full envelope { data, nextCursor,
+  // unread_count } so the bell can drive its unread dot from the server count.
+  // A logged-out caller 401s; the caller treats that as an empty feed.
+  notifications: {
+    list: async ({ unreadOnly = false, cursor, limit } = {}) => {
+      const qs = new URLSearchParams()
+      if (unreadOnly) qs.set('is_read', 'false')
+      if (cursor) qs.set('cursor', cursor)
+      if (limit) qs.set('limit', String(limit))
+      const suffix = qs.toString() ? `?${qs}` : ''
+      try {
+        const res = await fetch(apiUrl(`/notifications${suffix}`), { credentials: 'include' })
+        if (!res.ok) throw new Error(String(res.status))
+        return await res.json() // { data, nextCursor, unread_count }
+      } catch {
+        return { data: [], nextCursor: null, unread_count: 0 }
+      }
+    },
+    markRead: (id) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
+    markAllRead: () => request('/notifications/read-all', { method: 'POST' }),
+  },
+
   posts: () =>
     get('/posts', () =>
       MOCK_POSTS.map((p) => ({

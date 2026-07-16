@@ -94,7 +94,7 @@ export function Landing() {
                 to="/auth?mode=signup"
                 className="rounded-button bg-accent px-6 py-3.5 text-sm font-semibold text-white transition-transform active:scale-95"
               >
-                Get started — it’s free
+                Get started
               </Link>
               <Link
                 to="/feed"

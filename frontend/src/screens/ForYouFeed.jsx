@@ -16,6 +16,28 @@ const TABS = ['For You', 'Trending', 'Following']
 function FeaturedCard({ event }) {
   const navigate = useNavigate()
   const { savedIds, goingIds, toggleSaved, toggleGoing } = useApp()
+  // Re-seed during render when reused for a different event (React's
+  // reset-state-on-prop-change pattern — no effect, so no optimistic clobber).
+  const [goingCount, setGoingCount] = useState(event.goingCount ?? 0)
+  const [seededId, setSeededId] = useState(event.id)
+  if (seededId !== event.id) {
+    setSeededId(event.id)
+    setGoingCount(event.goingCount ?? 0)
+  }
+
+  // Sports runs fill via the roster, not RSVP (the backend 409s a sports RSVP),
+  // so route straight to the run screen. Non-sports: RSVP, bump the local count
+  // on a real state change, then open the detail page.
+  const onRsvp = async () => {
+    if (event.isSports) return navigate(`/sports/${event.id}`)
+    const wasGoing = goingIds.has(event.id)
+    const result = await toggleGoing(event.id)
+    if (result !== null && result !== wasGoing) {
+      setGoingCount((c) => Math.max(0, c + (result ? 1 : -1)))
+    }
+    navigate(`/event/${event.id}`)
+  }
+
   return (
     <div className="relative h-[300px] overflow-hidden rounded-card shadow-hero md:h-[330px]">
       <EventImage
@@ -54,16 +76,10 @@ function FeaturedCard({ event }) {
           </span>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <GoingStack count={event.goingCount} avatars={event.goingAvatars} size="md" />
+          <GoingStack count={goingCount} avatars={event.goingAvatars} size="md" />
           <div className="flex items-center gap-2">
             <SaveBtn saved={savedIds.has(event.id)} onToggle={() => toggleSaved(event.id)} />
-            <RSVPBtn
-              variant={goingIds.has(event.id) ? 'outline' : 'filled'}
-              onClick={() => {
-                if (!goingIds.has(event.id)) toggleGoing(event.id)
-                navigate(event.isSports ? `/sports/${event.id}` : `/event/${event.id}`)
-              }}
-            >
+            <RSVPBtn variant={goingIds.has(event.id) ? 'outline' : 'filled'} onClick={onRsvp}>
               {goingIds.has(event.id) ? 'Going' : 'RSVP'}
             </RSVPBtn>
           </div>

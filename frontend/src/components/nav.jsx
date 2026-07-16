@@ -1,7 +1,8 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Compass, Home, PlusCircle, Users, Search, User, LogOut } from 'lucide-react'
+import { Compass, Home, PlusCircle, Users, Search, User, LogOut } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useApp } from '../context/AppContext'
+import { NotificationBell } from './NotificationBell'
 
 const LOGO = <img src="/logo.png" alt="Loop" className="h-7 w-auto" />
 
@@ -56,13 +57,7 @@ export function TopNav() {
         <div className="flex flex-shrink-0 items-center gap-2">
           {isLoggedIn ? (
             <>
-              <button
-                className="relative grid h-10 w-10 place-items-center rounded-button text-text-secondary transition-colors hover:bg-surface hover:text-ink"
-                aria-label="Notifications"
-              >
-                <Bell size={20} />
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent ring-2 ring-white" />
-              </button>
+              <NotificationBell />
               <button
                 onClick={() => navigate('/profile')}
                 aria-label="Your profile"

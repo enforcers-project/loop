@@ -66,7 +66,7 @@ export function SearchBar({
   onSubmit,
   showMic = true,
   showLocation = true,
-  city = 'Oakland',
+  city,
   placeholder = "Try 'free Afrobeats party this weekend'",
 }) {
   return (
@@ -80,7 +80,7 @@ export function SearchBar({
         aria-label="Search events"
         className="min-w-0 flex-1 bg-transparent text-[15px] text-text-primary outline-none placeholder:text-placeholder"
       />
-      {showLocation && (
+      {showLocation && city && (
         <button
           className="hidden h-8 items-center gap-1 rounded-pill bg-surface px-3 text-xs font-semibold text-text-secondary transition-colors hover:text-ink sm:flex"
           aria-label={`Location: ${city}`}

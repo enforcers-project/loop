@@ -6,6 +6,7 @@ import adminSyncRouter from './sync/routes.js'
 import adminJobsRouter from './jobs/routes.js'
 import eventsRouter from './events/routes.js'
 import engagementRouter from './engagement/routes.js'
+import rosterRouter from './roster/routes.js'
 import interactionsRouter from './interactions/routes.js'
 import authRouter from './auth/routes.js'
 import usersRouter from './users/routes.js'
@@ -54,6 +55,9 @@ app.use('/api/events', eventsRouter)
 
 // --- Engagement: save + RSVP (§7.4, #15) -------------------------------------
 app.use('/api/events', engagementRouter)
+
+// --- Sports roster: positions / roster / claim / release / host (§7.4, #23) --
+app.use('/api/events', rosterRouter)
 
 // --- Recommendations (Prisma-backed affinity/popularity ranking) -------------
 app.use('/api', recommendationsRouter)

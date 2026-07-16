@@ -8,6 +8,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, fail } from '../auth/middleware.js'
+import { scheduleRebuild } from '../preferences/coalesce.js'
 
 const router = Router()
 
@@ -79,6 +80,8 @@ router.put('/:id/save', requireAuth, async (req, res) => {
       return { saved, updated }
     })
 
+    await scheduleRebuild(req.user.id)
+
     return res.json({
       data: {
         user_id: req.user.id,
@@ -125,6 +128,8 @@ router.delete('/:id/save', requireAuth, async (req, res) => {
       await emitInteraction(tx, { type: 'unsave', req, event })
       return updated
     })
+
+    await scheduleRebuild(req.user.id)
 
     return res.json({ data: { save_count: updated.saveCount, saved: false } })
   } catch (err) {
@@ -201,6 +206,8 @@ router.put('/:id/rsvp', requireAuth, async (req, res) => {
       return { rsvp, eventRow }
     })
 
+    await scheduleRebuild(req.user.id)
+
     return res.json({
       data: {
         id: rsvp.id,
@@ -262,6 +269,8 @@ router.delete('/:id/rsvp', requireAuth, async (req, res) => {
       await emitInteraction(tx, { type: 'rsvp_cancel', req, event })
       return eventRow
     })
+
+    await scheduleRebuild(req.user.id)
 
     return res.json({ data: { status: 'cancelled', event_rsvp_count: eventRow.rsvpCount } })
   } catch (err) {

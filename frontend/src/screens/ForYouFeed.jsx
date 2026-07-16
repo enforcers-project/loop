@@ -16,18 +16,26 @@ const TABS = ['For You', 'Trending', 'Following']
 function FeaturedCard({ event }) {
   const navigate = useNavigate()
   const { savedIds, goingIds, toggleSaved, toggleGoing } = useApp()
+  const go = () => navigate(event.isSports ? `/sports/${event.id}` : `/event/${event.id}`)
   return (
     <div className="relative h-[300px] overflow-hidden rounded-card shadow-hero md:h-[330px]">
-      <EventImage
-        src={event.poster}
-        alt={event.title}
-        category={event.category}
-        title={event.title}
-        iconSize={56}
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
+      <button
+        type="button"
+        onClick={go}
+        aria-label={`View ${event.title}`}
+        className="absolute inset-0 z-0 block h-full w-full cursor-pointer text-left"
+      >
+        <EventImage
+          src={event.poster}
+          alt={event.title}
+          category={event.category}
+          title={event.title}
+          iconSize={56}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
+      </button>
 
-      <div className="absolute inset-x-4 top-4 flex items-start justify-between gap-2">
+      <div className="pointer-events-none absolute inset-x-4 top-4 flex items-start justify-between gap-2">
         {event.rationale ? (
           <AIChip text={recommendationLabel(event.rationale, event.category)} />
         ) : (
@@ -41,8 +49,11 @@ function FeaturedCard({ event }) {
         {event.almostFull && <AlmostFullBadge />}
       </div>
 
-      <div className="absolute inset-x-4 bottom-4 text-white sm:inset-x-6 sm:bottom-6">
-        <h2 className="font-display text-[26px] font-bold leading-tight md:text-[30px]">
+      <div className="pointer-events-none absolute inset-x-4 bottom-4 text-white sm:inset-x-6 sm:bottom-6">
+        <h2
+          onClick={go}
+          className="pointer-events-auto cursor-pointer font-display text-[26px] font-bold leading-tight md:text-[30px]"
+        >
           {event.title}
         </h2>
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/90">
@@ -53,7 +64,7 @@ function FeaturedCard({ event }) {
             <MapPin size={15} className="opacity-90" /> {event.venueName} · {event.city}
           </span>
         </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="pointer-events-auto mt-4 flex flex-wrap items-center justify-between gap-3">
           <GoingStack count={event.goingCount} avatars={event.goingAvatars} size="md" />
           <div className="flex items-center gap-2">
             <SaveBtn saved={savedIds.has(event.id)} onToggle={() => toggleSaved(event.id)} />
@@ -61,7 +72,7 @@ function FeaturedCard({ event }) {
               variant={goingIds.has(event.id) ? 'outline' : 'filled'}
               onClick={() => {
                 if (!goingIds.has(event.id)) toggleGoing(event.id)
-                navigate(event.isSports ? `/sports/${event.id}` : `/event/${event.id}`)
+                go()
               }}
             >
               {goingIds.has(event.id) ? 'Going' : 'RSVP'}

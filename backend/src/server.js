@@ -11,6 +11,7 @@ import rosterRouter from './roster/routes.js'
 import interactionsRouter from './interactions/routes.js'
 import authRouter from './auth/routes.js'
 import usersRouter from './users/routes.js'
+import notificationsRouter from './notifications/routes.js'
 import { attachSession } from './auth/middleware.js'
 import recommendationsRouter from './recommendations/routes.js'
 import embeddingsRouter from './embeddings/routes.js'
@@ -124,6 +125,9 @@ app.use('/api/auth', authRouter)
 
 // --- Users (profile: onboarding interest commit; §7, work-plan #7) ----------
 app.use('/api/users', usersRouter)
+
+// --- Notifications (followed-organizer bell feed; §7.5, work-plan #27) -------
+app.use('/api/notifications', notificationsRouter)
 
 // --- AI assistant / NL search stub (grounded in real events) ----------------
 // POST /api/ai/search { q } -> { reply, events: Event[] }

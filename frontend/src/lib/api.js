@@ -161,7 +161,14 @@ async function request(path, { method = 'GET', body } = {}) {
 }
 
 function mockFilter({ category, isFree, isSports, q }) {
-  let list = MOCK_EVENTS.map(withOrganizer)
+  // Match the backend: past events are hidden from Home/Search. Compare on
+  // isoDate (has TZ offset) — an event that has already started is not
+  // something the user can still attend.
+  const now = Date.now()
+  let list = MOCK_EVENTS.map(withOrganizer).filter((e) => {
+    const t = e.isoDate ? Date.parse(e.isoDate) : NaN
+    return isNaN(t) || t >= now
+  })
   if (category && category !== 'All') list = list.filter((e) => e.category === category)
   if (isFree) list = list.filter((e) => e.isFree)
   if (isSports) list = list.filter((e) => e.isSports)
@@ -194,6 +201,9 @@ export function toClientUser(u) {
     isHost: u.is_host,
     isVerified: u.is_verified,
     onboardingCompletedAt: u.onboarding_completed_at,
+    homeCity: u.home_city ?? null,
+    homeLat: u.home_lat ?? null,
+    homeLng: u.home_lng ?? null,
   }
 }
 
@@ -276,6 +286,18 @@ async function toCreateEventBody(draft) {
   return body
 }
 
+// Build a `near` filter for api.events() from the client user. Prefers lat/lng
+// (backend does an earth_distance radius query when both are present), else
+// falls back to city ILIKE. Returns null when nothing is set.
+export function nearForUser(user) {
+  if (!user) return null
+  if (user.homeLat != null && user.homeLng != null) {
+    return { lat: user.homeLat, lng: user.homeLng }
+  }
+  if (user.homeCity) return { city: user.homeCity }
+  return null
+}
+
 export const api = {
   categories: () => get('/categories', () => MOCK_CATEGORIES),
   interests: () => get('/interests', () => MOCK_INTERESTS),
@@ -316,6 +338,24 @@ export const api = {
         }))
       : Promise.resolve({ interest_ids: interestIds, pending: true }),
 
+  // Commit the user's home location (PUT /users/:id/location). Feeds the
+  // recommender's geo pre-filter — with lat/lng it does a real radius search
+  // (earth_distance in engine.js), else falls back to city name matching.
+  saveLocation: (userId, { city, lat, lng, placeId }) =>
+    userId
+      ? put(`/users/${userId}/location`, { city, lat, lng, place_id: placeId }, () => ({
+          city,
+          lat,
+          lng,
+          place_id: placeId,
+          pending: true,
+        }))
+      : Promise.resolve({ city, lat, lng, place_id: placeId, pending: true }),
+
+  // GET /api/events. `near` is the caller's home location (from nearForUser());
+  // with both lat + lng the backend does an earth_distance radius query
+  // (radiusKm defaults to 40 to match the recommender), else falls back to
+  // city equality. Missing near → no geo filter (pre-onboarding sessions).
   events: (filters = {}) => {
     const qs = new URLSearchParams()
     if (filters.category && filters.category !== 'All') qs.set('category', filters.category)
@@ -323,6 +363,14 @@ export const api = {
     if (filters.isSports) qs.set('isSports', 'true')
     if (filters.q) qs.set('q', filters.q)
     if (filters.sort) qs.set('sort', filters.sort)
+    const near = filters.near
+    if (near?.lat != null && near?.lng != null) {
+      qs.set('nearLat', String(near.lat))
+      qs.set('nearLng', String(near.lng))
+      qs.set('radiusKm', String(near.radiusKm ?? 40))
+    } else if (near?.city) {
+      qs.set('city', near.city)
+    }
     const suffix = qs.toString() ? `?${qs}` : ''
     return get(`/events${suffix}`, () => mockFilter(filters)).then((list) =>
       (list ?? []).map(toEventCardShape),
@@ -367,6 +415,88 @@ export const api = {
       if (!o) return null
       return { ...o, events: MOCK_EVENTS.filter((e) => e.organizerId === id).map(withOrganizer) }
     }).then((o) => (o ? { ...o, events: (o.events ?? []).map(toEventCardShape) } : o)),
+
+  // Public user/organizer profile (GET /api/users/:id + /:id/events). Real UUID
+  // ids hit Prisma; mock `org-*` ids 404 the profile fetch, so we fall back to
+  // the mock organizer + its events. Returns the backend shape (snake_case) when
+  // real, the mock shape when not — toOrganizerShape() in the screen normalizes.
+  user: async (id, status = 'upcoming') => {
+    const profile = await get(`/users/${id}`, () => {
+      const o = MOCK_ORGANIZERS.find((x) => x.id === id)
+      if (!o) return null
+      return { ...o, _mock: true }
+    })
+    if (!profile) return null
+    if (profile._mock) {
+      const events = MOCK_EVENTS.filter((e) => e.organizerId === id).map(withOrganizer)
+      return { ...profile, events: events.map(toEventCardShape) }
+    }
+    // Real profile: pull the organizer's events for the requested tab.
+    const events = await get(`/users/${id}/events?status=${status}`, () => [])
+    return { ...profile, events: (events ?? []).map(toEventCardShape) }
+  },
+
+  // Follow / unfollow an organizer (no mock fallback — a follow must genuinely
+  // persist). POST returns { is_following, followee: { follower_count } };
+  // DELETE is 204 (request() returns null). Both throw on failure so the caller
+  // can roll back optimistic UI.
+  follow: (id) => request(`/users/${id}/follow`, { method: 'POST' }),
+  unfollow: (id) => request(`/users/${id}/follow`, { method: 'DELETE' }),
+
+  // Who a user follows (GET /api/users/:id/following) — used to hydrate the
+  // FollowBtn state on login/refresh. Returns the id array; [] on any failure
+  // so a hydration hiccup never blocks the app.
+  following: async (id) => {
+    try {
+      const res = await request(`/users/${id}/following`)
+      return (res ?? []).map((row) => row.user?.id).filter(Boolean)
+    } catch {
+      return []
+    }
+  },
+
+  // RSVP / cancel for an event (no mock fallback — an RSVP must genuinely
+  // persist). PUT sets status='going'; DELETE cancels. Both throw on failure so
+  // the caller can roll back optimistic UI. Returns { event_rsvp_count, ... } so
+  // a screen can sync the "N going" count.
+  rsvp: (id) => request(`/events/${id}/rsvp`, { method: 'PUT', body: { status: 'going' } }),
+  rsvpCancel: (id) => request(`/events/${id}/rsvp`, { method: 'DELETE' }),
+
+  // The caller's "going" event ids (GET /api/users/:id/rsvps?status=going) —
+  // used to hydrate RSVP state on login/refresh so the "Going" highlight
+  // survives a reload. Returns the id array; [] on any failure so a hydration
+  // hiccup never blocks the app. Mirrors api.following.
+  goingEvents: async (id) => {
+    try {
+      const res = await request(`/users/${id}/rsvps?status=going`)
+      return (res ?? []).map((row) => row.event?.id).filter(Boolean)
+    } catch {
+      return []
+    }
+  },
+
+  // Notification bell feed (real endpoints, no mock fallback — like auth/follow;
+  // backend #27). list() returns the full envelope { data, nextCursor,
+  // unread_count } so the bell can drive its unread dot from the server count.
+  // A logged-out caller 401s; the caller treats that as an empty feed.
+  notifications: {
+    list: async ({ unreadOnly = false, cursor, limit } = {}) => {
+      const qs = new URLSearchParams()
+      if (unreadOnly) qs.set('is_read', 'false')
+      if (cursor) qs.set('cursor', cursor)
+      if (limit) qs.set('limit', String(limit))
+      const suffix = qs.toString() ? `?${qs}` : ''
+      try {
+        const res = await fetch(apiUrl(`/notifications${suffix}`), { credentials: 'include' })
+        if (!res.ok) throw new Error(String(res.status))
+        return await res.json() // { data, nextCursor, unread_count }
+      } catch {
+        return { data: [], nextCursor: null, unread_count: 0 }
+      }
+    },
+    markRead: (id) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
+    markAllRead: () => request('/notifications/read-all', { method: 'POST' }),
+  },
 
   posts: () =>
     get('/posts', () =>

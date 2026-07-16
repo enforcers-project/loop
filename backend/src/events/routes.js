@@ -3,6 +3,7 @@ import prisma from '../lib/prisma.js'
 import { toEventCard, toEventDetail, EVENT_DETAIL_INCLUDE } from './serialize.js'
 import { requireAuth, fail } from '../auth/middleware.js'
 import { runJob } from '../jobs/index.js'
+import { notifyFollowersOfNewEvent } from '../notifications/publish.js'
 
 const router = Router()
 
@@ -52,11 +53,15 @@ router.get('/', async (req, res) => {
       where.city = { equals: city, mode: 'insensitive' }
     }
 
-    // Date range filter
+    // Date range filter. When the caller doesn't pass an explicit range we
+    // hide events whose start time is already in the past — a Home/Search
+    // list should only show things the user can still attend.
     if (dateFrom || dateTo) {
       where.startsAt = {}
       if (dateFrom) where.startsAt.gte = new Date(dateFrom)
       if (dateTo) where.startsAt.lte = new Date(dateTo)
+    } else {
+      where.startsAt = { gte: new Date() }
     }
 
     // Price range filter
@@ -228,6 +233,7 @@ router.get('/:id/related', async (req, res) => {
         categoryId: event.categoryId,
         id: { not: event.id },
         status: 'published',
+        startsAt: { gte: new Date() },
       },
       take: 6,
       orderBy: { startsAt: 'asc' },
@@ -241,7 +247,11 @@ router.get('/:id/related', async (req, res) => {
     // Fallback: if no same-category events, just grab recent ones
     if (related.length === 0) {
       related = await prisma.event.findMany({
-        where: { id: { not: event.id }, status: 'published' },
+        where: {
+          id: { not: event.id },
+          status: 'published',
+          startsAt: { gte: new Date() },
+        },
         take: 3,
         orderBy: { startsAt: 'asc' },
         include: {
@@ -541,9 +551,14 @@ router.post('/:id/publish', requireAuth, async (req, res) => {
       select: { id: true, status: true, publishedAt: true },
     })
 
-    // Enqueue the embedding-on-publish job (stub in S1/S2; real in S3). Also
-    // where followed-organizer notifications hang off later (#27). Best-effort.
+    // Enqueue the embedding-on-publish job (stub in S1/S2; real in S3). Best-effort.
     runJob('embed-pending-events').catch(() => {})
+
+    // Fan out followed-organizer notifications (#27). Best-effort: a follower
+    // notification failure must never fail the publish itself.
+    notifyFollowersOfNewEvent(event.organizerId, published.id).catch((err) =>
+      console.error('notifyFollowersOfNewEvent error:', err),
+    )
 
     return res.json({
       data: { id: published.id, status: published.status, published_at: published.publishedAt },

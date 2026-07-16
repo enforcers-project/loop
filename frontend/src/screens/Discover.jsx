@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api } from '../lib/api'
+import { api, nearForUser } from '../lib/api'
+import { useApp } from '../context/AppContext'
 import { CatRow, FilterBar, SearchBar } from '../components/rows'
 import { EventGrid } from '../components/EventCard'
 
@@ -12,14 +13,19 @@ const EMPTY_FILTERS = {
 }
 
 export function Discover() {
+  const { user } = useApp()
   const [cat, setCat] = useState('All')
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [events, setEvents] = useState([])
 
+  const near = nearForUser(user)
+  const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
+
   useEffect(() => {
-    api.events().then(setEvents)
-  }, [])
+    api.events({ near: nearForUser(user) }).then(setEvents)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearKey])
 
   const toggle = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }))
 

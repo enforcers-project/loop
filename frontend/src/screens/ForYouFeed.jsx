@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Calendar, MapPin } from 'lucide-react'
-import { api } from '../lib/api'
+import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
 import { CatRow, SearchBar } from '../components/rows'
@@ -74,19 +74,29 @@ function FeaturedCard({ event }) {
 }
 
 export function ForYouFeed() {
-  const { interests } = useApp()
+  const { interests, user } = useApp()
   const [tab, setTab] = useState('For You')
   const [cat, setCat] = useState('All')
   const [query, setQuery] = useState('')
   const [events, setEvents] = useState([])
 
+  // Depend only on the coord primitives (or city) so a full user-object
+  // reference change from a /me refresh doesn't retrigger this effect.
+  const near = nearForUser(user)
+  const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
+
   useEffect(() => {
     if (tab === 'For You') {
+      // /recommendations reads home location off the user row server-side, so
+      // no per-request geo params are needed here.
       api.recommendations(interests).then(setEvents)
     } else {
-      api.events({ sort: tab === 'Trending' ? 'popular' : 'date' }).then(setEvents)
+      api
+        .events({ sort: tab === 'Trending' ? 'popular' : 'date', near: nearForUser(user) })
+        .then(setEvents)
     }
-  }, [tab, interests])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, interests, nearKey])
 
   const filtered = events.filter((e) => {
     if (cat !== 'All' && e.category !== cat) return false

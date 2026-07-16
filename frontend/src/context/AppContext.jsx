@@ -136,6 +136,20 @@ export function AppProvider({ children }) {
 
   const setInterests = useCallback((ids) => setInterestsState(ids), [])
 
+  // Persist the user's home city + coords and mirror them onto the local user
+  // so any screen reading `user.homeCity/homeLat/homeLng` sees the fresh value
+  // without waiting for a /me refresh.
+  const saveLocation = useCallback(
+    async ({ city, lat, lng, placeId }) => {
+      const res = await api.saveLocation(user?.id, { city, lat, lng, placeId })
+      setUser((prev) =>
+        prev ? { ...prev, homeCity: city, homeLat: lat ?? null, homeLng: lng ?? null } : prev,
+      )
+      return res
+    },
+    [user?.id],
+  )
+
   // Gate a logged-out user before a member-only action (save/RSVP/follow):
   // opens the "log in to continue" dialog and returns false so the toggle is
   // a no-op. Returns true when the caller may proceed.
@@ -251,6 +265,7 @@ export function AppProvider({ children }) {
         logout,
         requireAuth,
         setInterests,
+        saveLocation,
         toggleSaved: toggle(setSavedIds),
         toggleGoing,
         toggleFollow,

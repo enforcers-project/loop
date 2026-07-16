@@ -43,7 +43,7 @@ const VALUE_PROPS = [
   {
     icon: Compass,
     title: 'Discover everything nearby',
-    body: 'Afrobeats rooftops, pickup runs, food markets and campus nights — all in one place.',
+    body: 'Afrobeats rooftops, pickup runs, food markets and campus nights all in one place.',
   },
   {
     icon: Users,

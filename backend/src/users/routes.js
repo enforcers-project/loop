@@ -10,6 +10,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { fail, requireAuth } from '../auth/middleware.js'
 import { toPublicUser, PUBLIC_USER_SELECT } from './serialize.js'
+import { toSelfUser } from '../auth/serialize.js'
 import { toEventCard } from '../events/serialize.js'
 
 const router = Router()
@@ -107,6 +108,64 @@ router.put('/:id/interests', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('PUT /api/users/:id/interests error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not save interests')
+  }
+})
+
+// --- PUT /api/users/:id/location --------------------------------------------
+// Body: { city: string, lat?: number, lng?: number, place_id?: string }
+// Persists the caller's home location so the recommender's geo pre-filter
+// (recommendations/engine.js: earth_distance radius when lat/lng present,
+// else city ILIKE) actually has something to filter on. Onboarding calls this;
+// a user can update it later from their profile.
+router.put('/:id/location', requireAuth, async (req, res) => {
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only edit your own location')
+  }
+
+  const { city, lat, lng, place_id } = req.body ?? {}
+  if (typeof city !== 'string' || !city.trim()) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'city is required')
+  }
+  if (city.length > 120) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'city too long (max 120 chars)')
+  }
+
+  // Coords are optional but must arrive as a valid pair — storing one without
+  // the other would leave the geo pre-filter unable to build a radius clause.
+  const hasLat = lat != null
+  const hasLng = lng != null
+  if (hasLat !== hasLng) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'lat and lng must be provided together')
+  }
+  let latNum = null
+  let lngNum = null
+  if (hasLat) {
+    latNum = Number(lat)
+    lngNum = Number(lng)
+    if (!Number.isFinite(latNum) || latNum < -90 || latNum > 90) {
+      return fail(res, 422, 'VALIDATION_ERROR', 'lat must be a number between -90 and 90')
+    }
+    if (!Number.isFinite(lngNum) || lngNum < -180 || lngNum > 180) {
+      return fail(res, 422, 'VALIDATION_ERROR', 'lng must be a number between -180 and 180')
+    }
+  }
+
+  const placeId = typeof place_id === 'string' && place_id.trim() ? place_id.trim() : null
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        homeCity: city.trim(),
+        homeLat: latNum,
+        homeLng: lngNum,
+        homePlaceId: placeId,
+      },
+    })
+    return res.json({ data: toSelfUser(updated) })
+  } catch (err) {
+    console.error('PUT /api/users/:id/location error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not save location')
   }
 })
 

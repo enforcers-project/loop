@@ -197,6 +197,85 @@ export function toClientUser(u) {
   }
 }
 
+// Resolve a category display name (e.g. "Nightlife") to the backend's real
+// category id. The category list is small and immutable during a session, so we
+// fetch it once and cache the promise. Matches on name or slug, case-insensitively.
+let _categoriesPromise = null
+async function resolveCategoryId(name) {
+  if (!_categoriesPromise) {
+    _categoriesPromise = fetch(apiUrl('/categories'), { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((j) => j.data ?? [])
+      .catch(() => [])
+  }
+  const cats = await _categoriesPromise
+  const key = String(name ?? '').toLowerCase()
+  const slug = key.replace(/\s+/g, '-')
+  const hit = cats.find(
+    (c) => c.name?.toLowerCase() === key || c.slug?.toLowerCase() === slug,
+  )
+  return hit?.id ?? null
+}
+
+// Translate the CreateEvent form's flat camelCase draft into the snake_case
+// body the backend expects. Throws a friendly Error when a required field the
+// backend enforces can't be satisfied (so the mutation's onError fires with a
+// real message instead of the request 422-ing opaquely).
+async function toCreateEventBody(draft) {
+  const categoryId = await resolveCategoryId(draft.category)
+  if (!categoryId) throw new Error(`Unknown category "${draft.category}"`)
+
+  // The form collects date + time; combine into an ISO instant the backend can
+  // Date.parse(). `datetime-local` inputs give "YYYY-MM-DDTHH:mm"; a bare date
+  // is fine too (midnight). Guard against an unparseable combo up front.
+  const stamp = draft.time ? `${draft.date}T${draft.time}` : draft.date
+  const startsAt = new Date(stamp)
+  if (isNaN(startsAt.getTime())) throw new Error('Enter a valid date and time')
+
+  const priceMin = Number(draft.price) || 0
+  const body = {
+    title: draft.title,
+    category_id: categoryId,
+    starts_at: startsAt.toISOString(),
+    timezone: draft.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    city: draft.city,
+    venue_name: draft.location || null,
+    description: draft.description || null,
+    price_min: priceMin,
+    price_max: priceMin,
+    is_free: priceMin === 0,
+    capacity: draft.capacity ?? null,
+    age_min: draft.ageRestriction ?? null,
+    is_sports: Boolean(draft.isSports),
+  }
+
+  if (draft.isSports) {
+    const playersNeeded = Number(draft.playersNeeded) || 0
+    // Parse "Goalkeeper, Defender, ..." into positions. The backend enforces
+    // Σ capacity = players_needed, so distribute the roster as evenly as
+    // possible across the named positions (remainder lands on the first few).
+    const labels = String(draft.positions || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    let positions
+    if (labels.length) {
+      const base = Math.floor(playersNeeded / labels.length)
+      const extra = playersNeeded % labels.length
+      positions = labels.map((label, i) => ({ label, capacity: base + (i < extra ? 1 : 0) }))
+    }
+    body.sports_details = {
+      sport: draft.category === 'Sports' ? 'general' : (draft.sport ?? 'general'),
+      skill_level: (draft.skillLevel || 'All Levels').toLowerCase().replace(/\s+/g, '_'),
+      venue_setting: draft.indoor ? 'indoor' : 'outdoor',
+      players_needed: playersNeeded,
+      ...(positions ? { positions } : {}),
+    }
+  }
+
+  return body
+}
+
 export const api = {
   categories: () => get('/categories', () => MOCK_CATEGORIES),
   interests: () => get('/interests', () => MOCK_INTERESTS),
@@ -300,16 +379,22 @@ export const api = {
       (list ?? []).map((p) => (p?.event ? { ...p, event: toEventCardShape(p.event) } : p)),
     ),
 
-  // Publish a new event. Targets POST /api/events (issue #9, not built yet);
-  // until that lands the request 404s and we fall back to echoing the draft
-  // back with a generated id + `pending: true` so the UI can flow end-to-end.
-  // Swap the fallback out — no caller change — the moment #9 ships.
-  createEvent: (draft) =>
-    post('/events', draft, () => ({
-      ...draft,
-      id: `draft-${draft.title?.toLowerCase().replace(/\s+/g, '-') || 'event'}`,
-      pending: true,
-    })),
+  // Create + publish a native event. The backend contract (POST /api/events)
+  // is snake_case and starts the event as a draft; a second call to
+  // POST /api/events/:id/publish flips it live. We translate the flat camelCase
+  // form draft into that contract, resolve the real category_id, and build a
+  // proper ISO starts_at. No mock fallback — like auth, a publish must genuinely
+  // succeed or fail so the UI can show the real error (a 422 no longer gets
+  // silently swallowed into a fake pending draft).
+  createEvent: async (draft) => {
+    const body = await toCreateEventBody(draft)
+    const created = await request('/events', { method: 'POST', body })
+    const published = await request(`/events/${created.id}/publish`, { method: 'POST' })
+    // The publish response is a slim { id, status, published_at }; return the
+    // full created detail merged with the new status so the caller has both an
+    // id to navigate to and the live status.
+    return { ...created, status: published?.status ?? created.status }
+  },
 
   aiSearch: (q) =>
     post('/ai/search', { q }, () => {

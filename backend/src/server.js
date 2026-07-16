@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import { EVENTS, ORGANIZERS, CATEGORIES, INTERESTS, AVATARS, POSTS } from './data/seed.js'
+import prisma from './lib/prisma.js'
 import adminSyncRouter from './sync/routes.js'
 import adminJobsRouter from './jobs/routes.js'
 import eventsRouter from './events/routes.js'
@@ -46,8 +47,45 @@ function withOrganizer(ev) {
 app.get('/api/health', (_req, res) => ok(res, { status: 'up', service: 'loop-backend' }))
 
 // --- Lookups ----------------------------------------------------------------
-app.get('/api/categories', (_req, res) => ok(res, CATEGORIES))
-app.get('/api/interests', (_req, res) => ok(res, INTERESTS))
+// Serve real DB categories (id + slug + name + color) so clients can send a
+// genuine `category_id` when creating events. Falls back to the in-memory seed
+// (no id) only when the DB is unreachable, matching the read-path convention.
+app.get('/api/categories', async (_req, res) => {
+  try {
+    const rows = await prisma.category.findMany({ orderBy: { sortOrder: 'asc' } })
+    ok(
+      res,
+      rows.map((c) => ({ id: c.id, slug: c.slug, name: c.name, color: c.colorHex })),
+    )
+  } catch {
+    ok(res, CATEGORIES)
+  }
+})
+// Serve real DB interests (id + slug + label + category name) so onboarding
+// commits genuine Interest UUIDs. Same fallback contract as /categories: drop
+// to the in-memory seed only when the DB is unreachable. Avatars have no DB
+// model, so they stay seed-only.
+app.get('/api/interests', async (_req, res) => {
+  try {
+    const rows = await prisma.interest.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      include: { category: { select: { name: true } } },
+    })
+    ok(
+      res,
+      rows.map((i) => ({
+        id: i.id,
+        slug: i.slug,
+        label: i.label,
+        icon: i.icon,
+        category: i.category.name,
+      })),
+    )
+  } catch {
+    ok(res, INTERESTS)
+  }
+})
 app.get('/api/avatars', (_req, res) => ok(res, AVATARS))
 
 // --- Events (Prisma-backed, cursor-paginated) --------------------------------

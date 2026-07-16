@@ -26,6 +26,7 @@ export function CreateEvent() {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [location, setLocation] = useState('')
+  const [city, setCity] = useState('')
   const [price, setPrice] = useState('')
   const [capacity, setCapacity] = useState('')
   const [age, setAge] = useState('')
@@ -49,7 +50,7 @@ export function CreateEvent() {
     date: date || time ? `${date || 'Date'} · ${time || 'Time'}` : 'Date · Time',
     isoDate: '',
     venueName: location || 'Venue',
-    city: 'Oakland',
+    city: city || 'Oakland',
     lat: 37.8,
     lng: -122.27,
     organizerId: 'org-preview',
@@ -85,6 +86,7 @@ export function CreateEvent() {
   if (!title.trim()) missing.push('title')
   if (!date.trim()) missing.push('date')
   if (!location.trim()) missing.push('location')
+  if (!city.trim()) missing.push('city')
   if (isSports && !Number(playersNeeded)) missing.push('players needed')
   const canPublish = missing.length === 0
 
@@ -96,6 +98,7 @@ export function CreateEvent() {
         date: date.trim(),
         time: time.trim(),
         location: location.trim(),
+        city: city.trim(),
         price: price ? Number(price) : 0,
         capacity: Number(capacity) || null,
         ageRestriction: age ? Number(age) : null,
@@ -108,17 +111,12 @@ export function CreateEvent() {
         indoor: isSports ? indoor : null,
       }),
     onSuccess: (created) => {
-      // Refresh any event lists so the new event shows once #9 persists it.
+      // Refresh any event lists so the newly published event shows up.
       queryClient.invalidateQueries({ queryKey: ['events'] })
-      if (created?.pending) {
-        // Backend publish endpoint (#9) isn't live yet — the draft didn't persist.
-        toast.info('Draft looks good! Publishing goes live once the events API lands.')
-      } else {
-        toast.success('Event published!')
-        navigate(`/event/${created.id}`)
-      }
+      toast.success('Event published!')
+      navigate(`/event/${created.id}`)
     },
-    onError: () => toast.error('Could not publish — please try again.'),
+    onError: (err) => toast.error(err?.message || 'Could not publish — please try again.'),
   })
 
   const onPublish = () => {
@@ -204,41 +202,51 @@ export function CreateEvent() {
             <FormField label="Date">
               <div className="relative">
                 <input
+                  type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  placeholder="Sat, Jul 12"
                   className={cn(inputClass, 'pr-10')}
                 />
                 <Calendar
                   size={16}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
                 />
               </div>
             </FormField>
             <FormField label="Time">
               <input
+                type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
-                placeholder="9:00 PM"
                 className={inputClass}
               />
             </FormField>
           </div>
 
-          <FormField label="Location">
-            <div className="relative">
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Venue">
+              <div className="relative">
+                <input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Skyline Rooftop"
+                  className={cn(inputClass, 'pr-10')}
+                />
+                <MapPin
+                  size={16}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
+                />
+              </div>
+            </FormField>
+            <FormField label="City">
               <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Skyline Rooftop, Oakland"
-                className={cn(inputClass, 'pr-10')}
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="Oakland"
+                className={inputClass}
               />
-              <MapPin
-                size={16}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
-              />
-            </div>
-          </FormField>
+            </FormField>
+          </div>
 
           <div className="grid grid-cols-3 gap-4">
             <FormField label="Price ($)">

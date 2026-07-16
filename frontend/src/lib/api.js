@@ -335,6 +335,26 @@ export const api = {
     }
   },
 
+  // RSVP / cancel for an event (no mock fallback — an RSVP must genuinely
+  // persist). PUT sets status='going'; DELETE cancels. Both throw on failure so
+  // the caller can roll back optimistic UI. Returns { event_rsvp_count, ... } so
+  // a screen can sync the "N going" count.
+  rsvp: (id) => request(`/events/${id}/rsvp`, { method: 'PUT', body: { status: 'going' } }),
+  rsvpCancel: (id) => request(`/events/${id}/rsvp`, { method: 'DELETE' }),
+
+  // The caller's "going" event ids (GET /api/users/:id/rsvps?status=going) —
+  // used to hydrate RSVP state on login/refresh so the "Going" highlight
+  // survives a reload. Returns the id array; [] on any failure so a hydration
+  // hiccup never blocks the app. Mirrors api.following.
+  goingEvents: async (id) => {
+    try {
+      const res = await request(`/users/${id}/rsvps?status=going`)
+      return (res ?? []).map((row) => row.event?.id).filter(Boolean)
+    } catch {
+      return []
+    }
+  },
+
   // Notification bell feed (real endpoints, no mock fallback — like auth/follow;
   // backend #27). list() returns the full envelope { data, nextCursor,
   // unread_count } so the bell can drive its unread dot from the server count.

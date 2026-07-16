@@ -32,6 +32,10 @@ export function EventDetail() {
   const [event, setEvent] = useState(null)
   const [related, setRelated] = useState([])
   const [comment, setComment] = useState('')
+  // Local "going" count so the header + GoingStack update immediately on RSVP;
+  // seeded from the event's denormalized rsvp_count (see OrganizerProfile's
+  // follower-count pattern).
+  const [goingCount, setGoingCount] = useState(0)
 
   // Commenting is a member action: gate logged-out users to /auth first.
   const postComment = () => {
@@ -45,7 +49,10 @@ export function EventDetail() {
 
   useEffect(() => {
     if (!id) return
-    api.event(id).then(setEvent)
+    api.event(id).then((e) => {
+      setEvent(e)
+      setGoingCount(e?.rsvpCount ?? 0)
+    })
     api.related(id).then(setRelated)
   }, [id])
 
@@ -56,6 +63,17 @@ export function EventDetail() {
   const saved = savedIds.has(event.id)
   const going = goingIds.has(event.id)
   const following = event.organizer ? followingIds.has(event.organizer.id) : false
+
+  // RSVP, then keep the local count in step with the action we just took. The
+  // backend moves rsvp_count only on going-transitions, so mirror that here.
+  // toggleGoing returns the resulting state (null if login-gated, or the prior
+  // state on failure/rollback) — only adjust when the state actually changed.
+  const onRsvp = async () => {
+    const wasGoing = goingIds.has(event.id)
+    const result = await toggleGoing(event.id)
+    if (result === null || result === wasGoing) return
+    setGoingCount((c) => Math.max(0, c + (result ? 1 : -1)))
+  }
 
   return (
     <div className="pb-24 md:pb-10">
@@ -126,7 +144,9 @@ export function EventDetail() {
                 </div>
                 <div className="flex items-center gap-2.5">
                   <Users size={18} className="text-white/60" />
-                  {event.rsvpCount} going · {event.capacity - event.rsvpCount} spots left
+                  {goingCount} going
+                  {event.capacity != null &&
+                    ` · ${Math.max(0, event.capacity - goingCount)} spots left`}
                 </div>
                 {event.ageRestriction && (
                   <div className="flex items-center gap-2.5">
@@ -137,16 +157,13 @@ export function EventDetail() {
 
               {/* GoingStack card */}
               <div className="mt-6 flex items-center justify-between rounded-card bg-white/10 p-4 backdrop-blur-sm">
-                <GoingStack count={event.goingCount} avatars={event.goingAvatars} size="md" />
+                <GoingStack count={goingCount} avatars={event.goingAvatars} size="md" />
                 <span className="text-xl font-bold">{event.isFree ? 'Free' : event.price}</span>
               </div>
 
               {/* CTAs */}
               <div className="mt-4 flex items-center gap-3">
-                <RSVPBtn
-                  variant={going ? 'outline' : 'filled'}
-                  onClick={() => toggleGoing(event.id)}
-                >
+                <RSVPBtn variant={going ? 'outline' : 'filled'} onClick={onRsvp}>
                   {going ? "You're going ✓" : 'RSVP now'}
                 </RSVPBtn>
                 <SaveBtn saved={saved} onToggle={() => toggleSaved(event.id)} />

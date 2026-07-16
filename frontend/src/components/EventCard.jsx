@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Calendar, MapPin } from 'lucide-react'
 import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
@@ -22,10 +23,33 @@ export function EventCard({ event, showRationale = false, onClick }) {
   const { savedIds, goingIds, toggleSaved, toggleGoing } = useApp()
   const saved = savedIds.has(event.id)
   const going = goingIds.has(event.id)
+  // Local "going" count so the footer updates immediately on RSVP; seeded from
+  // the event's denormalized rsvp_count. Sports cards read the roster count
+  // (players_signed_up), which the RSVP flow doesn't touch, so they're left as-is.
+  // Re-seed during render when the card is reused for a different event (React's
+  // reset-state-on-prop-change pattern — no effect, so no optimistic clobber).
+  const [goingCount, setGoingCount] = useState(event.goingCount ?? 0)
+  const [seededId, setSeededId] = useState(event.id)
+  if (seededId !== event.id) {
+    setSeededId(event.id)
+    setGoingCount(event.goingCount ?? 0)
+  }
 
   const go = () => {
     if (onClick) return onClick()
     navigate(event.isSports ? `/sports/${event.id}` : `/event/${event.id}`)
+  }
+
+  // Sports runs fill via the roster (claim a spot), not the RSVP flow — the
+  // backend 409s a sports RSVP — so "Join" routes to the run's detail screen.
+  // Non-sports: RSVP, then keep the local count in step with the resulting
+  // state. Skips the login-gated (null) and failure/rollback (unchanged) cases.
+  const onRsvp = async () => {
+    if (event.isSports) return navigate(`/sports/${event.id}`)
+    const wasGoing = goingIds.has(event.id)
+    const result = await toggleGoing(event.id)
+    if (result === null || result === wasGoing) return
+    setGoingCount((c) => Math.max(0, c + (result ? 1 : -1)))
   }
 
   return (
@@ -106,16 +130,12 @@ export function EventCard({ event, showRationale = false, onClick }) {
         {/* actions — pinned to the bottom so every footer aligns */}
         <div className="mt-auto flex items-center justify-between gap-2 border-t border-border-light pt-3">
           <GoingStack
-            count={event.isSports ? (event.playersSignedUp ?? 0) : event.goingCount}
+            count={event.isSports ? (event.playersSignedUp ?? 0) : goingCount}
             avatars={event.goingAvatars}
           />
           <div className="flex flex-shrink-0 items-center gap-2">
             <SaveBtn sm saved={saved} onToggle={() => toggleSaved(event.id)} />
-            <RSVPBtn
-              sm
-              variant={going ? 'outline' : 'filled'}
-              onClick={() => toggleGoing(event.id)}
-            >
+            <RSVPBtn sm variant={going ? 'outline' : 'filled'} onClick={onRsvp}>
               {going ? 'Going' : event.isSports ? 'Join' : 'RSVP'}
             </RSVPBtn>
           </div>

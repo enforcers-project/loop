@@ -233,9 +233,7 @@ async function resolveCategoryId(name) {
   const cats = await _categoriesPromise
   const key = String(name ?? '').toLowerCase()
   const slug = key.replace(/\s+/g, '-')
-  const hit = cats.find(
-    (c) => c.name?.toLowerCase() === key || c.slug?.toLowerCase() === slug,
-  )
+  const hit = cats.find((c) => c.name?.toLowerCase() === key || c.slug?.toLowerCase() === slug)
   return hit?.id ?? null
 }
 

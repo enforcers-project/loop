@@ -172,6 +172,68 @@ router.get('/:id/events', async (req, res) => {
   }
 })
 
+// --- GET /api/users/:id/rsvps — a user's own RSVPs --------------------------
+// Owner-only (self); optional ?status= filter, cursor-paginated by created_at.
+// Powers RSVP-state hydration on the client (the "Going" highlight after a
+// reload) and the UserProfile "Going" tab. Each item is { rsvp, event:EventCard }.
+const RSVP_STATUSES = new Set(['going', 'interested', 'waitlisted', 'cancelled'])
+
+router.get('/:id/rsvps', requireAuth, async (req, res) => {
+  if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only view your own RSVPs')
+  }
+  const { status } = req.query
+  if (status != null && !RSVP_STATUSES.has(status)) {
+    return fail(
+      res,
+      422,
+      'VALIDATION_ERROR',
+      'status must be going/interested/waitlisted/cancelled',
+    )
+  }
+
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50)
+    const where = { userId: req.params.id }
+    // Default to active RSVPs only — a cancelled RSVP shouldn't light up "Going".
+    if (status) where.status = status
+    else where.status = { not: 'cancelled' }
+    if (req.query.cursor) {
+      const cur = new Date(req.query.cursor)
+      if (!isNaN(cur)) where.createdAt = { lt: cur }
+    }
+
+    const rows = await prisma.rsvp.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      include: { event: { include: { category: true, organizer: true, sportsDetail: true } } },
+    })
+
+    let nextCursor = null
+    if (rows.length > limit) {
+      rows.pop()
+      nextCursor = rows[rows.length - 1].createdAt.toISOString()
+    }
+
+    const data = rows.map((r) => ({
+      rsvp: {
+        id: r.id,
+        status: r.status,
+        guests_count: r.guestsCount,
+        attended: r.attended,
+        created_at: r.createdAt,
+      },
+      event: toEventCard(r.event),
+    }))
+    return res.json({ data, nextCursor })
+  } catch (err) {
+    console.error('GET /api/users/:id/rsvps error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not load RSVPs')
+  }
+})
+
 // --- POST /api/users/:id/follow — follow ------------------------------------
 // Inserts follows(follower=me, followee=:id), bumps follower_count on the
 // followee and following_count on me, and appends a `follow` interaction signal.

@@ -67,6 +67,20 @@ export function AppProvider({ children }) {
     }
   }, [user?.id])
 
+  // Hydrate the RSVP ("going") set on the same login/refresh boundary, so the
+  // "Going" highlight survives a reload. Best-effort — api.goingEvents swallows
+  // its own errors; clears on logout below.
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    api.goingEvents(user.id).then((ids) => {
+      if (!cancelled) setGoingIds(new Set(ids))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
   // Real login: POST /auth/login, then adopt the returned user. Throws on bad
   // credentials so the Auth screen can surface the message.
   const login = useCallback(
@@ -155,6 +169,41 @@ export function AppProvider({ children }) {
     })
   }, [])
 
+  // RSVP toggle with optimistic UI. Flips goingIds immediately, then persists to
+  // the backend for a real (UUID) event, rolling back on failure. Mock seed
+  // events (non-UUID ids) have no backend row, so they toggle in-memory only.
+  const setGoingFlag = useCallback((id, on) => {
+    setGoingIds((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const toggleGoing = useCallback(
+    async (id) => {
+      if (!requireAuth()) return null
+      const wasGoing = goingIds.has(id)
+      const willGo = !wasGoing
+      setGoingFlag(id, willGo) // optimistic
+
+      // Mock events can't persist — leave the optimistic state and return.
+      if (!isUuid(id)) return willGo
+
+      try {
+        if (willGo) await api.rsvp(id)
+        else await api.rsvpCancel(id)
+        return willGo
+      } catch (err) {
+        setGoingFlag(id, wasGoing) // roll back
+        toast.error(err.message || 'Could not update RSVP. Please try again.')
+        return wasGoing
+      }
+    },
+    [requireAuth, goingIds, setGoingFlag, toast],
+  )
+
   const toggleFollow = useCallback(
     async (id) => {
       if (!requireAuth()) return null
@@ -203,7 +252,7 @@ export function AppProvider({ children }) {
         requireAuth,
         setInterests,
         toggleSaved: toggle(setSavedIds),
-        toggleGoing: toggle(setGoingIds),
+        toggleGoing,
         toggleFollow,
       }}
     >

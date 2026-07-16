@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { StoriesRow, PostCard } from '../components/social'
 import { EventImage } from '../components/EventImage'
@@ -35,14 +35,18 @@ function SidebarCard({ title, children }) {
 }
 
 export function SocialFeed() {
-  const { followingIds, toggleFollow } = useApp()
+  const { followingIds, toggleFollow, user } = useApp()
   const [posts, setPosts] = useState([])
   const [events, setEvents] = useState([])
 
+  const near = nearForUser(user)
+  const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
+
   useEffect(() => {
     api.posts().then(setPosts)
-    api.events({ sort: 'popular' }).then(setEvents)
-  }, [])
+    api.events({ sort: 'popular', near: nearForUser(user) }).then(setEvents)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearKey])
 
   const stories = [
     { name: 'You', avatar: 'https://i.pravatar.cc/150?img=1', isYou: true },

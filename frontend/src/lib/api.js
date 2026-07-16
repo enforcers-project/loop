@@ -277,25 +277,39 @@ export const api = {
   // with both lat + lng the backend does an earth_distance radius query
   // (radiusKm defaults to 40 to match the recommender), else falls back to
   // city equality. Missing near → no geo filter (pre-onboarding sessions).
-  events: (filters = {}) => {
-    const qs = new URLSearchParams()
-    if (filters.category && filters.category !== 'All') qs.set('category', filters.category)
-    if (filters.isFree) qs.set('isFree', 'true')
-    if (filters.isSports) qs.set('isSports', 'true')
-    if (filters.q) qs.set('q', filters.q)
-    if (filters.sort) qs.set('sort', filters.sort)
-    const near = filters.near
-    if (near?.lat != null && near?.lng != null) {
-      qs.set('nearLat', String(near.lat))
-      qs.set('nearLng', String(near.lng))
-      qs.set('radiusKm', String(near.radiusKm ?? 40))
-    } else if (near?.city) {
-      qs.set('city', near.city)
+  // Empty-near-you fallback: if a geo-filtered request returns 0 events, retry
+  // without geo so the user always sees something. Matters because the seed
+  // catalog only covers a handful of cities — a user whose saved location is
+  // elsewhere would otherwise see "No events match yet" forever.
+  events: async (filters = {}) => {
+    const buildQs = (includeGeo) => {
+      const qs = new URLSearchParams()
+      if (filters.category && filters.category !== 'All') qs.set('category', filters.category)
+      if (filters.isFree) qs.set('isFree', 'true')
+      if (filters.isSports) qs.set('isSports', 'true')
+      if (filters.q) qs.set('q', filters.q)
+      if (filters.sort) qs.set('sort', filters.sort)
+      if (includeGeo) {
+        const near = filters.near
+        if (near?.lat != null && near?.lng != null) {
+          qs.set('nearLat', String(near.lat))
+          qs.set('nearLng', String(near.lng))
+          qs.set('radiusKm', String(near.radiusKm ?? 40))
+        } else if (near?.city) {
+          qs.set('city', near.city)
+        }
+      }
+      return qs.toString() ? `?${qs}` : ''
     }
-    const suffix = qs.toString() ? `?${qs}` : ''
-    return get(`/events${suffix}`, () => mockFilter(filters)).then((list) =>
-      (list ?? []).map(toEventCardShape),
+    const hasGeo = !!(
+      (filters.near?.lat != null && filters.near?.lng != null) ||
+      filters.near?.city
     )
+    let list = (await get(`/events${buildQs(true)}`, () => mockFilter(filters))) ?? []
+    if (list.length === 0 && hasGeo) {
+      list = (await get(`/events${buildQs(false)}`, () => mockFilter(filters))) ?? []
+    }
+    return list.map(toEventCardShape)
   },
 
   event: (id) =>
@@ -314,8 +328,12 @@ export const api = {
       )
     }).then((list) => (list ?? []).map(toEventCardShape)),
 
-  recommendations: (interests) =>
-    post('/recommendations', { interests }, () => {
+  // Empty-feed fallback: /recommendations filters by the user's saved location
+  // server-side, so a user whose saved city has no seeded events would see an
+  // empty For You feed. When that happens, fall back to non-geo popular events
+  // so the feed always has something to show.
+  recommendations: async (interests) => {
+    const list = await post('/recommendations', { interests }, () => {
       const cats = new Set(
         MOCK_INTERESTS.filter((i) => interests.includes(i.id)).map((i) => i.category),
       )
@@ -328,7 +346,12 @@ export const api = {
         .map(({ e }) =>
           cats.size && !cats.has(e.category) ? { ...e, rationale: 'Popular near you' } : e,
         )
-    }).then((list) => (list ?? []).map(toEventCardShape)),
+    })
+    const arr = list ?? []
+    if (arr.length > 0) return arr.map(toEventCardShape)
+    const fallback = (await get('/events?sort=popular', () => mockFilter({}))) ?? []
+    return fallback.map(toEventCardShape)
+  },
 
   organizer: (id) =>
     get(`/organizers/${id}`, () => {
@@ -382,6 +405,14 @@ export const api = {
   // a screen can sync the "N going" count.
   rsvp: (id) => request(`/events/${id}/rsvp`, { method: 'PUT', body: { status: 'going' } }),
   rsvpCancel: (id) => request(`/events/${id}/rsvp`, { method: 'DELETE' }),
+
+  // Save / unsave for an event. Same shape as rsvp above — no mock fallback,
+  // throws on failure so an optimistic UI can roll back. Every mutation writes
+  // an interaction_events row on the backend, which triggers a rebuild of the
+  // user's preference vector — so a subsequent /recommendations call reflects
+  // the click on refresh.
+  save: (id) => request(`/events/${id}/save`, { method: 'PUT' }),
+  saveCancel: (id) => request(`/events/${id}/save`, { method: 'DELETE' }),
 
   // The caller's "going" event ids (GET /api/users/:id/rsvps?status=going) —
   // used to hydrate RSVP state on login/refresh so the "Going" highlight

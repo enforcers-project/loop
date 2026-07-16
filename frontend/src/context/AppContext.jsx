@@ -159,16 +159,6 @@ export function AppProvider({ children }) {
     return false
   }, [user, authGate])
 
-  const toggle = (set) => (id) => {
-    if (!requireAuth()) return
-    set((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
   // Follow/unfollow with optimistic UI. Flips followingIds immediately, then
   // persists to the backend for a real (UUID) organizer, rolling back on
   // failure. Mock `org-*` organizers (SocialFeed suggestions) have no backend
@@ -182,6 +172,42 @@ export function AppProvider({ children }) {
       return next
     })
   }, [])
+
+  // Save toggle with optimistic UI. Mirrors toggleGoing: flips savedIds
+  // immediately, then persists to the backend for a real (UUID) event, rolling
+  // back on failure. Every persist writes an interaction_events row and
+  // rebuilds the user's preference vector, so a refresh sees personalization.
+  const setSavedFlag = useCallback((id, on) => {
+    setSavedIds((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const toggleSaved = useCallback(
+    async (id) => {
+      if (!requireAuth()) return null
+      const wasSaved = savedIds.has(id)
+      const willSave = !wasSaved
+      setSavedFlag(id, willSave) // optimistic
+
+      // Mock events can't persist — leave the optimistic state and return.
+      if (!isUuid(id)) return willSave
+
+      try {
+        if (willSave) await api.save(id)
+        else await api.saveCancel(id)
+        return willSave
+      } catch (err) {
+        setSavedFlag(id, wasSaved) // roll back
+        toast.error(err.message || 'Could not update save. Please try again.')
+        return wasSaved
+      }
+    },
+    [requireAuth, savedIds, setSavedFlag, toast],
+  )
 
   // RSVP toggle with optimistic UI. Flips goingIds immediately, then persists to
   // the backend for a real (UUID) event, rolling back on failure. Mock seed
@@ -266,7 +292,7 @@ export function AppProvider({ children }) {
         requireAuth,
         setInterests,
         saveLocation,
-        toggleSaved: toggle(setSavedIds),
+        toggleSaved,
         toggleGoing,
         toggleFollow,
       }}

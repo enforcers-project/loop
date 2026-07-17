@@ -12,6 +12,12 @@ import { fail, requireAuth } from '../auth/middleware.js'
 import { toPublicUser, PUBLIC_USER_SELECT } from './serialize.js'
 import { toSelfUser } from '../auth/serialize.js'
 import { toEventCard } from '../events/serialize.js'
+import {
+  presignPutUrl,
+  isConfigured as s3Configured,
+  isAllowedContentType,
+  bucketPublicPrefix,
+} from '../lib/s3.js'
 
 const router = Router()
 
@@ -166,6 +172,77 @@ router.put('/:id/location', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('PUT /api/users/:id/location error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not save location')
+  }
+})
+
+// --- POST /api/users/:id/avatar-upload-url ----------------------------------
+// Owner-only. Body: { content_type: 'image/png' | 'image/jpeg' | ... }.
+// Returns a short-lived presigned PUT URL the browser uploads the image to
+// directly (bytes never touch this server), plus the stable public URL the
+// client PUTs back to /avatar once the upload succeeds.
+router.post('/:id/avatar-upload-url', requireAuth, async (req, res) => {
+  if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only change your own picture')
+  }
+  if (!s3Configured()) {
+    return fail(res, 503, 'NOT_CONFIGURED', 'Image uploads are not configured')
+  }
+
+  const contentType = req.body?.content_type
+  if (!isAllowedContentType(contentType)) {
+    return fail(
+      res,
+      422,
+      'VALIDATION_ERROR',
+      'content_type must be a JPEG, PNG, WebP, or GIF image',
+    )
+  }
+
+  try {
+    const { uploadUrl, publicUrl, key } = await presignPutUrl({
+      userId: req.user.id,
+      contentType,
+      // Uniqueness only — a request-time clock is fine and Date.now() is fine here.
+      stamp: Date.now(),
+    })
+    return res.json({
+      data: { upload_url: uploadUrl, public_url: publicUrl, key, content_type: contentType },
+    })
+  } catch (err) {
+    console.error('POST /api/users/:id/avatar-upload-url error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not start upload')
+  }
+})
+
+// --- PUT /api/users/:id/avatar -----------------------------------------------
+// Owner-only. Body: { avatar_url }. Persists the final public S3 URL after the
+// browser's direct upload succeeds. The URL must point at our own bucket so a
+// caller can't set their avatar to an arbitrary external link.
+router.put('/:id/avatar', requireAuth, async (req, res) => {
+  if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only change your own picture')
+  }
+
+  const avatarUrl = req.body?.avatar_url
+  if (typeof avatarUrl !== 'string' || !avatarUrl) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'avatar_url is required')
+  }
+  const prefix = bucketPublicPrefix()
+  if (!prefix || !avatarUrl.startsWith(prefix)) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'avatar_url must point at the avatar bucket')
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { avatarUrl },
+    })
+    return res.json({ data: toSelfUser(updated) })
+  } catch (err) {
+    console.error('PUT /api/users/:id/avatar error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not save picture')
   }
 })
 

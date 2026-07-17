@@ -18,6 +18,14 @@ import {
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 const apiUrl = (path) => `${API_BASE}/api${path}`
 
+// The default profile picture shown when a user has no avatar_url. New accounts
+// get this seeded on the backend (DEFAULT_AVATAR_URL) so this is just a safety
+// net for older rows / mocks. Set VITE_DEFAULT_AVATAR_URL to the same S3
+// silhouette URL at build time so the fallback matches; otherwise a neutral
+// pravatar keeps the UI from rendering a broken image.
+export const DEFAULT_AVATAR =
+  import.meta.env.VITE_DEFAULT_AVATAR_URL || 'https://i.pravatar.cc/150?img=1'
+
 const withOrganizer = (e) => ({
   ...e,
   organizer: MOCK_ORGANIZERS.find((o) => o.id === e.organizerId) ?? null,
@@ -196,7 +204,7 @@ export function toClientUser(u) {
     email: u.email,
     name: u.display_name || u.email?.split('@')[0] || 'You',
     handle: u.handle ? `@${u.handle}` : `@${u.email?.split('@')[0] || 'you'}`,
-    avatar: u.avatar_url || 'https://i.pravatar.cc/150?img=1',
+    avatar: u.avatar_url || DEFAULT_AVATAR,
     role: u.role,
     isHost: u.is_host,
     isVerified: u.is_verified,
@@ -455,6 +463,26 @@ export const api = {
     // Real profile: pull the organizer's events for the requested tab.
     const events = await get(`/users/${id}/events?status=${status}`, () => [])
     return { ...profile, events: (events ?? []).map(toEventCardShape) }
+  },
+
+  // Upload a new profile picture. Three steps, no mock fallback (a real upload
+  // must genuinely persist): (1) ask the backend for a presigned PUT URL, (2) PUT
+  // the raw file bytes straight to S3 — those bytes never touch our server — then
+  // (3) save the resulting public URL on the user. Returns the updated SelfUser
+  // (backend snake_case) so the caller can adopt it. Throws on any failure so the
+  // UI can surface a real error and roll back.
+  uploadAvatar: async (userId, file) => {
+    const { upload_url, public_url } = await request(`/users/${userId}/avatar-upload-url`, {
+      method: 'POST',
+      body: { content_type: file.type },
+    })
+    const put = await fetch(upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    })
+    if (!put.ok) throw new Error(`Upload failed (${put.status})`)
+    return request(`/users/${userId}/avatar`, { method: 'PUT', body: { avatar_url: public_url } })
   },
 
   // Follow / unfollow an organizer (no mock fallback — a follow must genuinely

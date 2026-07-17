@@ -168,7 +168,7 @@ export function Auth() {
             <>
               {mode === 'signup' && googleSignupHint && (
                 <p className="mb-3 rounded-button bg-primary/5 px-3 py-2 text-center text-xs text-text-secondary">
-                  Almost there — tap “Continue with Google” again to finish creating your account.
+                  Almost there: tap “Continue with Google” again to finish creating your account.
                 </p>
               )}
               <div ref={googleBtnRef} className="flex min-h-[44px] justify-center" />

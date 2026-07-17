@@ -209,7 +209,7 @@ export function Onboarding() {
         <div className="flex flex-1 flex-col">
           <h1 className="font-display text-3xl font-bold text-ink">What are you into?</h1>
           <div className="mt-2 flex items-center gap-3">
-            <p className="text-sm text-text-secondary">Pick at least 3 — we’ll tune your feed.</p>
+            <p className="text-sm text-text-secondary">Pick at least 3 to tune your feed.</p>
             <span
               className={cn(
                 'rounded-pill px-2.5 py-1 text-xs font-semibold',

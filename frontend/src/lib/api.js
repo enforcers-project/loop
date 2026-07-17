@@ -208,6 +208,10 @@ export function toClientUser(u) {
     role: u.role,
     isHost: u.is_host,
     isVerified: u.is_verified,
+    // Denormalized social counts (0 for a brand-new user); the profile header
+    // renders these and toggleFollow bumps `following` live on follow/unfollow.
+    followers: u.follower_count ?? 0,
+    following: u.following_count ?? 0,
     onboardingCompletedAt: u.onboarding_completed_at,
     homeCity: u.home_city ?? null,
     homeLat: u.home_lat ?? null,

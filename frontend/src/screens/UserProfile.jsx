@@ -4,7 +4,7 @@ import { Bookmark, CalendarHeart, Sparkles, Camera, X } from 'lucide-react'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { cn } from '../lib/utils'
+import { cn, formatCount } from '../lib/utils'
 import { RoleBadge } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
@@ -188,10 +188,16 @@ export function UserProfile() {
               </p>
               <div className="mt-3 flex items-center gap-5 text-sm text-text-secondary">
                 <span>
-                  <strong className="font-semibold text-ink">128</strong> following
+                  <strong className="font-semibold text-ink">
+                    {formatCount(user?.following ?? 0)}
+                  </strong>{' '}
+                  following
                 </span>
                 <span>
-                  <strong className="font-semibold text-ink">342</strong> followers
+                  <strong className="font-semibold text-ink">
+                    {formatCount(user?.followers ?? 0)}
+                  </strong>{' '}
+                  followers
                 </span>
               </div>
             </div>

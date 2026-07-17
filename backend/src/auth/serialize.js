@@ -40,6 +40,8 @@ export function toAuthUser(u) {
     display_name: u.displayName,
     handle: u.handle,
     is_verified: u.isVerified,
+    follower_count: u.followerCount,
+    following_count: u.followingCount,
     onboarding_completed_at: u.onboardingCompletedAt,
     created_at: u.createdAt,
   }

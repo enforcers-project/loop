@@ -242,6 +242,14 @@ export function AppProvider({ children }) {
     })
   }, [])
 
+  // Adjust the logged-in user's own "following" count so their profile header
+  // reflects a follow/unfollow immediately (clamped at 0). No-op when logged out.
+  const bumpFollowing = useCallback((delta) => {
+    setUser((prev) =>
+      prev ? { ...prev, following: Math.max(0, (prev.following ?? 0) + delta) } : prev,
+    )
+  }, [])
+
   // Save toggle with optimistic UI. Mirrors toggleGoing: flips savedIds
   // immediately, then persists to the backend for a real (UUID) event, rolling
   // back on failure. Every persist writes an interaction_events row and
@@ -322,6 +330,9 @@ export function AppProvider({ children }) {
       const willFollow = !wasFollowing
       followTouched.current.add(id) // survive an in-flight hydration overwrite
       setFollowFlag(id, willFollow) // optimistic
+      // Bump the viewer's own "following" count so their profile header updates
+      // immediately (the followee's follower_count is handled on their profile).
+      bumpFollowing(willFollow ? 1 : -1)
 
       // Mock organizers can't persist — leave the optimistic state and return.
       if (!isUuid(id)) return willFollow
@@ -332,17 +343,19 @@ export function AppProvider({ children }) {
         return willFollow
       } catch (err) {
         setFollowFlag(id, wasFollowing) // roll back
+        bumpFollowing(willFollow ? -1 : 1) // undo the optimistic count change
         // A 409 on follow (or 404 on unfollow) means the server already agrees
         // with our target state — treat as success rather than a scary error.
         if ((willFollow && err.status === 409) || (!willFollow && err.status === 404)) {
           setFollowFlag(id, willFollow)
+          bumpFollowing(willFollow ? 1 : -1) // re-apply the count we just rolled back
           return willFollow
         }
         toast.error(err.message || 'Could not update follow. Please try again.')
         return wasFollowing
       }
     },
-    [requireAuth, followingIds, setFollowFlag, toast],
+    [requireAuth, followingIds, setFollowFlag, bumpFollowing, toast],
   )
 
   return (

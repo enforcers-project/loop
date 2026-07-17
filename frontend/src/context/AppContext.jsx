@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { api, toClientUser } from '../lib/api'
 import { useModal } from './ModalContext'
 import { useToast } from './ToastContext'
@@ -24,6 +24,14 @@ export function AppProvider({ children }) {
   const [goingIds, setGoingIds] = useState(new Set())
   // Hydrated from GET /users/:id/following on login/refresh (effect below).
   const [followingIds, setFollowingIds] = useState(new Set())
+  // Ids the user has toggled this session (RSVP / follow). Hydration fetches
+  // can resolve *after* a click — especially on a cold-started backend — and a
+  // blind setGoingIds/setFollowingIds would overwrite the optimistic change
+  // with the stale pre-click server snapshot (the RSVP looks like it reverted
+  // until a reload). These refs let hydration keep server truth for untouched
+  // ids while preserving whatever the user just did.
+  const goingTouched = useRef(new Set())
+  const followTouched = useRef(new Set())
   // Auth is unknown until the first me() check resolves; guards let route
   // protection wait instead of bouncing a logged-in user on refresh.
   const [authReady, setAuthReady] = useState(false)
@@ -60,7 +68,17 @@ export function AppProvider({ children }) {
     if (!user?.id) return
     let cancelled = false
     api.following(user.id).then((ids) => {
-      if (!cancelled) setFollowingIds(new Set(ids))
+      if (cancelled) return
+      // Server truth, then re-apply anything toggled while the fetch was in
+      // flight so a slow response can't clobber an in-session follow/unfollow.
+      setFollowingIds((prev) => {
+        const next = new Set(ids)
+        for (const id of followTouched.current) {
+          if (prev.has(id)) next.add(id)
+          else next.delete(id)
+        }
+        return next
+      })
     })
     return () => {
       cancelled = true
@@ -74,7 +92,17 @@ export function AppProvider({ children }) {
     if (!user?.id) return
     let cancelled = false
     api.goingEvents(user.id).then((ids) => {
-      if (!cancelled) setGoingIds(new Set(ids))
+      if (cancelled) return
+      // Server truth, then re-apply anything toggled while the fetch was in
+      // flight so a slow response can't clobber an in-session RSVP/cancel.
+      setGoingIds((prev) => {
+        const next = new Set(ids)
+        for (const id of goingTouched.current) {
+          if (prev.has(id)) next.add(id)
+          else next.delete(id)
+        }
+        return next
+      })
     })
     return () => {
       cancelled = true
@@ -132,6 +160,8 @@ export function AppProvider({ children }) {
     setSavedIds(new Set())
     setGoingIds(new Set())
     setFollowingIds(new Set())
+    goingTouched.current = new Set()
+    followTouched.current = new Set()
   }, [])
 
   const setInterests = useCallback((ids) => setInterestsState(ids), [])
@@ -239,6 +269,7 @@ export function AppProvider({ children }) {
       if (!requireAuth()) return null
       const wasGoing = goingIds.has(id)
       const willGo = !wasGoing
+      goingTouched.current.add(id) // survive an in-flight hydration overwrite
       setGoingFlag(id, willGo) // optimistic
 
       // Mock events can't persist — leave the optimistic state and return.
@@ -262,6 +293,7 @@ export function AppProvider({ children }) {
       if (!requireAuth()) return null
       const wasFollowing = followingIds.has(id)
       const willFollow = !wasFollowing
+      followTouched.current.add(id) // survive an in-flight hydration overwrite
       setFollowFlag(id, willFollow) // optimistic
 
       // Mock organizers can't persist — leave the optimistic state and return.

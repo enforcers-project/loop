@@ -1,4 +1,4 @@
-import { Mic, MapPin, Search } from 'lucide-react'
+import { MapPin, Search } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 /* Single selected-state standard across the app: filled #6D5EFC + white text. */
@@ -68,13 +68,12 @@ export function FilterBar({ filters, onToggle }) {
 }
 
 /* --------------------------------------------------------------------------
-   SearchBar — NL placeholder, optional mic + location icons
+   SearchBar — NL placeholder with an optional location pill
 -------------------------------------------------------------------------- */
 export function SearchBar({
   value,
   onChange,
   onSubmit,
-  showMic = true,
   showLocation = true,
   city,
   placeholder = "Try 'free Afrobeats party this weekend'",
@@ -97,14 +96,6 @@ export function SearchBar({
         >
           <MapPin size={14} className="text-text-muted" />
           {city}
-        </button>
-      )}
-      {showMic && (
-        <button
-          className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface hover:text-primary"
-          aria-label="Search by voice"
-        >
-          <Mic size={18} />
         </button>
       )}
     </div>

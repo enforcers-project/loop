@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Sparkles, Bookmark, Eye, EyeOff, Check } from 'lucide-react'
+import { Sparkles, Bookmark, Eye, EyeOff, Check, AlertCircle } from 'lucide-react'
 import { cn, ROLE_STYLE } from '../lib/utils'
 
 /* --------------------------------------------------------------------------
@@ -188,6 +188,40 @@ export function GoingStack({ count, avatars, size = 'sm' }) {
       <span className="text-xs font-medium text-text-secondary">
         +{extra > 0 ? extra : count} going
       </span>
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   InlineAlert — a contextual error/info message rendered right next to the
+   form or button that produced it (instead of a bottom-of-screen toast), so
+   the user sees the feedback where they're looking. Renders nothing when
+   `message` is empty, so callers can render it unconditionally:
+
+     <InlineAlert message={error} />
+
+   `role="alert"` + aria-live announces it to screen readers on appearance.
+-------------------------------------------------------------------------- */
+export function InlineAlert({ message, variant = 'error', className }) {
+  if (!message) return null
+  const styles =
+    variant === 'error'
+      ? 'bg-accent/5 text-accent ring-accent/20'
+      : variant === 'success'
+        ? 'bg-success/5 text-success ring-success/20'
+        : 'bg-primary/5 text-primary ring-primary/20'
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className={cn(
+        'flex items-start gap-2 rounded-button px-3 py-2.5 text-sm font-medium ring-1',
+        styles,
+        className,
+      )}
+    >
+      <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+      <span className="flex-1">{message}</span>
     </div>
   )
 }

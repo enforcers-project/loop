@@ -1,20 +1,30 @@
-import { Mic, MapPin, Search } from 'lucide-react'
+import { MapPin, Search } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 /* Single selected-state standard across the app: filled #6D5EFC + white text. */
-const pillBase =
+export const pillBase =
   'flex-shrink-0 whitespace-nowrap rounded-pill px-4 py-2 text-sm font-medium transition-colors border'
-const pillSelected = 'bg-primary text-white border-primary'
-const pillUnselected = 'bg-white text-text-secondary border-border-light hover:border-text-muted'
+export const pillSelected = 'bg-primary text-white border-primary'
+export const pillUnselected =
+  'bg-white text-text-secondary border-border-light hover:border-text-muted'
 
 /* --------------------------------------------------------------------------
    CatRow — horizontal scrollable category chip row
 -------------------------------------------------------------------------- */
 const CATS = ['All', 'Music', 'Nightlife', 'Sports', 'Networking', 'Food', 'Campus']
 
-export function CatRow({ active, onChange }) {
+// `leading` renders extra pills (e.g. the For You feed's Trending/Following
+// toggles) inside the same scroll row so they sit attached to the category
+// chips. A thin divider separates them from the categories when present.
+export function CatRow({ active, onChange, leading }) {
   return (
     <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
+      {leading && (
+        <>
+          {leading}
+          <span className="my-1 w-px flex-shrink-0 self-stretch bg-border-light" aria-hidden />
+        </>
+      )}
       {CATS.map((c) => (
         <button
           key={c}
@@ -58,13 +68,12 @@ export function FilterBar({ filters, onToggle }) {
 }
 
 /* --------------------------------------------------------------------------
-   SearchBar — NL placeholder, optional mic + location icons
+   SearchBar — NL placeholder with an optional location pill
 -------------------------------------------------------------------------- */
 export function SearchBar({
   value,
   onChange,
   onSubmit,
-  showMic = true,
   showLocation = true,
   city,
   placeholder = "Try 'free Afrobeats party this weekend'",
@@ -87,14 +96,6 @@ export function SearchBar({
         >
           <MapPin size={14} className="text-text-muted" />
           {city}
-        </button>
-      )}
-      {showMic && (
-        <button
-          className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface hover:text-primary"
-          aria-label="Search by voice"
-        >
-          <Mic size={18} />
         </button>
       )}
     </div>

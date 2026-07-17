@@ -4,12 +4,16 @@ import { Calendar, MapPin } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
-import { CatRow, SearchBar } from '../components/rows'
+import { CatRow, SearchBar, pillBase, pillSelected, pillUnselected } from '../components/rows'
+import { cn } from '../lib/utils'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
 import { AIChip, AlmostFullBadge, GoingStack, RSVPBtn, SaveBtn } from '../components/primitives'
 
-const TABS = ['For You', 'Trending', 'Following']
+// The page *is* the "For You" feed, so that tab is implicit. Trending/Following
+// are now toggle pills in the filter row below: selecting one swaps the feed
+// source, deselecting returns to the default For You recommendations.
+const FEED_TOGGLES = ['Trending', 'Following']
 
 /* Featured hero card — controlled 320px (desktop) height with a smooth
    bottom-up overlay so the white text stays readable. */
@@ -148,27 +152,24 @@ export function ForYouFeed() {
         <SearchBar value={query} onChange={setQuery} city={user?.homeCity} />
       </div>
 
-      {/* tabs — 20px below search */}
-      <div className="mt-5 flex gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={
-              'rounded-pill border px-4 py-2 text-sm font-medium transition-colors ' +
-              (tab === t
-                ? 'border-primary bg-primary text-white'
-                : 'border-border-light bg-white text-text-secondary hover:border-text-muted')
-            }
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {/* category row — ~14px below tabs */}
-      <div className="mt-3.5">
-        <CatRow active={cat} onChange={setCat} />
+      {/* filter row — Trending/Following toggles sit attached to the category
+          chips; a selected toggle swaps the feed source, deselecting it (or
+          picking the other) returns to the default For You recommendations. */}
+      <div className="mt-5">
+        <CatRow
+          active={cat}
+          onChange={setCat}
+          leading={FEED_TOGGLES.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab((cur) => (cur === t ? 'For You' : t))}
+              aria-pressed={tab === t}
+              className={cn(pillBase, tab === t ? pillSelected : pillUnselected)}
+            >
+              {t}
+            </button>
+          ))}
+        />
       </div>
 
       {/* featured hero — 24px below categories */}

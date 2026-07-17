@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
-import { useToast } from '../context/ToastContext'
 import { cn } from '../lib/utils'
-import { FormField, PasswordField, inputClass } from '../components/primitives'
+import { FormField, PasswordField, InlineAlert, inputClass } from '../components/primitives'
 
 // Two roles only. Hosting pickup runs is an Organizer sub-capability toggled
 // below (not a role) — a plain attendee can't host. See planning §3/§10.
@@ -50,7 +49,6 @@ export function Auth() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { login, signup, loginWithGoogle } = useApp()
-  const toast = useToast()
   const [mode, setMode] = useState(params.get('mode') === 'login' ? 'login' : 'signup')
   const [email, setEmail] = useState('devarsh@gmail.com')
   const [password, setPassword] = useState('password123')
@@ -58,6 +56,9 @@ export function Auth() {
   const [role, setRole] = useState('attendee')
   const [isHost, setIsHost] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // Inline error shown right above the submit button (instead of a bottom-of-
+  // screen toast), so the feedback appears where the user is looking.
+  const [error, setError] = useState('')
   // Set when a Google *login* found no account and we flipped to signup, so we
   // can nudge the user to click "Continue with Google" once more to finish.
   const [googleSignupHint, setGoogleSignupHint] = useState(false)
@@ -89,15 +90,15 @@ export function Auth() {
       } catch (err) {
         // No account yet while trying to log in → send them to Sign up.
         if (err.status === 404) {
-          toast.error('No Loop account found — sign up to get started.')
+          setError('No Loop account found — sign up to get started.')
           setMode('signup')
           setGoogleSignupHint(true)
           return
         }
-        toast.error(err.message || 'Google sign-in failed. Please try again.')
+        setError(err.message || 'Google sign-in failed. Please try again.')
       }
     },
-    [loginWithGoogle, navigate, params, mode, role, wantsHost, toast],
+    [loginWithGoogle, navigate, params, mode, role, wantsHost],
   )
 
   // Initialize GSI and render Google's official button into the placeholder once
@@ -120,9 +121,10 @@ export function Auth() {
 
   const submit = async () => {
     if (submitting) return
+    setError('')
     // Client-side guard mirrors the backend contract (email + 8-char password).
-    if (!email.trim()) return toast.error('Enter your email.')
-    if (password.length < 8) return toast.error('Password must be at least 8 characters.')
+    if (!email.trim()) return setError('Enter your email.')
+    if (password.length < 8) return setError('Password must be at least 8 characters.')
 
     // A gated redirect (ProtectedRoute / authGate) parks the intended path in
     // ?next=; return there after login, else the sensible default per mode.
@@ -145,7 +147,7 @@ export function Auth() {
       }
     } catch (err) {
       // Surface the backend's real message (bad credentials, email taken, …).
-      toast.error(err.message || 'Something went wrong. Please try again.')
+      setError(err.message || 'Something went wrong. Please try again.')
       setSubmitting(false)
     }
   }
@@ -265,6 +267,9 @@ export function Auth() {
               </div>
             )}
 
+            {/* inline error — sits right above the button the user just clicked */}
+            <InlineAlert message={error} />
+
             <button
               onClick={submit}
               disabled={submitting}
@@ -287,6 +292,7 @@ export function Auth() {
             onClick={() => {
               setMode(mode === 'signup' ? 'login' : 'signup')
               setGoogleSignupHint(false) // manual switch clears the finish-signup nudge
+              setError('') // drop any stale error from the other mode
             }}
             className="font-semibold text-primary"
           >

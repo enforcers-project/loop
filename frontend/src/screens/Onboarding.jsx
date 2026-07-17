@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { cn } from '../lib/utils'
+import { InlineAlert } from '../components/primitives'
 import {
   cityFromGeocode,
   getCurrentLocation,
@@ -39,6 +40,9 @@ export function Onboarding() {
   const [locatingMe, setLocatingMe] = useState(false)
   const [predictions, setPredictions] = useState([])
   const [mapsReady, setMapsReady] = useState(false)
+  // Inline error shown above the step's primary button, instead of a toast at
+  // the bottom of the screen.
+  const [error, setError] = useState('')
 
   const autocompleteRef = useRef(null)
   const placesServiceRef = useRef(null)
@@ -118,7 +122,7 @@ export function Onboarding() {
       },
       (place, status) => {
         if (status !== 'OK' || !place?.geometry?.location) {
-          toast.error("Couldn't look up that place. Try picking another.")
+          setError("Couldn't look up that place. Try picking another.")
           return
         }
         setLocation({
@@ -141,8 +145,9 @@ export function Onboarding() {
 
   const useMyLocation = async () => {
     if (locatingMe) return
+    setError('')
     if (!isGoogleMapsConfigured()) {
-      toast.error('Maps setup is missing — pick a city instead.')
+      setError('Maps setup is missing — pick a city instead.')
       return
     }
     setLocatingMe(true)
@@ -152,7 +157,7 @@ export function Onboarding() {
       setCitySearch(loc.city)
       setPredictions([])
     } catch (err) {
-      toast.error(err.message || "Couldn't get your location")
+      setError(err.message || "Couldn't get your location")
     } finally {
       setLocatingMe(false)
     }
@@ -167,6 +172,7 @@ export function Onboarding() {
   const finish = async () => {
     if (saving) return
     if (!location) return
+    setError('')
     const ids = [...picked]
     setSaving(true)
     setInterests(ids)
@@ -180,7 +186,7 @@ export function Onboarding() {
       }
       navigate('/feed')
     } catch {
-      toast.error("Couldn't save your onboarding. Please try again.")
+      setError("Couldn't save your onboarding. Please try again.")
       setSaving(false)
     }
   }
@@ -331,6 +337,8 @@ export function Onboarding() {
           </div>
 
           <div className="mt-auto pt-10">
+            {/* inline error — right above the Done button that triggered it */}
+            <InlineAlert message={error} className="mb-3" />
             <button
               disabled={!location || saving}
               onClick={finish}

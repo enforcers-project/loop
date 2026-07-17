@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Calendar, ImagePlus, Lock, MapPin, Sparkles } from 'lucide-react'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
-import { FormField, inputClass } from '../components/primitives'
+import { FormField, InlineAlert, inputClass } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
@@ -41,6 +41,10 @@ export function CreateEvent() {
   const [skill, setSkill] = useState('All Levels')
   const [positions, setPositions] = useState('')
   const [indoor, setIndoor] = useState(false)
+
+  // Inline publish error, shown right above the Publish button instead of a
+  // bottom-of-screen toast. Success stays a toast (the page navigates away).
+  const [error, setError] = useState('')
 
   const previewEvent = {
     id: 'preview',
@@ -118,12 +122,13 @@ export function CreateEvent() {
       toast.success('Event published!')
       navigate(`/event/${created.id}`)
     },
-    onError: (err) => toast.error(err?.message || 'Could not publish — please try again.'),
+    onError: (err) => setError(err?.message || 'Could not publish — please try again.'),
   })
 
   const onPublish = () => {
+    setError('')
     if (!canPublish) {
-      toast.error(`Add a ${missing[0]} before publishing.`)
+      setError(`Add a ${missing[0]} before publishing.`)
       return
     }
     publish.mutate()
@@ -388,6 +393,9 @@ export function CreateEvent() {
               )}
             </div>
           )}
+
+          {/* inline error — right above the Publish button that triggered it */}
+          <InlineAlert message={error} />
 
           <button
             type="button"

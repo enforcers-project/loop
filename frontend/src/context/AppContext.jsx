@@ -32,6 +32,7 @@ export function AppProvider({ children }) {
   // ids while preserving whatever the user just did.
   const goingTouched = useRef(new Set())
   const followTouched = useRef(new Set())
+  const savedTouched = useRef(new Set())
   // Auth is unknown until the first me() check resolves; guards let route
   // protection wait instead of bouncing a logged-in user on refresh.
   const [authReady, setAuthReady] = useState(false)
@@ -109,6 +110,30 @@ export function AppProvider({ children }) {
     }
   }, [user?.id])
 
+  // Hydrate the saved ("bookmark") set on the same login/refresh boundary, so
+  // the SaveBtn highlight and the profile "Saved" tab survive a reload. Without
+  // this, savedIds started empty on every refresh and the Saved tab was always
+  // blank. Best-effort — api.savedEvents swallows its own errors; clears on
+  // logout below. Same touched-ref reconciliation as the going/follow sets.
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    api.savedEvents(user.id).then((ids) => {
+      if (cancelled) return
+      setSavedIds((prev) => {
+        const next = new Set(ids)
+        for (const id of savedTouched.current) {
+          if (prev.has(id)) next.add(id)
+          else next.delete(id)
+        }
+        return next
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
   // Real login: POST /auth/login, then adopt the returned user. Throws on bad
   // credentials so the Auth screen can surface the message.
   const login = useCallback(
@@ -162,6 +187,7 @@ export function AppProvider({ children }) {
     setFollowingIds(new Set())
     goingTouched.current = new Set()
     followTouched.current = new Set()
+    savedTouched.current = new Set()
   }, [])
 
   const setInterests = useCallback((ids) => setInterestsState(ids), [])
@@ -234,6 +260,7 @@ export function AppProvider({ children }) {
       if (!requireAuth()) return null
       const wasSaved = savedIds.has(id)
       const willSave = !wasSaved
+      savedTouched.current.add(id) // survive an in-flight hydration overwrite
       setSavedFlag(id, willSave) // optimistic
 
       // Mock events can't persist — leave the optimistic state and return.

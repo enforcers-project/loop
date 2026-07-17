@@ -341,7 +341,7 @@ export function Onboarding() {
                   : 'cursor-not-allowed bg-surface text-text-muted',
               )}
             >
-              {saving ? 'Saving…' : 'Finish — take me to my feed'}
+              {saving ? 'Saving…' : 'Done'}
             </button>
           </div>
         </div>

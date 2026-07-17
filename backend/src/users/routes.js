@@ -370,6 +370,50 @@ router.get('/:id/rsvps', requireAuth, async (req, res) => {
   }
 })
 
+// --- GET /api/users/:id/saved — a user's own saved events -------------------
+// Owner-only (self); cursor-paginated by saved_at desc. Powers the client's
+// saved-state hydration (the bookmark highlight after a reload) and the
+// UserProfile "Saved" tab. Each item is an EventCard, newest save first. Unlike
+// /events, it isn't restricted to upcoming/published, so an event saved from
+// search or a direct link still appears here.
+router.get('/:id/saved', requireAuth, async (req, res) => {
+  if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only view your own saved events')
+  }
+
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50)
+    const where = { userId: req.params.id }
+    if (req.query.cursor) {
+      const cur = new Date(req.query.cursor)
+      if (!isNaN(cur)) where.savedAt = { lt: cur }
+    }
+
+    const rows = await prisma.savedEvent.findMany({
+      where,
+      orderBy: { savedAt: 'desc' },
+      take: limit + 1,
+      include: { event: { include: { category: true, organizer: true, sportsDetail: true } } },
+    })
+
+    let nextCursor = null
+    if (rows.length > limit) {
+      rows.pop()
+      nextCursor = rows[rows.length - 1].savedAt.toISOString()
+    }
+
+    const data = rows.map((r) => ({
+      saved_at: r.savedAt,
+      event: toEventCard(r.event),
+    }))
+    return res.json({ data, nextCursor })
+  } catch (err) {
+    console.error('GET /api/users/:id/saved error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not load saved events')
+  }
+})
+
 // --- POST /api/users/:id/follow — follow ------------------------------------
 // Inserts follows(follower=me, followee=:id), bumps follower_count on the
 // followee and following_count on me, and appends a `follow` interaction signal.

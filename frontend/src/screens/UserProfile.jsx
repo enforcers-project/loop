@@ -121,16 +121,25 @@ export function UserProfile() {
   // an organizer-host shows the green "Sports Host" tint (per planning §5).
   const roleLabel = role === 'organizer' ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
   const [tab, setTab] = useState('Saved')
-  const [events, setEvents] = useState([])
+  const [savedEvents, setSavedEvents] = useState([])
+  const [goingEvents, setGoingEvents] = useState([])
   const [allInterests, setAllInterests] = useState([])
 
+  // Load the user's *actual* saved / going events from the backend — not a
+  // filter over the generic upcoming-events feed (which capped at 20 upcoming
+  // rows, so events saved from search / direct links / past events never showed).
   useEffect(() => {
-    api.events().then(setEvents)
     api.interests().then(setAllInterests)
-  }, [])
+    if (!user?.id) return
+    api.savedEventCards(user.id).then(setSavedEvents)
+    api.goingEventCards(user.id).then(setGoingEvents)
+  }, [user?.id])
 
-  const saved = events.filter((e) => savedIds.has(e.id))
-  const going = events.filter((e) => goingIds.has(e.id))
+  // Still gate on the live sets so an in-session unsave / cancel hides a card
+  // immediately, before a refetch — the fetched list is the source of truth,
+  // the Set is the just-now override.
+  const saved = savedEvents.filter((e) => savedIds.has(e.id))
+  const going = goingEvents.filter((e) => goingIds.has(e.id))
   const myInterests = allInterests.filter((i) => interests.includes(i.id))
   const displayName = user?.name?.trim() || 'Alex Carter'
 

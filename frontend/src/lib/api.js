@@ -519,6 +519,50 @@ export const api = {
   save: (id) => request(`/events/${id}/save`, { method: 'PUT' }),
   saveCancel: (id) => request(`/events/${id}/save`, { method: 'DELETE' }),
 
+  // The caller's saved event ids (GET /api/users/:id/saved) — used to hydrate
+  // saved state on login/refresh so the bookmark highlight survives a reload.
+  // Returns the id array; [] on any failure so a hydration hiccup never blocks
+  // the app. Mirrors api.goingEvents.
+  savedEvents: async (id) => {
+    try {
+      const res = await request(`/users/${id}/saved`)
+      return (res ?? []).map((row) => row.event?.id).filter(Boolean)
+    } catch {
+      return []
+    }
+  },
+
+  // The caller's saved events as full EventCards (GET /api/users/:id/saved),
+  // for the profile "Saved" tab. Unlike api.events() this returns the user's
+  // actual saved events (incl. past / non-feed ones), newest first. [] on
+  // failure so the tab degrades to its empty state rather than crashing.
+  savedEventCards: async (id) => {
+    try {
+      const res = await request(`/users/${id}/saved`)
+      return (res ?? [])
+        .map((row) => row.event)
+        .filter(Boolean)
+        .map(toEventCardShape)
+    } catch {
+      return []
+    }
+  },
+
+  // The caller's going events as full EventCards (GET /api/users/:id/rsvps?
+  // status=going), for the profile "Going" tab. Same rationale as
+  // savedEventCards — the true list, not a filter over the generic feed.
+  goingEventCards: async (id) => {
+    try {
+      const res = await request(`/users/${id}/rsvps?status=going`)
+      return (res ?? [])
+        .map((row) => row.event)
+        .filter(Boolean)
+        .map(toEventCardShape)
+    } catch {
+      return []
+    }
+  },
+
   // The caller's "going" event ids (GET /api/users/:id/rsvps?status=going) —
   // used to hydrate RSVP state on login/refresh so the "Going" highlight
   // survives a reload. Returns the id array; [] on any failure so a hydration

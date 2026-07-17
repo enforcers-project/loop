@@ -136,6 +136,19 @@ export function AppProvider({ children }) {
 
   const setInterests = useCallback((ids) => setInterestsState(ids), [])
 
+  // Upload a new profile picture and adopt the refreshed user so every screen
+  // reading `user.avatar` updates immediately (no /me round-trip). Throws on
+  // failure so the caller can surface a toast and stop its spinner.
+  const updateAvatar = useCallback(
+    async (file) => {
+      const self = await api.uploadAvatar(user?.id, file)
+      const clientUser = toClientUser(self)
+      adopt(clientUser)
+      return clientUser
+    },
+    [user?.id, adopt],
+  )
+
   // Persist the user's home city + coords and mirror them onto the local user
   // so any screen reading `user.homeCity/homeLat/homeLng` sees the fresh value
   // without waiting for a /me refresh.
@@ -291,6 +304,7 @@ export function AppProvider({ children }) {
         logout,
         requireAuth,
         setInterests,
+        updateAvatar,
         saveLocation,
         toggleSaved,
         toggleGoing,

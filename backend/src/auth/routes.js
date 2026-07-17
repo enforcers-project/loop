@@ -17,6 +17,7 @@ import {
   verifyToken,
   REFRESH_COOKIE,
 } from './jwt.js'
+import { DEFAULT_AVATAR_URL } from '../lib/s3.js'
 
 const router = Router()
 
@@ -83,6 +84,9 @@ router.post('/signup', async (req, res) => {
         isHost: resolvedRole === 'organizer' ? !!is_host : false,
         displayName: display_name ?? null,
         handle: handle ?? null,
+        // Every new account starts with the shared default silhouette (on S3);
+        // the user can replace it later from their profile.
+        avatarUrl: DEFAULT_AVATAR_URL,
       },
     })
 
@@ -231,7 +235,8 @@ router.post('/oauth/google', async (req, res) => {
           organizerKind: resolvedRole === 'organizer' ? (organizer_kind ?? null) : null,
           isHost: resolvedRole === 'organizer' ? !!is_host : false,
           displayName: payload.name ?? null,
-          avatarUrl: payload.picture ?? null,
+          // Prefer the Google profile photo; fall back to our default silhouette.
+          avatarUrl: payload.picture ?? DEFAULT_AVATAR_URL,
           isVerified: true, // Google-verified email
           oauthAccounts: {
             create: { provider: 'google', providerUid },

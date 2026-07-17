@@ -1,12 +1,71 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bookmark, CalendarHeart, Sparkles } from 'lucide-react'
-import { api } from '../lib/api'
+import { Bookmark, CalendarHeart, Sparkles, Camera, X } from 'lucide-react'
+import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
+import { useToast } from '../context/ToastContext'
 import { cn } from '../lib/utils'
 import { RoleBadge } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
+
+// Max upload size — S3 accepts anything, but a profile picture shouldn't be
+// huge, and rejecting client-side gives a friendlier error than a failed PUT.
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024
+
+/* Full-screen avatar viewer with a "Change picture" action. Clicking the profile
+   photo opens this; the button opens the OS file picker, uploads to S3 via the
+   presigned-URL flow, and closes on success. */
+function AvatarModal({ src, onClose, onUpload, uploading }) {
+  const fileRef = useRef(null)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 p-6 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"
+      >
+        <X size={22} />
+      </button>
+
+      <img
+        src={src}
+        alt="Profile"
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[70vh] w-auto max-w-[90vw] rounded-2xl object-contain shadow-hero"
+      />
+
+      <div className="mt-6" onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            // Reset so re-picking the same file still fires onChange.
+            e.target.value = ''
+            if (file) onUpload(file)
+          }}
+        />
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => fileRef.current?.click()}
+          className="inline-flex h-11 items-center gap-2 rounded-button bg-white px-6 text-sm font-semibold text-ink transition-transform active:scale-95 hover:opacity-90 disabled:opacity-60"
+        >
+          <Camera size={18} />
+          {uploading ? 'Uploading…' : 'Change picture'}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 /* Designed empty state — icon, heading, description and a routed CTA. Sized to
    fill the tab area so an empty profile never looks broken. */
@@ -30,7 +89,34 @@ function EmptyState({ Icon, title, description, cta, onCta }) {
 
 export function UserProfile() {
   const navigate = useNavigate()
-  const { user, role, isHost, interests, savedIds, goingIds } = useApp()
+  const { user, role, isHost, interests, savedIds, goingIds, updateAvatar } = useApp()
+  const toast = useToast()
+  const [avatarOpen, setAvatarOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const avatarSrc = user?.avatar || DEFAULT_AVATAR
+
+  // Upload a picked image to S3 (presigned-URL flow in api.uploadAvatar), then
+  // let context adopt the refreshed user so the new photo shows everywhere.
+  const onUpload = async (file) => {
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Please choose an image file.')
+      return
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      toast.error('Image is too large (max 5MB).')
+      return
+    }
+    setUploading(true)
+    try {
+      await updateAvatar(file)
+      toast.success('Profile picture updated.')
+      setAvatarOpen(false)
+    } catch (err) {
+      toast.error(err.message || 'Could not update picture. Please try again.')
+    } finally {
+      setUploading(false)
+    }
+  }
   // Two logic roles + the host capability drive the display RoleBadge:
   // an organizer-host shows the green "Sports Host" tint (per planning §5).
   const roleLabel = role === 'organizer' ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
@@ -65,11 +151,22 @@ export function UserProfile() {
         <div className="-mt-12 flex flex-col gap-5 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-end">
             <div className="relative flex-shrink-0">
-              <img
-                src={user?.avatar ?? 'https://i.pravatar.cc/150?img=1'}
-                alt=""
-                className="h-28 w-28 rounded-full bg-surface object-cover ring-4 ring-white"
-              />
+              <button
+                type="button"
+                onClick={() => setAvatarOpen(true)}
+                aria-label="View profile picture"
+                className="group block rounded-full ring-4 ring-white focus:outline-none focus-visible:ring-primary"
+              >
+                <img
+                  src={avatarSrc}
+                  alt=""
+                  className="h-28 w-28 rounded-full bg-surface object-cover"
+                />
+                {/* hover hint that the photo is editable */}
+                <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-full bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                  <Camera size={22} />
+                </span>
+              </button>
               <span className="absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border-2 border-white bg-success" />
             </div>
             <div className="pb-1">
@@ -161,6 +258,15 @@ export function UserProfile() {
           )}
         </div>
       </div>
+
+      {avatarOpen && (
+        <AvatarModal
+          src={avatarSrc}
+          uploading={uploading}
+          onUpload={onUpload}
+          onClose={() => !uploading && setAvatarOpen(false)}
+        />
+      )}
     </div>
   )
 }

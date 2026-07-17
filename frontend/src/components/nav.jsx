@@ -28,7 +28,7 @@ export function TopNav() {
 
   const linkClass = (active) =>
     cn(
-      'rounded-button px-4 py-2 text-sm transition-colors',
+      'rounded-button px-4 py-2 text-base transition-colors',
       active ? 'font-semibold text-primary' : 'font-medium text-text-secondary hover:text-ink',
     )
 

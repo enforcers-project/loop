@@ -56,8 +56,16 @@ try {
   ids.push(A.user?.id, B.user?.id)
 
   // 1) Brand-new users start at 0 / 0 — in the signup response...
-  check('A signup follower_count === 0', A.user?.follower_count === 0, `got ${A.user?.follower_count}`)
-  check('A signup following_count === 0', A.user?.following_count === 0, `got ${A.user?.following_count}`)
+  check(
+    'A signup follower_count === 0',
+    A.user?.follower_count === 0,
+    `got ${A.user?.follower_count}`,
+  )
+  check(
+    'A signup following_count === 0',
+    A.user?.following_count === 0,
+    `got ${A.user?.following_count}`,
+  )
 
   // ...and via /me (what AppContext hydrates on refresh).
   const meA0 = await call('/api/auth/me', { cookie: A.cookie })
@@ -74,24 +82,49 @@ try {
   )
 
   const meA1 = await call('/api/auth/me', { cookie: A.cookie })
-  check('A /me follower_count === 1 after being followed', meA1.json?.data?.follower_count === 1, `got ${meA1.json?.data?.follower_count}`)
+  check(
+    'A /me follower_count === 1 after being followed',
+    meA1.json?.data?.follower_count === 1,
+    `got ${meA1.json?.data?.follower_count}`,
+  )
 
   const meB1 = await call('/api/auth/me', { cookie: B.cookie })
-  check('B /me following_count === 1 after following', meB1.json?.data?.following_count === 1, `got ${meB1.json?.data?.following_count}`)
+  check(
+    'B /me following_count === 1 after following',
+    meB1.json?.data?.following_count === 1,
+    `got ${meB1.json?.data?.following_count}`,
+  )
 
   // 3) B unfollows A → both back to 0.
-  const unfollow = await call(`/api/users/${A.user.id}/follow`, { method: 'DELETE', cookie: B.cookie })
-  check('unfollow returns 2xx', unfollow.status >= 200 && unfollow.status < 300, `status ${unfollow.status}`)
+  const unfollow = await call(`/api/users/${A.user.id}/follow`, {
+    method: 'DELETE',
+    cookie: B.cookie,
+  })
+  check(
+    'unfollow returns 2xx',
+    unfollow.status >= 200 && unfollow.status < 300,
+    `status ${unfollow.status}`,
+  )
 
   const meA2 = await call('/api/auth/me', { cookie: A.cookie })
   const meB2 = await call('/api/auth/me', { cookie: B.cookie })
-  check('A /me follower_count back to 0', meA2.json?.data?.follower_count === 0, `got ${meA2.json?.data?.follower_count}`)
-  check('B /me following_count back to 0', meB2.json?.data?.following_count === 0, `got ${meB2.json?.data?.following_count}`)
+  check(
+    'A /me follower_count back to 0',
+    meA2.json?.data?.follower_count === 0,
+    `got ${meA2.json?.data?.follower_count}`,
+  )
+  check(
+    'B /me following_count back to 0',
+    meB2.json?.data?.following_count === 0,
+    `got ${meB2.json?.data?.following_count}`,
+  )
 
   console.log(`\n=== ${pass} passed, ${fail} failed ===`)
 } finally {
   for (const id of ids.filter(Boolean)) {
-    await prisma.follow.deleteMany({ where: { OR: [{ followerId: id }, { followeeId: id }] } }).catch(() => {})
+    await prisma.follow
+      .deleteMany({ where: { OR: [{ followerId: id }, { followeeId: id }] } })
+      .catch(() => {})
     await prisma.userSession.deleteMany({ where: { userId: id } }).catch(() => {})
     await prisma.interactionEvent.deleteMany({ where: { userId: id } }).catch(() => {})
     await prisma.user.delete({ where: { id } }).catch(() => {})

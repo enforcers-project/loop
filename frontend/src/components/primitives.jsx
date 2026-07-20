@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Sparkles, Bookmark, Eye, EyeOff, Check, AlertCircle, Share2 } from 'lucide-react'
-import { cn, ROLE_STYLE } from '../lib/utils'
+import { cn, formatCount, ROLE_STYLE } from '../lib/utils'
 
 /* --------------------------------------------------------------------------
    FormField — label (13px Inter 500 #6B6B76) above child
@@ -166,28 +166,28 @@ export function AlmostFullBadge({ label = 'Almost full' }) {
 }
 
 /* --------------------------------------------------------------------------
-   GoingStack — 3 overlapping avatars + "+N going"
+   GoingStack — 3 overlapping avatars + "N going". Displays the true attendee
+   count (no "+" prefix) so the number reads as social proof, not a delta.
 -------------------------------------------------------------------------- */
-export function GoingStack({ count, avatars, size = 'sm' }) {
+export function GoingStack({ count, avatars = [], size = 'sm' }) {
   const px = size === 'sm' ? 24 : 32
   const shown = avatars.slice(0, 3)
-  const extra = Math.max(0, count - shown.length)
   return (
     <div className="flex items-center gap-2">
-      <div className="flex -space-x-2">
-        {shown.map((a, i) => (
-          <img
-            key={i}
-            src={a}
-            alt=""
-            className="rounded-full border-2 border-white object-cover"
-            style={{ width: px, height: px }}
-          />
-        ))}
-      </div>
-      <span className="text-xs font-medium text-text-secondary">
-        +{extra > 0 ? extra : count} going
-      </span>
+      {shown.length > 0 && (
+        <div className="flex -space-x-2">
+          {shown.map((a, i) => (
+            <img
+              key={i}
+              src={a}
+              alt=""
+              className="rounded-full border-2 border-white object-cover"
+              style={{ width: px, height: px }}
+            />
+          ))}
+        </div>
+      )}
+      <span className="text-xs font-medium text-text-secondary">{formatCount(count)} going</span>
     </div>
   )
 }

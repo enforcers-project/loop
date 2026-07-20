@@ -2,6 +2,53 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+/**
+ * Deterministic pseudo-random number in [0, 1) from a string seed. Used to
+ * generate stable "plausible" RSVP/save counts across reseeds so the demo UI
+ * has social proof without pretending the same event has different popularity
+ * each time. Simple FNV-ish mix — good enough for jitter, not cryptography.
+ */
+function hashUnit(seed) {
+  let h = 2166136261
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  // Fold to unsigned, divide by 2^32 for [0, 1).
+  return (h >>> 0) / 4294967296
+}
+
+/**
+ * Seed a plausible RSVP + save count for a demo event. Reads capacity as the
+ * upper bound (an event never has more RSVPs than seats), then draws a fill
+ * ratio from a deterministic distribution keyed by slug + is_sports:
+ *   - sports/pickup runs → 40–85% filled (small squads, real signup pressure)
+ *   - regular events     → 25–75% filled (median event; some hot, some cold)
+ *   - free + high-cap    → wider, headliners fill deeper
+ * Saves track ~35–55% of the RSVP count (people who bookmark but haven't RSVPd).
+ */
+function seedCounts(evt) {
+  const cap = evt.capacity ?? 100
+  const r1 = hashUnit(evt.slug)
+  const r2 = hashUnit(`${evt.slug}:save`)
+  let fillLow, fillHigh
+  if (evt.isSports) {
+    fillLow = 0.4
+    fillHigh = 0.85
+  } else if (evt.isFree && cap >= 200) {
+    fillLow = 0.35
+    fillHigh = 0.8
+  } else {
+    fillLow = 0.25
+    fillHigh = 0.75
+  }
+  const fill = fillLow + r1 * (fillHigh - fillLow)
+  const rsvpCount = Math.max(1, Math.min(cap, Math.round(cap * fill)))
+  const saveRatio = 0.35 + r2 * 0.2
+  const saveCount = Math.round(rsvpCount * saveRatio)
+  return { rsvpCount, saveCount }
+}
+
 // One real organizer User (UUID PK) so the follow graph + OrganizerProfile work
 // end-to-end against the DB (the rest of the demo organizers are mock-only).
 // Fixed id keeps the profile URL stable across reseeds. password_hash null =
@@ -1360,6 +1407,11 @@ async function main() {
 
   console.log('Seeding events...')
   let eventCount = 0
+  // Pre-compute seeded RSVP counts per event so we can (a) write them onto the
+  // event rows and (b) fill the sports_details.players_signed_up counters to
+  // match — otherwise a sports card would show a full-looking crowd on the
+  // event but zero on the roster meter.
+  const seededByslug = new Map(EVENTS.map((e) => [e.slug, seedCounts(e)]))
   for (const evt of EVENTS) {
     const { category, sportsDetail, positions, ...eventData } = evt
 
@@ -1367,6 +1419,8 @@ async function main() {
     // profile has events to show; everything else stays organizer-less (synced-
     // style). organizerId is set in both create + update so reseeds stay correct.
     const organizerId = ORGANIZER_CATEGORIES.has(category) ? ORGANIZER.id : null
+
+    const { rsvpCount, saveCount } = seededByslug.get(evt.slug)
 
     const created = await prisma.event.upsert({
       where: {
@@ -1383,6 +1437,8 @@ async function main() {
         startsAt: new Date(evt.startsAt),
         endsAt: evt.endsAt ? new Date(evt.endsAt) : null,
         isSports: evt.isSports || false,
+        rsvpCount,
+        saveCount,
       },
       create: {
         ...eventData,
@@ -1395,20 +1451,30 @@ async function main() {
         startsAt: new Date(evt.startsAt),
         endsAt: evt.endsAt ? new Date(evt.endsAt) : null,
         isSports: evt.isSports || false,
+        rsvpCount,
+        saveCount,
       },
     })
 
     if (sportsDetail && positions) {
+      // Pickup runs display a "N / needed" roster meter fed by playersSignedUp.
+      // Seed it to a plausible fraction of the required roster so the sports
+      // card doesn't read as empty on first load; capped at playersNeeded to
+      // preserve the run's capacity invariant.
+      const playersSignedUp = Math.min(
+        sportsDetail.playersNeeded,
+        Math.max(1, Math.round(sportsDetail.playersNeeded * 0.65)),
+      )
       await prisma.sportsDetail.upsert({
         where: { eventId: created.id },
         update: {
           ...sportsDetail,
-          playersSignedUp: 0,
+          playersSignedUp,
         },
         create: {
           eventId: created.id,
           ...sportsDetail,
-          playersSignedUp: 0,
+          playersSignedUp,
         },
       })
 

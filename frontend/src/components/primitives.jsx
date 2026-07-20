@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Sparkles, Bookmark, Eye, EyeOff, Check, AlertCircle } from 'lucide-react'
+import { Sparkles, Bookmark, Eye, EyeOff, Check, AlertCircle, Share2 } from 'lucide-react'
 import { cn, ROLE_STYLE } from '../lib/utils'
 
 /* --------------------------------------------------------------------------
@@ -232,32 +232,82 @@ export function PageLoader({ label = 'Loading' }) {
 }
 
 /* --------------------------------------------------------------------------
+   IconButton — a round icon control for secondary hero actions (Share,
+   overflow, socials, back). Sized to sit beside the RSVP/Save buttons so the
+   CTA row stays evenly weighted. Keep it visual-only — semantic buttons
+   should still carry an aria-label via the `label` prop.
+-------------------------------------------------------------------------- */
+export function IconButton({ onClick, label, sm = false, children, className }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={cn(
+        'grid flex-shrink-0 place-items-center rounded-full border border-border-light bg-white text-text-secondary transition-colors hover:border-primary hover:text-primary',
+        sm ? 'h-10 w-10' : 'h-11 w-11',
+        className,
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+/* --------------------------------------------------------------------------
    StickyRsvpBar — a floating pill that keeps the RSVP + Save controls in
-   reach after the hero CTA scrolls off. Light surface to match the body,
-   with a small poster thumb + price so context stays with the actions.
+   reach after the hero CTA scrolls off. Shows the event's own title so the
+   user always knows what they're committing to; the price folds onto the
+   RSVP button so the number is inseparable from the action.
 
    Controlled visibility: parent passes `visible` (usually driven by an
    IntersectionObserver on the hero CTA), which fades + slides the pill in.
+   While hidden, the whole row is aria-hidden + inert so keyboard/screen-
+   reader users don't tab into invisible controls.
 -------------------------------------------------------------------------- */
-export function StickyRsvpBar({ poster, price, isFree, going, saved, onRsvp, onSave, visible }) {
+export function StickyRsvpBar({
+  title,
+  poster,
+  price,
+  isFree,
+  going,
+  saved,
+  onRsvp,
+  onSave,
+  onShare,
+  visible,
+}) {
+  const priceLabel = isFree ? 'Free' : price
+  const rsvpLabel = going ? 'Going ✓' : priceLabel ? `RSVP · ${priceLabel}` : 'RSVP'
   return (
     <div
+      aria-hidden={!visible}
+      inert={!visible ? '' : undefined}
       className={cn(
-        'fixed bottom-4 left-1/2 z-40 -translate-x-1/2 transition-all duration-300',
+        'fixed bottom-4 left-1/2 z-40 w-[min(calc(100vw-2rem),34rem)] -translate-x-1/2 transition-all duration-300',
         visible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0',
       )}
     >
       <div className="flex items-center gap-3 rounded-pill border border-border-light bg-white px-3 py-2 shadow-card-hover">
-        <img src={poster} alt="" className="h-10 w-10 flex-shrink-0 rounded-md object-cover" />
-        <div className="flex min-w-0 flex-col leading-tight pr-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
-            {isFree ? 'Free' : price}
-          </span>
-          <span className="truncate text-sm font-semibold text-ink">Reserve your spot</span>
+        <img
+          src={poster}
+          alt=""
+          className="hidden h-10 w-10 flex-shrink-0 rounded-md object-cover sm:block"
+        />
+        <div className="min-w-0 flex-1 pr-1 leading-tight">
+          <span className="block truncate text-sm font-semibold text-ink">{title}</span>
+          {priceLabel && (
+            <span className="block truncate text-xs text-text-muted">{priceLabel}</span>
+          )}
         </div>
+        {onShare && (
+          <IconButton sm onClick={onShare} label="Share event">
+            <Share2 size={16} />
+          </IconButton>
+        )}
         <SaveBtn sm saved={saved} onToggle={onSave} />
         <RSVPBtn sm variant={going ? 'outline' : 'filled'} onClick={onRsvp}>
-          {going ? 'Going' : 'RSVP'}
+          {rsvpLabel}
         </RSVPBtn>
       </div>
     </div>

@@ -57,7 +57,9 @@ export function toEventCardShape(e) {
     category: e.category?.name ?? '',
     poster: e.flyer_url ?? '',
     isFree: e.is_free,
-    price: e.is_free ? 'Free' : priceMin != null ? `$${priceMin}` : '',
+    // Fall back to 'TBA' for paid events with no price_min so the EventCard
+    // price pill never renders as an empty white chip (looks like a bug).
+    price: e.is_free ? 'Free' : priceMin != null ? `$${priceMin}` : 'TBA',
     date: e.starts_at
       ? new Date(e.starts_at).toLocaleDateString('en-US', {
           weekday: 'short',
@@ -77,9 +79,17 @@ export function toEventCardShape(e) {
       ? {
           id: e.organizer.id,
           name: e.organizer.display_name,
-          handle: e.organizer.handle,
+          // Prefix the handle with '@' so the hosted-by card and hero organizer
+          // chip render the same social-media convention as mock organizers.
+          handle: e.organizer.handle ? `@${e.organizer.handle}` : null,
           avatar: e.organizer.avatar_url,
           verified: e.organizer.is_verified,
+          // Trust signals — the hosted-by card renders followers when present,
+          // and formatCount() collapses large numbers ("8.4k"). Nullable so
+          // brand-new organizers show the row only once they have a real count.
+          followers: e.organizer.follower_count ?? null,
+          role: e.organizer.role ?? null,
+          bio: e.organizer.bio ?? null,
         }
       : e.external_organizer_name
         ? { id: null, name: e.external_organizer_name, avatar: '', verified: false }

@@ -21,18 +21,16 @@ export function CreateEvent() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const [title, setTitle] = useState('Afro Nation Rooftop')
+  const [title, setTitle] = useState('')
   const [category, setCategory] = useState('Nightlife')
-  const [date, setDate] = useState('2026-08-15')
-  const [time, setTime] = useState('21:00')
-  const [location, setLocation] = useState('Skyline Rooftop')
-  const [city, setCity] = useState('Oakland')
-  const [price, setPrice] = useState('25')
-  const [capacity, setCapacity] = useState('200')
-  const [age, setAge] = useState('21')
-  const [description, setDescription] = useState(
-    'Afro Nation takes over the Skyline Rooftop for one unforgettable night. Expect the best Afrobeats, Amapiano, and Dancehall from top DJs, panoramic views of the Bay, craft cocktails, and a vibe that runs until 2 AM. Dress to impress.',
-  )
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [location, setLocation] = useState('')
+  const [city, setCity] = useState('')
+  const [price, setPrice] = useState('')
+  const [capacity, setCapacity] = useState('')
+  const [age, setAge] = useState('')
+  const [description, setDescription] = useState('')
   const [flyer, setFlyer] = useState(null)
 
   // sports

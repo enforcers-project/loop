@@ -578,15 +578,17 @@ export const api = {
         scored.map((s) => s.popularity),
         0.85,
       )
-      return scored.sort((a, b) => b.score - a.score).map(({ e, popularity }) => {
-        // Category-matched events keep the recommender's own rationale.
-        if (!cats.size || cats.has(e.category)) return e
-        // Out-of-category: only the truly popular ones get the "Popular near
-        // you" chip; the rest render with just the category badge.
-        return popularity >= popularityCutoff
-          ? { ...e, rationale: 'Popular near you' }
-          : { ...e, rationale: undefined }
-      })
+      return scored
+        .sort((a, b) => b.score - a.score)
+        .map(({ e, popularity }) => {
+          // Category-matched events keep the recommender's own rationale.
+          if (!cats.size || cats.has(e.category)) return e
+          // Out-of-category: only the truly popular ones get the "Popular near
+          // you" chip; the rest render with just the category badge.
+          return popularity >= popularityCutoff
+            ? { ...e, rationale: 'Popular near you' }
+            : { ...e, rationale: undefined }
+        })
     })
     const arr = list ?? []
     if (arr.length > 0) return arr.map(toEventCardShape)

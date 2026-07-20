@@ -38,25 +38,46 @@ export function SocialFeed() {
   const { followingIds, toggleFollow, user } = useApp()
   const [posts, setPosts] = useState([])
   const [events, setEvents] = useState([])
+  const [storyGroups, setStoryGroups] = useState([])
 
   const near = nearForUser(user)
   const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
 
   useEffect(() => {
-    api.posts().then(setPosts)
+    // Load the feed, then hydrate each post's comments (the feed carries only a
+    // comment_count, not the comment bodies). Small N at demo scale.
+    api.feedSocial().then(async (list) => {
+      const withComments = await Promise.all(
+        (list ?? []).map(async (p) => ({
+          ...p,
+          comments: p.commentCount ? await api.postComments(p.id, { limit: 3 }) : [],
+        })),
+      )
+      setPosts(withComments)
+    })
+    api.stories().then(setStoryGroups)
     api.events({ sort: 'popular', near: nearForUser(user) }).then(setEvents)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nearKey])
 
+  // Mark a story group viewed when its ring is tapped (idempotent server-side),
+  // then flip it to the muted "all viewed" state locally.
+  const openStory = (group) => {
+    const ids = (group.stories ?? []).map((s) => s.id).filter(Boolean)
+    ids.forEach((id) => api.viewStory(id))
+    setStoryGroups((prev) =>
+      prev.map((g) => (g.author?.id === group.author?.id ? { ...g, allViewed: true } : g)),
+    )
+  }
+
   const stories = [
-    { name: 'You', avatar: 'https://i.pravatar.cc/150?img=1', isYou: true },
-    ...posts.map((p) => ({
-      name: p.organizer?.name ?? '',
-      avatar: p.organizer?.avatar ?? '',
-    })),
-    ...events.slice(0, 4).map((e) => ({
-      name: e.organizer?.name ?? '',
-      avatar: e.organizer?.avatar ?? '',
+    { name: 'You', avatar: user?.avatar ?? 'https://i.pravatar.cc/150?img=1', isYou: true },
+    ...storyGroups.map((g) => ({
+      id: g.author?.id,
+      name: g.author?.name ?? '',
+      avatar: g.author?.avatar ?? '',
+      allViewed: g.allViewed,
+      stories: g.stories,
     })),
   ]
 
@@ -123,7 +144,7 @@ export function SocialFeed() {
         <div className="w-full max-w-[600px] flex-1">
           {/* stories scroll horizontally *inside* this column */}
           <div className="rounded-card border border-border-light bg-white p-4 shadow-card">
-            <StoriesRow stories={stories} />
+            <StoriesRow stories={stories} onOpen={openStory} />
           </div>
           <div className="mt-6 space-y-6">
             {posts.map((p) => (

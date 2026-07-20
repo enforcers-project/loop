@@ -63,6 +63,36 @@
   --breakpoint-xl: 1280px;
 }
 
+/* ---------------------------------------------------------------------------
+   Dark mode — flip the design tokens when <html class="dark"> is set (see
+   ThemeContext). The tokens are the same names Tailwind's @theme utilities
+   read, so utilities like `bg-white`, `text-ink`, `bg-surface`, and
+   `border-border-light` invert automatically without per-element `dark:`
+   variants. Brand colors (primary, accent) stay put; only the neutrals move.
+--------------------------------------------------------------------------- */
+.dark {
+  --color-ink: #f5f5f7;
+  --color-white: #0b0b0f;
+  --color-surface: #17171d;
+  --color-primary-light: #2a2440;
+
+  --color-text-primary: #f5f5f7;
+  --color-text-secondary: #b7b7c1;
+  --color-text-muted: #8a8a94;
+  --color-placeholder: #6b6b76;
+
+  --color-border-light: #2a2a33;
+  --color-card-bg: #1f1f27;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 6px 28px rgba(0, 0, 0, 0.55);
+  --shadow-hero: 0 8px 40px rgba(0, 0, 0, 0.65);
+}
+.dark body {
+  background: var(--color-white);
+  color: var(--color-text-primary);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -165,4 +195,8 @@ a,
   background: linear-gradient(90deg, #efeff1 25%, #f7f7f8 37%, #efeff1 63%);
   background-size: 200% 100%;
   animation: loop-shimmer 1.4s ease-in-out infinite;
+}
+.dark .loop-skeleton {
+  background: linear-gradient(90deg, #1f1f27 25%, #2a2a33 37%, #1f1f27 63%);
+  background-size: 200% 100%;
 }

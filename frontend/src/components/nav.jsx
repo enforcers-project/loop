@@ -1,7 +1,20 @@
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Compass, Home, PlusCircle, Users, Search, User, LogOut } from 'lucide-react'
+import {
+  Compass,
+  Home,
+  PlusCircle,
+  Users,
+  Search,
+  User,
+  LogOut,
+  Settings,
+  Moon,
+  Sun,
+} from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useApp } from '../context/AppContext'
+import { useTheme } from '../context/ThemeContext'
 import { NotificationBell } from './NotificationBell'
 
 const LOGO = <img src="/logo.png" alt="Loop" className="h-7 w-auto" />
@@ -58,24 +71,7 @@ export function TopNav() {
           {isLoggedIn ? (
             <>
               <NotificationBell />
-              <button
-                onClick={() => navigate('/profile')}
-                aria-label="Your profile"
-                className="grid h-10 w-10 place-items-center rounded-full"
-              >
-                <img
-                  src={user?.avatar}
-                  alt=""
-                  className="h-9 w-9 rounded-full border border-border-light bg-surface object-cover"
-                />
-              </button>
-              <button
-                onClick={onLogout}
-                aria-label="Log out"
-                className="grid h-10 w-10 place-items-center rounded-button text-text-secondary transition-colors hover:bg-surface hover:text-ink"
-              >
-                <LogOut size={19} />
-              </button>
+              <ProfileMenu user={user} onLogout={onLogout} />
             </>
           ) : (
             <>
@@ -96,6 +92,127 @@ export function TopNav() {
         </div>
       </div>
     </header>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   ProfileMenu — avatar button that opens a dropdown with View profile,
+   Settings, a light/dark toggle, and Log out. Closes on outside click,
+   Escape, or route navigation.
+-------------------------------------------------------------------------- */
+function ProfileMenu({ user, onLogout }) {
+  const navigate = useNavigate()
+  const { theme, toggleTheme } = useTheme()
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDocClick = (e) => {
+      if (!rootRef.current?.contains(e.target)) setOpen(false)
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const go = (to) => {
+    setOpen(false)
+    navigate(to)
+  }
+
+  const itemClass =
+    'flex w-full items-center gap-3 px-3 py-2.5 text-sm text-ink transition-colors hover:bg-surface'
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Your profile menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="grid h-10 w-10 place-items-center rounded-full"
+      >
+        <img
+          src={user?.avatar}
+          alt=""
+          className="h-9 w-9 rounded-full border border-border-light bg-surface object-cover"
+        />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-12 z-40 w-56 overflow-hidden rounded-card border border-border-light bg-white shadow-card-hover"
+        >
+          <div className="border-b border-border-light px-3 py-3">
+            <div className="truncate text-sm font-semibold text-ink">
+              {user?.name || 'Your account'}
+            </div>
+            {user?.email && <div className="truncate text-xs text-text-muted">{user.email}</div>}
+          </div>
+
+          <button role="menuitem" onClick={() => go('/profile')} className={itemClass}>
+            <User size={16} className="text-text-secondary" />
+            View profile
+          </button>
+          <button role="menuitem" onClick={() => go('/settings')} className={itemClass}>
+            <Settings size={16} className="text-text-secondary" />
+            Settings
+          </button>
+
+          <button
+            role="menuitemcheckbox"
+            aria-checked={theme === 'dark'}
+            onClick={toggleTheme}
+            className={cn(itemClass, 'justify-between')}
+          >
+            <span className="flex items-center gap-3">
+              {theme === 'dark' ? (
+                <Moon size={16} className="text-text-secondary" />
+              ) : (
+                <Sun size={16} className="text-text-secondary" />
+              )}
+              {theme === 'dark' ? 'Dark mode' : 'Light mode'}
+            </span>
+            <span
+              className={cn(
+                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+                theme === 'dark' ? 'bg-primary' : 'bg-border-light',
+              )}
+              aria-hidden="true"
+            >
+              <span
+                className={cn(
+                  'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                  theme === 'dark' ? 'translate-x-4' : 'translate-x-0.5',
+                )}
+              />
+            </span>
+          </button>
+
+          <div className="border-t border-border-light">
+            <button
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onLogout()
+              }}
+              className={cn(itemClass, 'text-accent hover:bg-accent/5')}
+            >
+              <LogOut size={16} />
+              Log out
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -2,6 +2,7 @@ import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import { AppProvider, useApp } from './context/AppContext'
 import { ToastProvider } from './context/ToastContext'
 import { ModalProvider } from './context/ModalContext'
+import { ThemeProvider } from './context/ThemeContext'
 import { TopNav, BottomBar } from './components/nav'
 import { AIAssistant } from './components/AIAssistant'
 import { Landing } from './screens/Landing'
@@ -15,6 +16,7 @@ import { CreateEvent } from './screens/CreateEvent'
 import { SportsPickupDetail } from './screens/SportsPickupDetail'
 import { OrganizerProfile } from './screens/OrganizerProfile'
 import { UserProfile } from './screens/UserProfile'
+import { Settings } from './screens/Settings'
 
 /* Routes that render standalone (no app chrome / bars / assistant). */
 const BARE_ROUTES = ['/', '/auth', '/onboarding']
@@ -68,6 +70,14 @@ function Shell() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -84,12 +94,14 @@ export default function App() {
   // ToastProvider + ModalProvider wrap AppProvider so any screen can raise
   // toasts and dialogs. QueryClientProvider lives at the root in main.jsx.
   return (
-    <ToastProvider>
-      <ModalProvider>
-        <AppProvider>
-          <Shell />
-        </AppProvider>
-      </ModalProvider>
-    </ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <ModalProvider>
+          <AppProvider>
+            <Shell />
+          </AppProvider>
+        </ModalProvider>
+      </ToastProvider>
+    </ThemeProvider>
   )
 }

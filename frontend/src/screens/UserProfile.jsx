@@ -5,7 +5,7 @@ import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { cn, formatCount } from '../lib/utils'
-import { RoleBadge } from '../components/primitives'
+import { RoleBadge, Spinner } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
 
@@ -121,27 +121,54 @@ export function UserProfile() {
   // an organizer-host shows the green "Sports Host" tint (per planning §5).
   const roleLabel = role === 'organizer' ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
   const [tab, setTab] = useState('Saved')
-  const [savedEvents, setSavedEvents] = useState([])
-  const [goingEvents, setGoingEvents] = useState([])
-  const [allInterests, setAllInterests] = useState([])
+  // null while a fetch is in flight, so the tab area can show a spinner
+  // instead of empty-state cards flashing in before real data arrives.
+  const [savedEvents, setSavedEvents] = useState(null)
+  const [goingEvents, setGoingEvents] = useState(null)
+  const [allInterests, setAllInterests] = useState(null)
+
+  // Render-time reset when the profile owner changes so we don't flash the
+  // previous user's saved/going lists before the new fetch lands. See
+  // FeaturedCard for the same pattern.
+  const [fetchedUserId, setFetchedUserId] = useState('__init__')
+  if (fetchedUserId !== (user?.id ?? null)) {
+    setFetchedUserId(user?.id ?? null)
+    setAllInterests(null)
+    setSavedEvents(null)
+    setGoingEvents(null)
+  }
 
   // Load the user's *actual* saved / going events from the backend — not a
   // filter over the generic upcoming-events feed (which capped at 20 upcoming
   // rows, so events saved from search / direct links / past events never showed).
   useEffect(() => {
-    api.interests().then(setAllInterests)
+    let cancelled = false
+    api.interests().then((data) => {
+      if (!cancelled) setAllInterests(data)
+    })
     if (!user?.id) return
-    api.savedEventCards(user.id).then(setSavedEvents)
-    api.goingEventCards(user.id).then(setGoingEvents)
+    api.savedEventCards(user.id).then((data) => {
+      if (!cancelled) setSavedEvents(data)
+    })
+    api.goingEventCards(user.id).then((data) => {
+      if (!cancelled) setGoingEvents(data)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [user?.id])
 
   // Still gate on the live sets so an in-session unsave / cancel hides a card
   // immediately, before a refetch — the fetched list is the source of truth,
   // the Set is the just-now override.
-  const saved = savedEvents.filter((e) => savedIds.has(e.id))
-  const going = goingEvents.filter((e) => goingIds.has(e.id))
-  const myInterests = allInterests.filter((i) => interests.includes(i.id))
+  const saved = (savedEvents ?? []).filter((e) => savedIds.has(e.id))
+  const going = (goingEvents ?? []).filter((e) => goingIds.has(e.id))
+  const myInterests = (allInterests ?? []).filter((i) => interests.includes(i.id))
   const displayName = user?.name?.trim() || 'Alex Carter'
+  const tabLoading =
+    (tab === 'Saved' && savedEvents === null) ||
+    (tab === 'Going' && goingEvents === null) ||
+    (tab === 'Interests' && allInterests === null)
 
   return (
     <div className="pb-24 md:pb-12">
@@ -227,7 +254,11 @@ export function UserProfile() {
 
         {/* content — always tall enough that an empty tab never looks broken */}
         <div className="mt-8 min-h-[340px]">
-          {tab === 'Interests' ? (
+          {tabLoading ? (
+            <div className="flex min-h-[340px] items-center justify-center">
+              <Spinner size="lg" label="Loading" />
+            </div>
+          ) : tab === 'Interests' ? (
             myInterests.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {myInterests.map((i) => (

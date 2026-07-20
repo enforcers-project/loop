@@ -8,7 +8,14 @@ import { CatRow, SearchBar, pillBase, pillSelected, pillUnselected } from '../co
 import { cn } from '../lib/utils'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
-import { AIChip, AlmostFullBadge, GoingStack, RSVPBtn, SaveBtn } from '../components/primitives'
+import {
+  AIChip,
+  AlmostFullBadge,
+  GoingStack,
+  PageLoader,
+  RSVPBtn,
+  SaveBtn,
+} from '../components/primitives'
 
 // The page *is* the "For You" feed, so that tab is implicit. Trending/Following
 // are now toggle pills in the filter row below: selecting one swaps the feed
@@ -110,27 +117,42 @@ export function ForYouFeed() {
   const [tab, setTab] = useState('For You')
   const [cat, setCat] = useState('All')
   const [query, setQuery] = useState('')
-  const [events, setEvents] = useState([])
+  // null while a fetch is in flight (initial mount + tab change), so we can
+  // show the page-level spinner instead of an empty grid.
+  const [events, setEvents] = useState(null)
 
   // Depend only on the coord primitives (or city) so a full user-object
   // reference change from a /me refresh doesn't retrigger this effect.
   const near = nearForUser(user)
   const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
 
+  // Reset-state-on-prop-change (render-time), same pattern as FeaturedCard: when
+  // the fetch inputs change we want to blank the previous tab's list *before*
+  // the new request resolves so the spinner replaces stale rows rather than
+  // flashing them under a new heading.
+  const fetchKey = `${tab}|${interests.join(',')}|${nearKey}`
+  const [fetchedKey, setFetchedKey] = useState('')
+  if (fetchedKey !== fetchKey) {
+    setFetchedKey(fetchKey)
+    setEvents(null)
+  }
+
   useEffect(() => {
-    if (tab === 'For You') {
-      // /recommendations reads home location off the user row server-side, so
-      // no per-request geo params are needed here.
-      api.recommendations(interests).then(setEvents)
-    } else {
-      api
-        .events({ sort: tab === 'Trending' ? 'popular' : 'date', near: nearForUser(user) })
-        .then(setEvents)
+    let cancelled = false
+    const p =
+      tab === 'For You'
+        ? api.recommendations(interests)
+        : api.events({ sort: tab === 'Trending' ? 'popular' : 'date', near: nearForUser(user) })
+    p.then((data) => {
+      if (!cancelled) setEvents(data)
+    })
+    return () => {
+      cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, interests, nearKey])
 
-  const filtered = events.filter((e) => {
+  const filtered = (events ?? []).filter((e) => {
     if (cat !== 'All' && e.category !== cat) return false
     if (query.trim()) {
       const n = query.toLowerCase()
@@ -172,23 +194,29 @@ export function ForYouFeed() {
         />
       </div>
 
-      {/* featured hero — 24px below categories */}
-      {featured && (
-        <div className="mt-6">
-          <FeaturedCard event={featured} />
-        </div>
-      )}
+      {events === null ? (
+        <PageLoader label="Loading events" />
+      ) : (
+        <>
+          {/* featured hero — 24px below categories */}
+          {featured && (
+            <div className="mt-6">
+              <FeaturedCard event={featured} />
+            </div>
+          )}
 
-      {/* grid — 24px below hero */}
-      <div className="mt-6">
-        {rest.length > 0 ? (
-          <EventGrid events={rest} showRationale />
-        ) : (
-          !featured && (
-            <p className="py-16 text-center text-sm text-text-muted">No events match yet.</p>
-          )
-        )}
-      </div>
+          {/* grid — 24px below hero */}
+          <div className="mt-6">
+            {rest.length > 0 ? (
+              <EventGrid events={rest} showRationale />
+            ) : (
+              !featured && (
+                <p className="py-16 text-center text-sm text-text-muted">No events match yet.</p>
+              )
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

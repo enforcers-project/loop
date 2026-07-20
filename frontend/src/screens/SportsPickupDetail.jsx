@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Calendar, MapPin, Users } from 'lucide-react'
 import { api } from '../lib/api'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
-import { VerifiedBadge } from '../components/primitives'
+import { PageLoader, VerifiedBadge } from '../components/primitives'
 
 const SKILL_STYLE = {
   Beginner: { bg: '#F0EFFE', text: '#6D5EFC' },
@@ -34,9 +34,7 @@ export function SportsPickupDetail() {
     if (id) api.event(id).then(setEvent)
   }, [id])
 
-  if (!event || !event.isSports) {
-    return <div className="py-24 text-center text-text-muted">Loading…</div>
-  }
+  if (!event || !event.isSports) return <PageLoader label="Loading run" />
 
   const signed = (event.playersSignedUp ?? 0) + (joined ? 1 : 0)
   const needed = event.playersNeeded ?? 0

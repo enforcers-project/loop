@@ -502,6 +502,10 @@ export function PostCard({ post }) {
   const [comments, setComments] = useState(post.comments ?? [])
   const [draft, setDraft] = useState('')
   const [posting, setPosting] = useState(false)
+  // Instagram-style comment overlay — opened by the comment icon or the
+  // "View all comments" link, closed by the backdrop or the X. Scoped to the
+  // feed's PostCard; EventDetail keeps its own inline EventComments section.
+  const [commentsOpen, setCommentsOpen] = useState(false)
   const org = post.organizer
 
   const iconBtn = 'grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-surface'
@@ -607,7 +611,7 @@ export function PostCard({ post }) {
             className={cn('transition-colors', liked ? 'fill-accent text-accent' : 'text-ink')}
           />
         </button>
-        <button className={iconBtn} aria-label="Comment">
+        <button onClick={() => setCommentsOpen(true)} className={iconBtn} aria-label="Comment">
           <MessageCircle size={22} className="text-ink" />
         </button>
         <button className={iconBtn} aria-label="Share">
@@ -631,49 +635,141 @@ export function PostCard({ post }) {
         <p className="text-sm leading-relaxed text-text-primary">
           <span className="font-semibold">{org?.handle?.replace('@', '')}</span> {post.caption}
         </p>
-        {comments.map((c) => (
-          <div key={c.id} className="pt-0.5">
-            <div className="group flex items-start gap-1.5">
-              <p className="min-w-0 flex-1 text-sm leading-relaxed text-text-secondary">
-                <span className="font-semibold text-ink">{c.author}</span> {c.text}
-              </p>
-              {canDeleteComment(c) && (
-                <button
-                  onClick={() => removeComment(c)}
-                  className="mt-0.5 text-text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
-                  aria-label="Delete comment"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-            {/* Reply thread only for real (server) comments — a local echo has
-                no id the backend knows, so it can't accept a parent_comment_id. */}
-            {c.authorId != null && (
-              <CommentReplies comment={c} api={replyApi} canDelete={canDeleteComment} />
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* comment composer */}
-      <div className="flex items-center gap-2 border-t border-border-light px-4 py-2.5">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submitComment()}
-          placeholder="Add a comment…"
-          aria-label="Add a comment"
-          className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-placeholder"
-        />
+        {/* Comment entry point — mirrors Instagram's "View all N comments".
+            Tapping it (or the comment icon above) opens the overlay where the
+            full thread + composer live. */}
         <button
-          onClick={submitComment}
-          disabled={posting || !draft.trim()}
-          className="text-sm font-semibold text-primary transition-opacity disabled:opacity-40"
+          onClick={() => setCommentsOpen(true)}
+          className="text-sm text-text-muted transition-colors hover:text-text-secondary"
         >
-          Post
+          {comments.length > 0
+            ? `View ${comments.length === 1 ? '1 comment' : `all ${comments.length} comments`}`
+            : 'Add a comment…'}
         </button>
       </div>
+
+      {commentsOpen && (
+        <CommentsModal
+          onClose={() => setCommentsOpen(false)}
+          comments={comments}
+          draft={draft}
+          setDraft={setDraft}
+          posting={posting}
+          submitComment={submitComment}
+          replyApi={replyApi}
+          canDeleteComment={canDeleteComment}
+          removeComment={removeComment}
+        />
+      )}
     </article>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   CommentsModal — Instagram-style comment overlay for a feed post. Renders the
+   full comment thread (with CommentReplies) plus the add-a-comment composer.
+   The backdrop closes it (click-outside); the panel stops propagation so taps
+   inside stay open. Feed-only — EventDetail uses the inline EventComments
+   section instead.
+-------------------------------------------------------------------------- */
+function CommentsModal({
+  onClose,
+  comments,
+  draft,
+  setDraft,
+  posting,
+  submitComment,
+  replyApi,
+  canDeleteComment,
+  removeComment,
+}) {
+  // Close on Escape, matching the app's other overlays.
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Comments"
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-w-md sm:rounded-card"
+      >
+        {/* header */}
+        <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
+          <h2 className="text-base font-bold text-ink">Comments</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* scrollable thread */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {comments.length === 0 ? (
+            <p className="py-8 text-center text-sm text-text-muted">
+              No comments yet. Start the conversation.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {comments.map((c) => (
+                <div key={c.id}>
+                  <div className="group flex items-start gap-1.5">
+                    <p className="min-w-0 flex-1 text-sm leading-relaxed text-text-secondary">
+                      <span className="font-semibold text-ink">{c.author}</span> {c.text}
+                    </p>
+                    {canDeleteComment(c) && (
+                      <button
+                        onClick={() => removeComment(c)}
+                        className="mt-0.5 text-text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
+                        aria-label="Delete comment"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {/* Reply thread only for real (server) comments — a local echo
+                      has no id the backend knows, so it can't take a parentId. */}
+                  {c.authorId != null && (
+                    <CommentReplies comment={c} api={replyApi} canDelete={canDeleteComment} />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* composer — pinned to the bottom of the sheet */}
+        <div className="flex items-center gap-2 border-t border-border-light px-4 py-3">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submitComment()}
+            placeholder="Add a comment…"
+            aria-label="Add a comment"
+            autoFocus
+            className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-placeholder"
+          />
+          <button
+            onClick={submitComment}
+            disabled={posting || !draft.trim()}
+            className="text-sm font-semibold text-primary transition-opacity disabled:opacity-40"
+          >
+            Post
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

@@ -125,6 +125,7 @@ export function toEventCard(event, distanceKm = null) {
     source: event.source,
     starts_at: event.startsAt,
     ends_at: event.endsAt,
+    published_at: event.publishedAt,
     timezone: event.timezone,
     venue_name: event.venueName,
     city: event.city,

@@ -72,6 +72,7 @@ export function toEventCardShape(e) {
         })
       : '',
     isoDate: e.starts_at ?? '',
+    publishedAt: e.published_at ?? null,
     description: e.description ?? '',
     venueName: e.venue_name ?? '',
     city: e.city ?? '',

@@ -161,7 +161,7 @@ export function Auth() {
 
         <div className="rounded-card border border-border-light bg-white p-6 shadow-card sm:p-8">
           {/* current-mode heading — one operation at a time; switch via the link below */}
-          <h1 className="mb-6 text-center text-xl font-semibold text-ink">
+          <h1 className="mb-6 text-center text-2xl font-semibold text-ink">
             {mode === 'signup' ? 'Sign up' : 'Log in'}
           </h1>
 

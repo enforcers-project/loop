@@ -159,7 +159,7 @@ export function SportsPickupDetail() {
 
       {/* light body: roster */}
       <div className="mx-auto max-w-[1140px] px-5 py-10">
-        <h2 className="font-display text-xl font-bold text-ink">
+        <h2 className="font-display text-2xl font-bold text-ink">
           Roster ({claimed.length}/{needed})
         </h2>
 

@@ -213,7 +213,7 @@ export function Onboarding() {
 
       {step === 1 ? (
         <div className="flex flex-1 flex-col">
-          <h1 className="font-display text-3xl font-bold text-ink">What are you into?</h1>
+          <h1 className="font-display text-4xl font-bold text-ink">What are you into?</h1>
           <div className="mt-2 flex items-center gap-3">
             <p className="text-sm text-text-secondary">Pick at least 3 to tune your feed.</p>
             <span
@@ -264,7 +264,7 @@ export function Onboarding() {
         </div>
       ) : (
         <div className="flex flex-1 flex-col">
-          <h1 className="font-display text-3xl font-bold text-ink">Where are you?</h1>
+          <h1 className="font-display text-4xl font-bold text-ink">Where are you?</h1>
           <p className="mt-2 text-sm text-text-secondary">
             We’ll show you events happening nearby.
           </p>

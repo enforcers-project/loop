@@ -48,7 +48,7 @@ export function Settings() {
 
   return (
     <div className="loop-container py-8">
-      <h1 className="font-display text-2xl font-bold text-ink">Settings</h1>
+      <h1 className="font-display text-3xl font-bold text-ink">Settings</h1>
       <p className="mt-1 text-sm text-text-secondary">Manage your account and preferences.</p>
 
       <section className="mt-6 overflow-hidden rounded-card border border-border-light bg-white">

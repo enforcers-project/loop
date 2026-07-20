@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { cn, formatCount } from '../lib/utils'
-import { FollowBtn, RoleBadge, VerifiedBadge } from '../components/primitives'
+import { FollowBtn, PageLoader, RoleBadge, VerifiedBadge } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 
 // Normalize either shape into what the screen renders: a real backend profile
@@ -74,7 +74,7 @@ export function OrganizerProfile() {
     }
   }, [id, tab, org?.isBackend])
 
-  if (!org) return <div className="py-24 text-center text-text-muted">Loading…</div>
+  if (!org) return <PageLoader label="Loading profile" />
   // Follow state: the shared context set is the source of truth once loaded, but
   // fall back to the profile's viewer-relative is_following on first paint.
   const following = followingIds.has(org.id) || (org.isFollowing ?? false)

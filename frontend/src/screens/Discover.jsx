@@ -3,6 +3,7 @@ import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { CatRow, FilterBar, SearchBar } from '../components/rows'
 import { EventGrid } from '../components/EventCard'
+import { PageLoader } from '../components/primitives'
 
 const EMPTY_FILTERS = {
   free: false,
@@ -17,20 +18,36 @@ export function Discover() {
   const [cat, setCat] = useState('All')
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
-  const [events, setEvents] = useState([])
+  // null while the events fetch is in flight, so the screen can show a
+  // spinner instead of "0 events near you".
+  const [events, setEvents] = useState(null)
 
   const near = nearForUser(user)
   const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
 
+  // Render-time reset when the fetch input changes so stale rows don't flash
+  // before the new request resolves. See FeaturedCard for the same pattern.
+  const [fetchedKey, setFetchedKey] = useState('')
+  if (fetchedKey !== nearKey) {
+    setFetchedKey(nearKey)
+    setEvents(null)
+  }
+
   useEffect(() => {
-    api.events({ near: nearForUser(user) }).then(setEvents)
+    let cancelled = false
+    api.events({ near: nearForUser(user) }).then((data) => {
+      if (!cancelled) setEvents(data)
+    })
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nearKey])
 
   const toggle = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }))
 
   const filtered = useMemo(() => {
-    return events.filter((e) => {
+    return (events ?? []).filter((e) => {
       if (cat !== 'All' && e.category !== cat) return false
       if (filters.free && !e.isFree) return false
       if (filters.sports && !e.isSports) return false
@@ -69,17 +86,23 @@ export function Discover() {
         <FilterBar filters={filters} onToggle={toggle} />
       </div>
 
-      {/* section heading — 24px above, 20px below to the grid */}
-      <h1 className="mb-5 mt-6 font-display text-[22px] font-bold leading-tight text-ink md:text-2xl">
-        {heading}
-      </h1>
-
-      {filtered.length > 0 ? (
-        <EventGrid events={filtered} />
+      {events === null ? (
+        <PageLoader label="Loading events" />
       ) : (
-        <p className="py-16 text-center text-sm text-text-muted">
-          No events match those filters. Try clearing a few.
-        </p>
+        <>
+          {/* section heading — 24px above, 20px below to the grid */}
+          <h1 className="mb-5 mt-6 font-display text-[22px] font-bold leading-tight text-ink md:text-2xl">
+            {heading}
+          </h1>
+
+          {filtered.length > 0 ? (
+            <EventGrid events={filtered} />
+          ) : (
+            <p className="py-16 text-center text-sm text-text-muted">
+              No events match those filters. Try clearing a few.
+            </p>
+          )}
+        </>
       )}
     </div>
   )

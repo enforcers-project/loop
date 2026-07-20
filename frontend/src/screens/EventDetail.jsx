@@ -1,12 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Calendar, Clock, MapPin, Users } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { CATEGORY_COLOR } from '../lib/utils'
-import { FollowBtn, GoingStack, RSVPBtn, SaveBtn, VerifiedBadge } from '../components/primitives'
+import {
+  FollowBtn,
+  GoingStack,
+  PageLoader,
+  RSVPBtn,
+  SaveBtn,
+  StickyRsvpBar,
+  VerifiedBadge,
+} from '../components/primitives'
 import { EventCard } from '../components/EventCard'
+import { EventMap } from '../components/EventMap'
+import { OrganizerFooterCard } from '../components/OrganizerFooterCard'
 
 const DEMO_COMMENTS = [
   {
@@ -23,6 +33,15 @@ const DEMO_COMMENTS = [
   },
 ]
 
+// Format an ISO instant into "9:00 PM" for the spec sheet. Guards a missing /
+// unparseable value so the row is skipped instead of showing "Invalid Date".
+function formatTime(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
 export function EventDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -36,6 +55,12 @@ export function EventDetail() {
   // seeded from the event's denormalized rsvp_count (see OrganizerProfile's
   // follower-count pattern).
   const [goingCount, setGoingCount] = useState(0)
+
+  // Whether to show the floating StickyRsvpBar. Hidden while the hero CTA is
+  // still on screen (redundant control), revealed once it scrolls off so the
+  // user never loses the RSVP action on a long page.
+  const [pillVisible, setPillVisible] = useState(false)
+  const heroCtaRef = useRef(null)
 
   // Commenting is a member action: gate logged-out users to /auth first.
   const postComment = () => {
@@ -56,13 +81,49 @@ export function EventDetail() {
     api.related(id).then(setRelated)
   }, [id])
 
-  if (!event) {
-    return <div className="py-24 text-center text-text-muted">Loading…</div>
-  }
+  // Reveal the sticky pill only after the hero CTA scrolls out of view. Skips
+  // when the hero CTA hasn't mounted yet (initial load) so the pill doesn't
+  // flash in before the page paints.
+  useEffect(() => {
+    const el = heroCtaRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      ([entry]) => setPillVisible(!entry.isIntersecting),
+      { rootMargin: '0px 0px -40px 0px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [event])
+
+  // Precompute spec-sheet rows: only fields the current event actually has.
+  // Rendered as a dl below the About paragraph so a short-copy event still
+  // reads as a complete detail page (Date / Time / Venue / Price / Age).
+  const specs = useMemo(() => {
+    if (!event) return []
+    const rows = []
+    if (event.date) rows.push({ label: 'Date', value: event.date })
+    const time = formatTime(event.isoDate)
+    if (time) rows.push({ label: 'Time', value: time })
+    if (event.venueName) {
+      rows.push({
+        label: 'Venue',
+        value: [event.venueName, event.city].filter(Boolean).join(', '),
+      })
+    }
+    rows.push({ label: 'Price', value: event.isFree ? 'Free' : event.price || 'TBA' })
+    if (event.ageRestriction) rows.push({ label: 'Age', value: event.ageRestriction })
+    if (event.capacity != null) {
+      rows.push({ label: 'Capacity', value: `${event.capacity} people` })
+    }
+    return rows
+  }, [event])
+
+  if (!event) return <PageLoader label="Loading event" />
 
   const saved = savedIds.has(event.id)
   const going = goingIds.has(event.id)
   const following = event.organizer ? followingIds.has(event.organizer.id) : false
+  const hasAbout = Boolean(event.description?.trim())
 
   // RSVP, then keep the local count in step with the action we just took. The
   // backend moves rsvp_count only on going-transitions, so mirror that here.
@@ -76,7 +137,7 @@ export function EventDetail() {
   }
 
   return (
-    <div className="pb-24 md:pb-10">
+    <div className="pb-24 md:pb-24">
       {/* dark immersive header */}
       <div className="relative overflow-hidden bg-ink">
         <img
@@ -161,8 +222,8 @@ export function EventDetail() {
                 <span className="text-xl font-bold">{event.isFree ? 'Free' : event.price}</span>
               </div>
 
-              {/* CTAs */}
-              <div className="mt-4 flex items-center gap-3">
+              {/* CTAs — ref anchors the sticky-pill IntersectionObserver */}
+              <div ref={heroCtaRef} className="mt-4 flex items-center gap-3">
                 <RSVPBtn variant={going ? 'outline' : 'filled'} onClick={onRsvp}>
                   {going ? "You're going ✓" : 'RSVP now'}
                 </RSVPBtn>
@@ -173,92 +234,122 @@ export function EventDetail() {
         </div>
       </div>
 
-      {/* light body */}
-      <div className="mx-auto max-w-[1140px] px-5 py-10">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_320px]">
-          {/* main */}
-          <div>
-            <h2 className="font-display text-xl font-bold text-ink">About this event</h2>
+      {/* light body — single column so the map + organizer card get real
+          width; About/Comments stay capped narrow for readability. */}
+      <div className="mx-auto max-w-[1140px] space-y-8 px-5 py-10">
+        {/* About + spec sheet — always renders because Date/Venue/Price
+            guarantee ≥1 spec row, so the section never becomes an orphan
+            heading. Long-copy events show the paragraph above the specs. */}
+        <section className="mx-auto max-w-[860px]">
+          <h2 className="font-display text-xl font-bold text-ink">About this event</h2>
+          {hasAbout && (
             <p className="mt-3 leading-relaxed text-text-secondary">{event.description}</p>
-
-            {/* tags */}
-            <div className="mt-4 flex flex-wrap gap-2">
+          )}
+          {specs.length > 0 && (
+            <dl className="mt-6 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+              {specs.map((row) => (
+                <div key={row.label} className="border-b border-border-light py-2">
+                  <dt className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+                    {row.label}
+                  </dt>
+                  <dd className="mt-0.5 text-sm font-medium text-ink">{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {event.tags?.length > 0 && (
+            <div className="mt-6 flex flex-wrap gap-2">
               {event.tags.map((t) => (
                 <span
                   key={t}
-                  className="rounded-pill bg-surface px-3 py-1 text-xs font-medium text-text-secondary"
+                  className="rounded-pill border border-border-light bg-white px-3 py-1 text-xs font-medium text-text-secondary"
                 >
                   {t}
                 </span>
               ))}
             </div>
+          )}
+        </section>
 
-            {/* comments */}
-            <h2 className="mt-10 font-display text-xl font-bold text-ink">
-              Comments ({DEMO_COMMENTS.length})
-            </h2>
-            <div className="mt-4 space-y-4">
-              {DEMO_COMMENTS.map((c) => (
-                <div key={c.id} className="flex gap-3">
-                  <img src={c.avatar} alt="" className="h-9 w-9 rounded-full object-cover" />
-                  <div>
-                    <span className="text-sm font-semibold text-ink">{c.author}</span>
-                    <p className="text-sm text-text-secondary">{c.text}</p>
-                  </div>
+        {/* Full-width map — real interactive Google Maps embed, replacing the
+            broken static-OSM tile + floating pin fallback. */}
+        <EventMap
+          lat={event.lat}
+          lng={event.lng}
+          venueName={event.venueName}
+          city={event.city}
+          address={event.address}
+        />
+
+        {/* Comments — capped narrow to match About */}
+        <section className="mx-auto max-w-[860px]">
+          <h2 className="font-display text-xl font-bold text-ink">
+            Comments ({DEMO_COMMENTS.length})
+          </h2>
+          <div className="mt-4 space-y-4">
+            {DEMO_COMMENTS.map((c) => (
+              <div key={c.id} className="flex gap-3">
+                <img src={c.avatar} alt="" className="h-9 w-9 rounded-full object-cover" />
+                <div>
+                  <span className="text-sm font-semibold text-ink">{c.author}</span>
+                  <p className="text-sm text-text-secondary">{c.text}</p>
                 </div>
-              ))}
-              <div className="flex items-center gap-2 rounded-input border border-border-light px-4 py-2.5">
-                <input
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && postComment()}
-                  placeholder="Add a comment…"
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-placeholder"
-                />
-                <button onClick={postComment} className="text-sm font-semibold text-primary">
-                  Post
-                </button>
               </div>
+            ))}
+            <div className="flex items-center gap-2 rounded-input border border-border-light px-4 py-2.5">
+              <input
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && postComment()}
+                placeholder="Add a comment…"
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-placeholder"
+              />
+              <button onClick={postComment} className="text-sm font-semibold text-primary">
+                Post
+              </button>
             </div>
           </div>
+        </section>
 
-          {/* sidebar */}
-          <aside className="space-y-6">
-            {/* map card */}
-            <div className="overflow-hidden rounded-card border border-border-light shadow-card">
-              <div className="relative h-44 bg-surface">
-                <img
-                  src={`https://staticmap.openstreetmap.de/staticmap.php?center=${event.lat},${event.lng}&zoom=14&size=400x200&markers=${event.lat},${event.lng},red-pushpin`}
-                  alt="Map"
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none'
-                  }}
-                />
-                <div className="absolute inset-0 grid place-items-center">
-                  <MapPin size={28} className="text-accent" />
-                </div>
-              </div>
-              <div className="p-4">
-                <p className="text-sm font-semibold text-ink">{event.venueName}</p>
-                <p className="text-xs text-text-secondary">{event.city}</p>
-              </div>
+        {/* Organizer footer — hosted-by module with follow + link to profile */}
+        <OrganizerFooterCard organizer={event.organizer} eventCount={related.length + 1} />
+
+        {/* Related events — moved out of the sidebar into a full-width row so
+            the discovery moment is proportional to the event page. */}
+        {related.length > 0 && (
+          <section>
+            <div className="mb-4 flex items-baseline justify-between">
+              <h3 className="font-display text-lg font-bold text-ink">More events</h3>
+              {event.organizer && (
+                <Link
+                  to={`/organizer/${event.organizer.id}`}
+                  className="text-sm font-semibold text-primary hover:opacity-80"
+                >
+                  See all →
+                </Link>
+              )}
             </div>
-
-            {/* more events */}
-            {related.length > 0 && (
-              <div>
-                <h3 className="mb-3 font-display text-base font-bold text-ink">More events</h3>
-                <div className="space-y-4">
-                  {related.slice(0, 2).map((e) => (
-                    <EventCard key={e.id} event={e} />
-                  ))}
-                </div>
-              </div>
-            )}
-          </aside>
-        </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {related.slice(0, 3).map((e) => (
+                <EventCard key={e.id} event={e} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
+
+      {/* Sticky pill CTA — floats in only after the hero CTA scrolls off so
+          it's never redundant with the primary button. */}
+      <StickyRsvpBar
+        poster={event.poster}
+        price={event.price}
+        isFree={event.isFree}
+        going={going}
+        saved={saved}
+        onRsvp={onRsvp}
+        onSave={() => toggleSaved(event.id)}
+        visible={pillVisible}
+      />
     </div>
   )
 }

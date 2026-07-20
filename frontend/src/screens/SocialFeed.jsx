@@ -36,10 +36,11 @@ function SidebarCard({ title, children }) {
 
 export function SocialFeed() {
   const { followingIds, toggleFollow, user } = useApp()
-  // null while either fetch is still in flight, so we can show a page-level
-  // spinner instead of an empty feed with a lonely stories row.
+  // null while a fetch is still in flight, so we can show a page-level spinner
+  // instead of an empty feed with a lonely stories row.
   const [posts, setPosts] = useState(null)
   const [events, setEvents] = useState(null)
+  const [storyGroups, setStoryGroups] = useState([])
   const loading = posts === null || events === null
 
   const near = nearForUser(user)
@@ -52,12 +53,24 @@ export function SocialFeed() {
     setFetchedKey(nearKey)
     setPosts(null)
     setEvents(null)
+    setStoryGroups([])
   }
 
   useEffect(() => {
     let cancelled = false
-    api.posts().then((data) => {
-      if (!cancelled) setPosts(data)
+    // Load the feed, then hydrate each post's comments (the feed carries only a
+    // comment_count, not the comment bodies). Small N at demo scale.
+    api.feedSocial().then(async (list) => {
+      const withComments = await Promise.all(
+        (list ?? []).map(async (p) => ({
+          ...p,
+          comments: p.commentCount ? await api.postComments(p.id, { limit: 3 }) : [],
+        })),
+      )
+      if (!cancelled) setPosts(withComments)
+    })
+    api.stories().then((data) => {
+      if (!cancelled) setStoryGroups(data ?? [])
     })
     api.events({ sort: 'popular', near: nearForUser(user) }).then((data) => {
       if (!cancelled) setEvents(data)
@@ -68,17 +81,26 @@ export function SocialFeed() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nearKey])
 
+  // Mark a story group viewed when its ring is tapped (idempotent server-side),
+  // then flip it to the muted "all viewed" state locally.
+  const openStory = (group) => {
+    const ids = (group.stories ?? []).map((s) => s.id).filter(Boolean)
+    ids.forEach((id) => api.viewStory(id))
+    setStoryGroups((prev) =>
+      prev.map((g) => (g.author?.id === group.author?.id ? { ...g, allViewed: true } : g)),
+    )
+  }
+
   const postList = posts ?? []
   const eventList = events ?? []
   const stories = [
-    { name: 'You', avatar: 'https://i.pravatar.cc/150?img=1', isYou: true },
-    ...postList.map((p) => ({
-      name: p.organizer?.name ?? '',
-      avatar: p.organizer?.avatar ?? '',
-    })),
-    ...eventList.slice(0, 4).map((e) => ({
-      name: e.organizer?.name ?? '',
-      avatar: e.organizer?.avatar ?? '',
+    { name: 'You', avatar: user?.avatar ?? 'https://i.pravatar.cc/150?img=1', isYou: true },
+    ...storyGroups.map((g) => ({
+      id: g.author?.id,
+      name: g.author?.name ?? '',
+      avatar: g.author?.avatar ?? '',
+      allViewed: g.allViewed,
+      stories: g.stories,
     })),
   ]
 
@@ -153,7 +175,7 @@ export function SocialFeed() {
         <div className="w-full max-w-[600px] flex-1">
           {/* stories scroll horizontally *inside* this column */}
           <div className="rounded-card border border-border-light bg-white p-4 shadow-card">
-            <StoriesRow stories={stories} />
+            <StoriesRow stories={stories} onOpen={openStory} />
           </div>
           <div className="mt-6 space-y-6">
             {postList.map((p) => (

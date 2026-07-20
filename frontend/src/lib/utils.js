@@ -27,6 +27,28 @@ export function formatCount(n) {
 }
 
 /**
+ * Compact relative time ("3h", "2d", "just now") from an ISO timestamp — used
+ * by the SocialFeed PostCard where the mock previously hardcoded `timeAgo`.
+ * Returns '' for a missing/invalid input so the caller can render nothing.
+ */
+export function timeAgo(iso) {
+  if (!iso) return ''
+  const then = Date.parse(iso)
+  if (isNaN(then)) return ''
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000))
+  if (secs < 60) return 'just now'
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d`
+  const weeks = Math.floor(days / 7)
+  if (weeks < 5) return `${weeks}w`
+  return `${Math.floor(days / 30)}mo`
+}
+
+/**
  * Normalize a raw recommendation rationale into a short, intentional badge
  * label — never long enough to truncate or overflow. Falls back to the
  * event category so "Because you like …" stays specific but concise.

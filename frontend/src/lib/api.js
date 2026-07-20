@@ -229,6 +229,101 @@ export function toClientUser(u) {
   }
 }
 
+// --- Social feed mappers (SocialFeed, backend #29) --------------------------
+// The backend serializes posts/stories/comments in snake_case with a compact
+// author ref; the SocialFeed components read a flat camelCase shape (org.name,
+// post.likes, post.timeAgo, …). These adapters bridge the two, mirroring
+// toEventCardShape/toClientUser.
+
+// A backend author ref → the { id, name, handle, avatar, verified } shape the
+// PostCard/StoriesRow/comment rows render.
+function toClientAuthor(a) {
+  if (!a) return null
+  return {
+    id: a.id,
+    name: a.display_name || a.handle || 'Someone',
+    handle: a.handle ? `@${a.handle}` : '@someone',
+    avatar: a.avatar_url || DEFAULT_AVATAR,
+    verified: !!a.is_verified,
+  }
+}
+
+function toClientPost(p) {
+  if (!p) return p
+  return {
+    id: p.id,
+    organizer: toClientAuthor(p.author),
+    eventId: p.event_id ?? null,
+    kind: p.kind,
+    image: p.image_url || '',
+    caption: p.caption || '',
+    likes: p.like_count ?? 0,
+    commentCount: p.comment_count ?? 0,
+    likedByMe: !!p.liked_by_me,
+    timeAgo: p.created_at || '',
+  }
+}
+
+function toClientComment(c) {
+  if (!c) return c
+  const author = toClientAuthor(c.author)
+  return {
+    id: c.id,
+    author: author?.name ?? 'Someone',
+    authorHandle: author?.handle ?? '',
+    authorAvatar: author?.avatar ?? DEFAULT_AVATAR,
+    text: c.body,
+    parentId: c.parent_comment_id ?? null,
+    replyCount: c.reply_count ?? 0,
+    createdAt: c.created_at,
+  }
+}
+
+function toClientStoryGroup(g) {
+  if (!g) return g
+  return {
+    author: toClientAuthor(g.author),
+    allViewed: !!g.all_viewed,
+    stories: (g.stories ?? []).map((s) => ({
+      id: s.id,
+      mediaUrl: s.media_url,
+      caption: s.caption || '',
+      eventId: s.event_id ?? null,
+      viewedByMe: !!s.viewed_by_me,
+      createdAt: s.created_at,
+      expiresAt: s.expires_at,
+    })),
+  }
+}
+
+// Shape a mock seed POST (frontend/src/data/seed.js) as if it came from the
+// backend feed, so the offline fallback flows through the same toClientPost.
+function mockPostToBackend(p) {
+  const org = MOCK_ORGANIZERS.find((o) => o.id === p.organizerId) ?? null
+  return {
+    id: p.id,
+    author: org
+      ? {
+          id: org.id,
+          display_name: org.name,
+          handle: org.handle?.replace(/^@/, ''),
+          avatar_url: org.avatar,
+          is_verified: org.verified,
+        }
+      : null,
+    event_id: p.eventId ?? null,
+    kind: 'flyer',
+    image_url: p.image,
+    caption: p.caption,
+    like_count: p.likes ?? 0,
+    comment_count: p.comments?.length ?? 0,
+    liked_by_me: false,
+    // Mock posts stored a relative label ("3h"); keep it verbatim — timeAgo()
+    // only reformats real ISO timestamps and passes a non-date through as-is.
+    created_at: p.timeAgo ?? '',
+  }
+}
+
 // Build a `near` filter for api.events() from the client user. Prefers lat/lng
 // (backend does an earth_distance radius query when both are present), else
 // falls back to city ILIKE. Returns null when nothing is set.
@@ -613,16 +708,62 @@ export const api = {
     markAllRead: () => request('/notifications/read-all', { method: 'POST' }),
   },
 
-  posts: () =>
-    get('/posts', () =>
-      MOCK_POSTS.map((p) => ({
-        ...p,
-        organizer: MOCK_ORGANIZERS.find((o) => o.id === p.organizerId) ?? null,
-        event: MOCK_EVENTS.find((e) => e.id === p.eventId) ?? null,
-      })),
-    ).then((list) =>
-      (list ?? []).map((p) => (p?.event ? { ...p, event: toEventCardShape(p.event) } : p)),
-    ),
+  // Instagram-style social feed (GET /api/feed/social; backend #29). Returns
+  // client-shaped posts (see toClientPost) with live like_count + liked_by_me.
+  // Falls back to the mock catalog so the SocialFeed always renders when the
+  // backend is unreachable (matches api.posts()'s original behavior).
+  feedSocial: async ({ cursor, limit } = {}) => {
+    const qs = new URLSearchParams()
+    if (cursor) qs.set('cursor', cursor)
+    if (limit) qs.set('limit', String(limit))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    const list = await get(`/feed/social${suffix}`, () =>
+      MOCK_POSTS.map((p) => toClientPost(mockPostToBackend(p))),
+    )
+    return (list ?? []).map(toClientPost)
+  },
+
+  // Story rings grouped by author (GET /api/stories; backend #29). Each group is
+  // { author, allViewed, stories:[{ id, mediaUrl, viewedByMe, ... }] }. Falls
+  // back to an empty list (the StoriesRow still shows the "Your story" tile).
+  stories: async ({ cursor, limit } = {}) => {
+    const qs = new URLSearchParams()
+    if (cursor) qs.set('cursor', cursor)
+    if (limit) qs.set('limit', String(limit))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    const list = await get(`/stories${suffix}`, () => [])
+    return (list ?? []).map(toClientStoryGroup)
+  },
+
+  // Like / unlike a post (POST/DELETE /api/posts/:id/like; backend #29). No mock
+  // fallback — a like must genuinely persist so the count reconciles. Both throw
+  // on failure so PostCard can roll back its optimistic flip. Returns
+  // { post_id, like_count, liked }.
+  likePost: (id) => request(`/posts/${id}/like`, { method: 'POST' }),
+  unlikePost: (id) => request(`/posts/${id}/like`, { method: 'DELETE' }),
+
+  // Comments on a post (GET/POST /api/posts/:id/comments; backend #29/#30).
+  // list() is public and returns client-shaped comments; add() requires auth and
+  // returns the created comment. list() degrades to [] so the card still renders.
+  postComments: async (id, { parentId, cursor, limit } = {}) => {
+    const qs = new URLSearchParams()
+    if (parentId) qs.set('parentId', parentId)
+    if (cursor) qs.set('cursor', cursor)
+    if (limit) qs.set('limit', String(limit))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    const list = await get(`/posts/${id}/comments${suffix}`, () => [])
+    return (list ?? []).map(toClientComment)
+  },
+  addComment: (id, body, parentCommentId) =>
+    request(`/posts/${id}/comments`, {
+      method: 'POST',
+      body: { body, ...(parentCommentId ? { parent_comment_id: parentCommentId } : {}) },
+    }).then(toClientComment),
+
+  // Mark a story viewed (POST /api/stories/:id/view; backend #29). Idempotent
+  // and fire-and-forget — a failed seen-marker never blocks the UI, so we
+  // swallow errors rather than throw.
+  viewStory: (id) => request(`/stories/${id}/view`, { method: 'POST' }).catch(() => null),
 
   // Create + publish a native event. The backend contract (POST /api/events)
   // is snake_case and starts the event as a draft; a second call to

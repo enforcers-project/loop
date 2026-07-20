@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
-import { EVENTS, ORGANIZERS, CATEGORIES, INTERESTS, AVATARS, POSTS } from './data/seed.js'
+import { EVENTS, ORGANIZERS, CATEGORIES, INTERESTS, AVATARS } from './data/seed.js'
 import prisma from './lib/prisma.js'
 import adminSyncRouter from './sync/routes.js'
 import adminJobsRouter from './jobs/routes.js'
@@ -16,6 +16,7 @@ import { attachSession } from './auth/middleware.js'
 import recommendationsRouter from './recommendations/routes.js'
 import embeddingsRouter from './embeddings/routes.js'
 import preferencesRouter from './preferences/routes.js'
+import socialRouter from './social/routes.js'
 import { startScheduler } from './jobs/index.js'
 
 const app = express()
@@ -109,15 +110,10 @@ app.get('/api/organizers/:id', (req, res) => {
   ok(res, { ...org, events })
 })
 
-// --- Social feed ------------------------------------------------------------
-app.get('/api/posts', (_req, res) => {
-  const list = POSTS.map((p) => ({
-    ...p,
-    organizer: ORGANIZERS.find((o) => o.id === p.organizerId) ?? null,
-    event: EVENTS.find((e) => e.id === p.eventId) ?? null,
-  }))
-  ok(res, list)
-})
+// --- Social layer: post feed, likes, comments, stories, views (§7.5, #29/#30)
+// Prisma-backed. Mounted at /api so the router owns /feed/social, /posts,
+// /posts/:id/like, /posts/:id/comments, /stories, /stories/:id/view.
+app.use('/api', socialRouter)
 
 // --- Auth (JWT HttpOnly cookie, Prisma-backed; §7.1) ------------------------
 // signup / login / logout / refresh / me — see src/auth/routes.js.

@@ -1280,6 +1280,53 @@ const EVENTS = [
   },
 ]
 
+// Social posts + stories for the SocialFeed (work-plan #29). All authored by the
+// real ORGANIZER user (the only DB-backed account), each linked to one of its
+// events by slug so the PostCard can deep-link. Fixed ids keep reseeds
+// idempotent. like_count/comment_count start at 0 and are maintained live by
+// the /posts/:id/like + /comments endpoints.
+const POSTS = [
+  {
+    id: '00000000-0000-4000-8000-000000000101',
+    eventSlug: 'afrobeats-warehouse-night',
+    kind: 'flyer',
+    imageUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=1000&q=80',
+    caption:
+      'Warehouse doors open Saturday 🌆🔥 Amapiano x Afrobeats all night. Tap in before we cap it.',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000102',
+    eventSlug: 'afro-glow-club-night',
+    kind: 'update',
+    imageUrl: 'https://images.unsplash.com/photo-1545128485-c400e7702796?w=1000&q=80',
+    caption: 'AFRO GLOW is nearly sold out — neon paint bar restocked. Last release tickets live.',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000103',
+    eventSlug: 'rooftop-sunset-party',
+    kind: 'recap',
+    imageUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=1000&q=80',
+    caption: 'Golden hour hit different last week ☀️ Rooftop is back this Saturday. Smart casual.',
+  },
+]
+
+// Ephemeral stories (StoriesRow). expires_at is set in main() so they stay live
+// relative to the reseed time (24h window).
+const STORIES = [
+  {
+    id: '00000000-0000-4000-8000-000000000201',
+    eventSlug: 'afrobeats-warehouse-night',
+    mediaUrl: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=800&q=80',
+    caption: 'Soundcheck done ✅ tonight is going to be special',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000202',
+    eventSlug: 'afro-glow-club-night',
+    mediaUrl: 'https://images.unsplash.com/photo-1545128485-c400e7702796?w=800&q=80',
+    caption: 'Neon room is ready 💜',
+  },
+]
+
 async function main() {
   console.log('Seeding categories...')
   for (const cat of CATEGORIES) {
@@ -1387,8 +1434,46 @@ async function main() {
     eventCount++
   }
 
+  // Resolve event ids by slug (externalId) so posts/stories can link to them.
+  console.log('Seeding social posts + stories...')
+  const eventBySlug = Object.fromEntries(
+    (
+      await prisma.event.findMany({
+        where: { source: 'native' },
+        select: { id: true, externalId: true },
+      })
+    ).map((e) => [e.externalId, e.id]),
+  )
+
+  for (const p of POSTS) {
+    const data = {
+      authorId: ORGANIZER.id,
+      eventId: eventBySlug[p.eventSlug] ?? null,
+      kind: p.kind,
+      imageUrl: p.imageUrl,
+      caption: p.caption,
+    }
+    await prisma.post.upsert({ where: { id: p.id }, update: data, create: { id: p.id, ...data } })
+  }
+
+  const storyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  for (const s of STORIES) {
+    const data = {
+      authorId: ORGANIZER.id,
+      eventId: eventBySlug[s.eventSlug] ?? null,
+      mediaUrl: s.mediaUrl,
+      caption: s.caption,
+      expiresAt: storyExpiresAt,
+    }
+    await prisma.story.upsert({
+      where: { id: s.id },
+      update: data,
+      create: { id: s.id, ...data },
+    })
+  }
+
   console.log(
-    `Done — ${CATEGORIES.length} categories, ${INTERESTS.length} interests, ${eventCount} events.`,
+    `Done — ${CATEGORIES.length} categories, ${INTERESTS.length} interests, ${eventCount} events, ${POSTS.length} posts, ${STORIES.length} stories.`,
   )
 }
 

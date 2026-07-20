@@ -1,4 +1,5 @@
 import { registerJob } from './scheduler.js'
+import prisma from '../lib/prisma.js'
 import { embedPendingEvents } from '../embeddings/pipeline.js'
 import { rebuildStaleVectors } from '../preferences/builder.js'
 
@@ -52,10 +53,17 @@ registerJob('dispatch-reminders', {
   },
 })
 
+// Stories already drop out of GET /api/stories the moment expires_at passes
+// (the feed filters on expires_at > now), so this is pure housekeeping: reclaim
+// the rows once they're past their 24h TTL. StoryView rows cascade-delete with
+// the story (schema onDelete: Cascade), so no orphaned views are left behind.
 registerJob('expire-stories', {
   schedule: '0 * * * *', // every hour
   handler: async () => {
-    console.log('[job:expire-stories] stub — would mark stories older than 24h as expired')
-    return { stub: true }
+    const { count } = await prisma.story.deleteMany({
+      where: { expiresAt: { lt: new Date() } },
+    })
+    console.log(`[job:expire-stories] deleted ${count} expired stor${count === 1 ? 'y' : 'ies'}`)
+    return { deleted: count }
   },
 })

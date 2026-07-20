@@ -121,6 +121,20 @@ async function get(path, fallback) {
   }
 }
 
+// Like get(), but preserves the pagination cursor that sits beside `data` in the
+// envelope ({ data, nextCursor }). Returns { data, nextCursor }; on failure the
+// fallback supplies the data and the cursor is null (no more pages to load).
+async function getPage(path, fallback) {
+  try {
+    const res = await fetch(apiUrl(path), { credentials: 'include' })
+    if (!res.ok) throw new Error(String(res.status))
+    const json = await res.json()
+    return { data: json.data, nextCursor: json.nextCursor ?? null }
+  } catch {
+    return { data: fallback(), nextCursor: null }
+  }
+}
+
 async function post(path, body, fallback) {
   try {
     const res = await fetch(apiUrl(path), {
@@ -717,10 +731,59 @@ export const api = {
     if (cursor) qs.set('cursor', cursor)
     if (limit) qs.set('limit', String(limit))
     const suffix = qs.toString() ? `?${qs}` : ''
-    const list = await get(`/feed/social${suffix}`, () =>
-      MOCK_POSTS.map((p) => toClientPost(mockPostToBackend(p))),
+    const { data, nextCursor } = await getPage(`/feed/social${suffix}`, () =>
+      MOCK_POSTS.map((p) => mockPostToBackend(p)),
     )
-    return (list ?? []).map(toClientPost)
+    return { posts: (data ?? []).map(toClientPost), nextCursor }
+  },
+
+  // Create a post (POST /api/posts; backend #29). No mock fallback — a real post
+  // must persist. `kind` is flyer/recap/update; image is a URL string; eventId
+  // is optional. Returns the created post in client shape so the caller can
+  // prepend it to the feed without a refetch.
+  createPost: async ({ kind = 'update', imageUrl, caption, eventId } = {}) => {
+    const created = await request('/posts', {
+      method: 'POST',
+      body: {
+        kind,
+        image_url: imageUrl,
+        ...(caption ? { caption } : {}),
+        ...(eventId ? { event_id: eventId } : {}),
+      },
+    })
+    return toClientPost(created)
+  },
+
+  // Post an ephemeral story (POST /api/stories; backend #29). Expires in 24h
+  // server-side. No mock fallback. Returns the raw created row ({ id, media_url,
+  // … }); the SocialFeed refetches stories to regroup rings, so we keep it thin.
+  createStory: ({ mediaUrl, caption, eventId } = {}) =>
+    request('/stories', {
+      method: 'POST',
+      body: {
+        media_url: mediaUrl,
+        ...(caption ? { caption } : {}),
+        ...(eventId ? { event_id: eventId } : {}),
+      },
+    }),
+
+  // Upload a post/story image to S3 and return its public URL. Two steps,
+  // mirroring uploadAvatar: (1) ask for a presigned PUT URL, (2) PUT the bytes
+  // straight to S3 (they never touch our server). `kind` picks the S3 folder
+  // ('post' | 'story'). Throws on failure; the 503 { code:'NOT_CONFIGURED' }
+  // surfaces via err.status so the Composer can fall back to a URL input.
+  uploadSocialImage: async (file, kind = 'post') => {
+    const { upload_url, public_url } = await request('/uploads/social-image', {
+      method: 'POST',
+      body: { content_type: file.type, kind },
+    })
+    const put = await fetch(upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    })
+    if (!put.ok) throw new Error(`Upload failed (${put.status})`)
+    return public_url
   },
 
   // Story rings grouped by author (GET /api/stories; backend #29). Each group is

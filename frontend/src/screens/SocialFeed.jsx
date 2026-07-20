@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { PenSquare } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
-import { StoriesRow, PostCard } from '../components/social'
+import { StoriesRow, PostCard, Composer } from '../components/social'
 import { EventImage } from '../components/EventImage'
-import { FollowBtn, PageLoader, VerifiedBadge } from '../components/primitives'
+import { FollowBtn, PageLoader, Spinner, VerifiedBadge } from '../components/primitives'
 
 /* Small square event thumbnail with the branded fallback baked in. */
 function Thumb({ event, size }) {
@@ -34,13 +35,27 @@ function SidebarCard({ title, children }) {
   )
 }
 
+// Attach each post's first few comments (the feed carries only a comment_count,
+// not the bodies). Small N at demo scale.
+async function hydrateComments(list) {
+  return Promise.all(
+    (list ?? []).map(async (p) => ({
+      ...p,
+      comments: p.commentCount ? await api.postComments(p.id, { limit: 3 }) : [],
+    })),
+  )
+}
+
 export function SocialFeed() {
-  const { followingIds, toggleFollow, user } = useApp()
+  const { followingIds, toggleFollow, user, isLoggedIn, requireAuth } = useApp()
   // null while a fetch is still in flight, so we can show a page-level spinner
   // instead of an empty feed with a lonely stories row.
   const [posts, setPosts] = useState(null)
   const [events, setEvents] = useState(null)
   const [storyGroups, setStoryGroups] = useState([])
+  const [cursor, setCursor] = useState(null) // next page cursor; null = no more
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [composer, setComposer] = useState(null) // 'post' | 'story' | null
   const loading = posts === null || events === null
 
   const near = nearForUser(user)
@@ -54,20 +69,17 @@ export function SocialFeed() {
     setPosts(null)
     setEvents(null)
     setStoryGroups([])
+    setCursor(null)
   }
 
   useEffect(() => {
     let cancelled = false
-    // Load the feed, then hydrate each post's comments (the feed carries only a
-    // comment_count, not the comment bodies). Small N at demo scale.
-    api.feedSocial().then(async (list) => {
-      const withComments = await Promise.all(
-        (list ?? []).map(async (p) => ({
-          ...p,
-          comments: p.commentCount ? await api.postComments(p.id, { limit: 3 }) : [],
-        })),
-      )
-      if (!cancelled) setPosts(withComments)
+    api.feedSocial().then(async ({ posts: list, nextCursor }) => {
+      const withComments = await hydrateComments(list)
+      if (!cancelled) {
+        setPosts(withComments)
+        setCursor(nextCursor)
+      }
     })
     api.stories().then((data) => {
       if (!cancelled) setStoryGroups(data ?? [])
@@ -81,6 +93,37 @@ export function SocialFeed() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nearKey])
 
+  // Fetch the next page and append it, de-duping by id in case a new post was
+  // prepended since the cursor was captured. Guarded so overlapping scroll
+  // events don't double-fetch.
+  const loadMore = useCallback(async () => {
+    if (!cursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const { posts: list, nextCursor } = await api.feedSocial({ cursor })
+      const withComments = await hydrateComments(list)
+      setPosts((prev) => {
+        const seen = new Set((prev ?? []).map((p) => p.id))
+        return [...(prev ?? []), ...withComments.filter((p) => !seen.has(p.id))]
+      })
+      setCursor(nextCursor)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [cursor, loadingMore])
+
+  // Infinite scroll: fire loadMore when the sentinel scrolls into view.
+  const sentinelRef = useRef(null)
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !cursor) return
+    const io = new IntersectionObserver((entries) => entries[0]?.isIntersecting && loadMore(), {
+      rootMargin: '400px',
+    })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [cursor, loadMore])
+
   // Mark a story group viewed when its ring is tapped (idempotent server-side),
   // then flip it to the muted "all viewed" state locally.
   const openStory = (group) => {
@@ -89,6 +132,18 @@ export function SocialFeed() {
     setStoryGroups((prev) =>
       prev.map((g) => (g.author?.id === group.author?.id ? { ...g, allViewed: true } : g)),
     )
+  }
+
+  const openComposer = (mode) => requireAuth() && setComposer(mode)
+
+  // After a create: prepend the new post to the feed, or refetch story rings so
+  // the caller's own ring appears grouped with any existing stories.
+  const onCreated = (kind, result) => {
+    if (kind === 'post' && result) {
+      setPosts((prev) => [{ ...result, comments: [] }, ...(prev ?? [])])
+    } else if (kind === 'story') {
+      api.stories().then((data) => setStoryGroups(data ?? []))
+    }
   }
 
   const postList = posts ?? []
@@ -175,13 +230,45 @@ export function SocialFeed() {
         <div className="w-full max-w-[600px] flex-1">
           {/* stories scroll horizontally *inside* this column */}
           <div className="rounded-card border border-border-light bg-white p-4 shadow-card">
-            <StoriesRow stories={stories} onOpen={openStory} />
+            <StoriesRow
+              stories={stories}
+              onOpen={openStory}
+              onAddStory={() => openComposer('story')}
+            />
           </div>
+
+          {/* create-post prompt */}
+          <button
+            type="button"
+            onClick={() => openComposer('post')}
+            className="mt-6 flex w-full items-center gap-3 rounded-card border border-border-light bg-white px-4 py-3.5 text-left shadow-card transition-colors hover:border-primary"
+          >
+            <img
+              src={user?.avatar ?? 'https://i.pravatar.cc/150?img=1'}
+              alt=""
+              className="h-10 w-10 flex-shrink-0 rounded-full bg-surface object-cover"
+            />
+            <span className="flex-1 text-sm text-text-muted">
+              {isLoggedIn ? 'Share a flyer, recap or update…' : 'Sign in to post…'}
+            </span>
+            <PenSquare size={20} className="flex-shrink-0 text-primary" />
+          </button>
+
           <div className="mt-6 space-y-6">
             {postList.map((p) => (
               <PostCard key={p.id} post={p} />
             ))}
           </div>
+
+          {/* infinite-scroll sentinel + spinner */}
+          {cursor && (
+            <div ref={sentinelRef} className="flex justify-center py-8">
+              {loadingMore && <Spinner label="Loading more posts" />}
+            </div>
+          )}
+          {!cursor && postList.length > 0 && (
+            <p className="py-8 text-center text-sm text-text-muted">You're all caught up ✨</p>
+          )}
         </div>
 
         {/* right rail — xl only */}
@@ -227,6 +314,10 @@ export function SocialFeed() {
           </div>
         </aside>
       </div>
+
+      {composer && (
+        <Composer mode={composer} onClose={() => setComposer(null)} onCreated={onCreated} />
+      )}
     </div>
   )
 }

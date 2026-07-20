@@ -1,24 +1,269 @@
-import { useState } from 'react'
-import { Bookmark, Heart, MessageCircle, Plus, Send } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Bookmark, Heart, ImagePlus, Link2, MessageCircle, Plus, Send, X } from 'lucide-react'
 import { cn, formatCount, timeAgo } from '../lib/utils'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
-import { VerifiedBadge } from './primitives'
+import { useToast } from '../context/ToastContext'
+import { inputClass, Spinner, VerifiedBadge } from './primitives'
 import { EventImage } from './EventImage'
+
+const POST_KINDS = [
+  { value: 'flyer', label: 'Flyer' },
+  { value: 'recap', label: 'Recap' },
+  { value: 'update', label: 'Update' },
+]
+
+const ACCEPT_IMAGE = 'image/png,image/jpeg,image/webp,image/gif'
+
+/* --------------------------------------------------------------------------
+   Composer — modal to create a post or a story. The image is uploaded to S3 via
+   the presign flow (api.uploadSocialImage) and the resulting public URL is what
+   createPost/createStory persists. When uploads aren't configured (503) the
+   picker falls back to a paste-a-URL input so the feed still works in dev.
+   `onCreated(kind, result)` lets the SocialFeed prepend a new post or refetch
+   its story rings without a full reload.
+-------------------------------------------------------------------------- */
+export function Composer({ mode = 'post', onClose, onCreated }) {
+  const toast = useToast()
+  const fileRef = useRef(null)
+  const [imageUrl, setImageUrl] = useState('') // final persisted URL (S3 or pasted)
+  const [caption, setCaption] = useState('')
+  const [kind, setKind] = useState('update')
+  const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  // Flip to a paste-a-URL input when S3 uploads aren't available (503).
+  const [urlMode, setUrlMode] = useState(false)
+
+  const isStory = mode === 'story'
+  const captionMax = isStory ? 160 : 2200
+  const canSubmit = imageUrl.trim() && !busy && !uploading
+
+  // Upload the picked file to S3; on 503 (uploads unconfigured) switch to the
+  // URL-input fallback instead of erroring.
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // let re-picking the same file fire onChange again
+    if (!file) return
+    setUploading(true)
+    try {
+      const url = await api.uploadSocialImage(file, isStory ? 'story' : 'post')
+      setImageUrl(url)
+    } catch (err) {
+      if (err.status === 503) {
+        setUrlMode(true)
+        toast.info('Uploads unavailable — paste an image URL instead')
+      } else {
+        toast.error(err.message || 'Could not upload image. Please try again.')
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const submit = async () => {
+    const url = imageUrl.trim()
+    if (!url || busy) return
+    setBusy(true)
+    try {
+      if (isStory) {
+        await api.createStory({ mediaUrl: url, caption: caption.trim() || undefined })
+        toast.success('Story posted')
+        onCreated?.('story')
+      } else {
+        const post = await api.createPost({
+          kind,
+          imageUrl: url,
+          caption: caption.trim() || undefined,
+        })
+        toast.success('Post published')
+        onCreated?.('post', post)
+      }
+      onClose?.()
+    } catch (err) {
+      toast.error(
+        err.message || `Could not publish ${isStory ? 'story' : 'post'}. Please try again.`,
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      onClick={() => !busy && onClose?.()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={isStory ? 'Add to your story' : 'Create a post'}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md overflow-hidden rounded-card bg-white shadow-hero"
+      >
+        {/* header */}
+        <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
+          <h2 className="text-base font-bold text-ink">
+            {isStory ? 'Add to your story' : 'Create a post'}
+          </h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => !busy && onClose?.()}
+            className="grid h-8 w-8 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          {/* image — upload to S3, with a paste-a-URL fallback when unconfigured */}
+          <div>
+            <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
+              {isStory ? 'Story media' : 'Post image'}
+            </span>
+
+            {/* live preview once we have a URL */}
+            {imageUrl.trim() && (
+              <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-input bg-surface">
+                <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  aria-label="Remove image"
+                  onClick={() => setImageUrl('')}
+                  className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            )}
+
+            {/* picker (default) or URL input (fallback) when no image yet */}
+            {!imageUrl.trim() &&
+              (urlMode ? (
+                <input
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="https://…"
+                  type="url"
+                  autoFocus
+                  className={inputClass}
+                />
+              ) : (
+                <label
+                  className={cn(
+                    'flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-input border-2 border-dashed border-border-light bg-surface text-text-muted transition-colors hover:border-primary',
+                    uploading && 'pointer-events-none opacity-70',
+                  )}
+                >
+                  {uploading ? (
+                    <>
+                      <Spinner label="Uploading image" />
+                      <span className="text-sm">Uploading…</span>
+                    </>
+                  ) : (
+                    <>
+                      <ImagePlus size={28} />
+                      <span className="text-sm">
+                        {isStory ? 'Upload story media' : 'Upload an image'}
+                      </span>
+                    </>
+                  )}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept={ACCEPT_IMAGE}
+                    className="hidden"
+                    onChange={onPickFile}
+                  />
+                </label>
+              ))}
+
+            {/* toggle between upload and paste-a-URL */}
+            {!imageUrl.trim() && !uploading && (
+              <button
+                type="button"
+                onClick={() => setUrlMode((v) => !v)}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                <Link2 size={14} />
+                {urlMode ? 'Upload a file instead' : 'Paste an image URL instead'}
+              </button>
+            )}
+          </div>
+
+          {/* kind — posts only */}
+          {!isStory && (
+            <div className="flex gap-2">
+              {POST_KINDS.map((k) => (
+                <button
+                  key={k.value}
+                  type="button"
+                  onClick={() => setKind(k.value)}
+                  className={cn(
+                    'rounded-pill px-3.5 py-1.5 text-sm font-medium transition-colors',
+                    kind === k.value
+                      ? 'bg-primary text-white'
+                      : 'bg-surface text-text-secondary hover:bg-border-light',
+                  )}
+                >
+                  {k.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* caption */}
+          <div>
+            <textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value.slice(0, captionMax))}
+              placeholder={isStory ? 'Add a caption…' : 'Write a caption…'}
+              rows={3}
+              className={cn(inputClass, 'resize-none')}
+            />
+            <div className="mt-1 text-right text-xs text-text-muted">
+              {caption.length}/{captionMax}
+            </div>
+          </div>
+        </div>
+
+        {/* footer */}
+        <div className="flex justify-end gap-2 border-t border-border-light px-5 py-3.5">
+          <button
+            type="button"
+            onClick={() => !busy && onClose?.()}
+            className="rounded-button px-4 py-2 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!canSubmit}
+            className="rounded-button bg-primary px-5 py-2 text-sm font-semibold text-white transition-opacity active:scale-95 disabled:opacity-40"
+          >
+            {busy ? 'Posting…' : isStory ? 'Share story' : 'Post'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /* --------------------------------------------------------------------------
    StoriesRow — horizontal avatar ring row; labels allow 2 lines, w-16.
-   `onOpen(story)` fires when a ring is tapped so the parent can mark it viewed.
+   `onOpen(story)` fires when a ring is tapped so the parent can mark it viewed;
+   `onAddStory()` fires when the caller taps their own "Your story" tile.
    Rings the caller has already fully viewed render in a muted gray instead of
    the gradient.
 -------------------------------------------------------------------------- */
-export function StoriesRow({ stories, onOpen }) {
+export function StoriesRow({ stories, onOpen, onAddStory }) {
   return (
     <div className="scrollbar-hide -mx-1 flex gap-4 overflow-x-auto px-1 pb-1">
       {stories.map((s, i) => (
         <button
           key={s.id ?? i}
-          onClick={() => !s.isYou && onOpen?.(s)}
+          onClick={() => (s.isYou ? onAddStory?.() : onOpen?.(s))}
           className="flex w-[68px] flex-shrink-0 flex-col items-center gap-1.5"
           aria-label={s.isYou ? 'Add to your story' : `${s.name}'s story`}
         >

@@ -19,6 +19,12 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, fail } from '../auth/middleware.js'
 import {
+  presignPutUrl,
+  isConfigured as s3Configured,
+  isAllowedContentType,
+  bucketPublicPrefix,
+} from '../lib/s3.js'
+import {
   POST_SELECT,
   COMMENT_SELECT,
   AUTHOR_SELECT,
@@ -61,6 +67,58 @@ async function loadPost(id) {
     select: { id: true, authorId: true, eventId: true },
   })
 }
+
+/**
+ * Validate a post/story image URL. Accepts our own S3 bucket (uploaded via the
+ * presign flow) OR an https link (users may paste an external image when S3
+ * isn't configured — the URL-input fallback). Rejects anything else so we never
+ * store javascript:/data: or plain-http URLs that would break or be unsafe in
+ * an <img>. Returns true when acceptable.
+ */
+function isAcceptableImageUrl(url) {
+  if (typeof url !== 'string' || !url) return false
+  const prefix = bucketPublicPrefix()
+  if (prefix && url.startsWith(prefix)) return true
+  return /^https:\/\//i.test(url)
+}
+
+// --- POST /api/uploads/social-image — presigned PUT for post/story media -----
+// Owner-scoped (keyed under the caller's id). Body: { content_type, kind } where
+// kind is 'post' | 'story' (chooses the S3 folder). Returns a short-lived
+// presigned PUT URL the browser uploads to directly (bytes never touch this
+// server) plus the stable public URL to send back in image_url / media_url.
+// 503s when S3 isn't configured so the client can fall back to a URL input.
+router.post('/uploads/social-image', requireAuth, async (req, res) => {
+  if (!s3Configured()) {
+    return fail(res, 503, 'NOT_CONFIGURED', 'Image uploads are not configured')
+  }
+
+  const contentType = req.body?.content_type
+  if (!isAllowedContentType(contentType)) {
+    return fail(
+      res,
+      422,
+      'VALIDATION_ERROR',
+      'content_type must be a JPEG, PNG, WebP, or GIF image',
+    )
+  }
+  const folder = req.body?.kind === 'story' ? 'stories' : 'posts'
+
+  try {
+    const { uploadUrl, publicUrl, key } = await presignPutUrl({
+      userId: req.user.id,
+      contentType,
+      folder,
+      stamp: Date.now(),
+    })
+    return res.json({
+      data: { upload_url: uploadUrl, public_url: publicUrl, key, content_type: contentType },
+    })
+  } catch (err) {
+    console.error('POST /api/uploads/social-image error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not start upload')
+  }
+})
 
 // --- GET /api/feed/social — paginated post feed ------------------------------
 // Newest first, cursor on created_at. `liked_by_me` is resolved for the
@@ -118,6 +176,9 @@ router.post('/posts', requireAuth, async (req, res) => {
   }
   if (!image_url || typeof image_url !== 'string') {
     return fail(res, 422, 'VALIDATION_ERROR', 'image_url is required')
+  }
+  if (!isAcceptableImageUrl(image_url)) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'image_url must be an https image URL')
   }
   if (event_id != null && !isUuid(event_id)) {
     return fail(res, 422, 'VALIDATION_ERROR', 'event_id must be a valid id')
@@ -425,6 +486,9 @@ router.post('/stories', requireAuth, async (req, res) => {
 
   if (!media_url || typeof media_url !== 'string') {
     return fail(res, 422, 'VALIDATION_ERROR', 'media_url is required')
+  }
+  if (!isAcceptableImageUrl(media_url)) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'media_url must be an https image URL')
   }
   if (caption != null && (typeof caption !== 'string' || caption.length > 160)) {
     return fail(res, 422, 'VALIDATION_ERROR', 'caption must be ≤160 characters')

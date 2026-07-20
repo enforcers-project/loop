@@ -692,7 +692,7 @@ function CommentsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
@@ -758,7 +758,6 @@ function CommentsModal({
             onKeyDown={(e) => e.key === 'Enter' && submitComment()}
             placeholder="Add a comment…"
             aria-label="Add a comment"
-            autoFocus
             className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-placeholder"
           />
           <button

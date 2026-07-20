@@ -212,6 +212,19 @@ export function AppProvider({ children }) {
     [user?.id, adopt],
   )
 
+  // Edit name / handle / bio and adopt the refreshed user so the profile header
+  // and nav update immediately. Throws on failure (e.g. 409 handle taken) so the
+  // caller can surface a toast and keep the form open.
+  const updateProfile = useCallback(
+    async (fields) => {
+      const self = await api.updateProfile(user?.id, fields)
+      const clientUser = toClientUser(self)
+      adopt(clientUser)
+      return clientUser
+    },
+    [user?.id, adopt],
+  )
+
   // Persist the user's home city + coords and mirror them onto the local user
   // so any screen reading `user.homeCity/homeLat/homeLng` sees the fresh value
   // without waiting for a /me refresh.
@@ -384,6 +397,7 @@ export function AppProvider({ children }) {
         requireAuth,
         setInterests,
         updateAvatar,
+        updateProfile,
         saveLocation,
         toggleSaved,
         toggleGoing,

@@ -247,6 +247,10 @@ export function toClientUser(u) {
     email: u.email,
     name: u.display_name || u.email?.split('@')[0] || 'You',
     handle: u.handle ? `@${u.handle}` : `@${u.email?.split('@')[0] || 'you'}`,
+    // Raw stored handle (no leading @, may be null) — the edit form needs the
+    // real value to prefill, distinct from the always-present display `handle`.
+    handleRaw: u.handle ?? null,
+    bio: u.bio ?? '',
     avatar: u.avatar_url || DEFAULT_AVATAR,
     role: u.role,
     isHost: u.is_host,
@@ -485,6 +489,12 @@ export const api = {
           pending: true,
         }))
       : Promise.resolve({ interest_ids: interestIds, pending: true }),
+
+  // Edit the caller's own profile (PATCH /users/:id). Sends only the provided
+  // fields; returns the refreshed SelfUser. No mock fallback — a save must
+  // genuinely persist. Throws with .status so the caller can surface a 409
+  // (handle taken) or validation message.
+  updateProfile: (userId, fields) => request(`/users/${userId}`, { method: 'PATCH', body: fields }),
 
   // Commit the user's home location (PUT /users/:id/location). Feeds the
   // recommender's geo pre-filter — with lat/lng it does a real radius search

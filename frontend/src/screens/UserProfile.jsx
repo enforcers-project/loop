@@ -5,9 +5,14 @@ import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { cn, formatCount, pluralize } from '../lib/utils'
-import { RoleBadge, Spinner } from '../components/primitives'
+import { inputClass, RoleBadge, Spinner } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
+
+const NAME_MAX = 120
+const BIO_MAX = 500
+// Mirror the backend/signup handle rule so the client validates before the PATCH.
+const HANDLE_RE = /^[a-zA-Z0-9_]{3,30}$/
 
 // Max upload size — S3 accepts anything, but a profile picture shouldn't be
 // huge, and rejecting client-side gives a friendlier error than a failed PUT.
@@ -67,6 +72,200 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
   )
 }
 
+/* Edit-profile modal — avatar, name, handle and bio. Prefills from the current
+   user, validates the handle client-side (mirrors the backend rule) so an
+   obvious typo doesn't round-trip, and PATCHes via updateProfile. A 409 from a
+   taken handle is surfaced on the handle field so the user can fix it in place.
+   The avatar row reuses the parent's S3 upload flow (onUpload/uploading) — the
+   same path as the full-screen AvatarModal — and persists immediately on pick,
+   independent of the Save button (which only commits the text fields). */
+function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSave }) {
+  const fileRef = useRef(null)
+  const [name, setName] = useState(user?.name ?? '')
+  // handleRaw is the stored handle (no @, may be null); fall back to empty.
+  const [handle, setHandle] = useState(user?.handleRaw ?? '')
+  const [bio, setBio] = useState(user?.bio ?? '')
+  const [busy, setBusy] = useState(false)
+  const [handleError, setHandleError] = useState('')
+
+  const submit = async () => {
+    if (busy) return
+    const cleanHandle = handle.trim()
+    if (cleanHandle && !HANDLE_RE.test(cleanHandle)) {
+      setHandleError('3–30 characters — letters, numbers and _ only.')
+      return
+    }
+    setHandleError('')
+    setBusy(true)
+    try {
+      // Send the stored handle without a leading @; empty clears it.
+      await onSave({ display_name: name.trim(), handle: cleanHandle, bio: bio.trim() })
+      onClose?.()
+    } catch (err) {
+      if (err.status === 409) {
+        setHandleError('That handle is already taken.')
+      } else {
+        // Non-handle failures bubble as a toast from the caller; keep the form open.
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      onClick={() => !busy && !uploading && onClose?.()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit profile"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md overflow-hidden rounded-card bg-white shadow-hero"
+      >
+        {/* header */}
+        <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
+          <h2 className="text-base font-bold text-ink">Edit profile</h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => !busy && !uploading && onClose?.()}
+            className="grid h-8 w-8 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          {/* avatar — reuses the parent's S3 upload; persists on pick */}
+          <div className="flex items-center gap-4">
+            <div className="relative flex-shrink-0">
+              <img
+                src={avatarSrc}
+                alt=""
+                className="h-16 w-16 rounded-full bg-surface object-cover"
+              />
+              {uploading && (
+                <span className="absolute inset-0 grid place-items-center rounded-full bg-black/40">
+                  <Spinner label="Uploading picture" />
+                </span>
+              )}
+            </div>
+            <div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  // Reset so re-picking the same file still fires onChange.
+                  e.target.value = ''
+                  if (file) onUpload(file)
+                }}
+              />
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => fileRef.current?.click()}
+                className="inline-flex h-9 items-center gap-2 rounded-button border border-border-light bg-white px-4 text-sm font-semibold text-ink transition-colors hover:border-text-muted disabled:opacity-60"
+              >
+                <Camera size={16} />
+                {uploading ? 'Uploading…' : 'Change picture'}
+              </button>
+              <p className="mt-1 text-xs text-text-muted">PNG, JPG, WebP or GIF · max 5MB</p>
+            </div>
+          </div>
+
+          {/* display name */}
+          <div>
+            <label
+              htmlFor="edit-name"
+              className="mb-1.5 block text-[13px] font-medium text-text-secondary"
+            >
+              Display name
+            </label>
+            <input
+              id="edit-name"
+              value={name}
+              onChange={(e) => setName(e.target.value.slice(0, NAME_MAX))}
+              placeholder="Your name"
+              className={inputClass}
+            />
+          </div>
+
+          {/* handle */}
+          <div>
+            <label
+              htmlFor="edit-handle"
+              className="mb-1.5 block text-[13px] font-medium text-text-secondary"
+            >
+              Handle
+            </label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-text-muted">
+                @
+              </span>
+              <input
+                id="edit-handle"
+                value={handle}
+                onChange={(e) => {
+                  setHandle(e.target.value.replace(/^@/, '').slice(0, 30))
+                  if (handleError) setHandleError('')
+                }}
+                placeholder="username"
+                className={cn(inputClass, 'pl-7', handleError && 'border-accent')}
+              />
+            </div>
+            {handleError && <p className="mt-1 text-xs text-accent">{handleError}</p>}
+          </div>
+
+          {/* bio */}
+          <div>
+            <label
+              htmlFor="edit-bio"
+              className="mb-1.5 block text-[13px] font-medium text-text-secondary"
+            >
+              Bio
+            </label>
+            <textarea
+              id="edit-bio"
+              value={bio}
+              onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX))}
+              placeholder="Tell people a little about yourself…"
+              rows={3}
+              className={cn(inputClass, 'resize-none')}
+            />
+            <div className="mt-1 text-right text-xs text-text-muted">
+              {bio.length}/{BIO_MAX}
+            </div>
+          </div>
+        </div>
+
+        {/* footer */}
+        <div className="flex justify-end gap-2 border-t border-border-light px-5 py-3.5">
+          <button
+            type="button"
+            onClick={() => !busy && !uploading && onClose?.()}
+            className="rounded-button px-4 py-2 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={busy || uploading}
+            className="rounded-button bg-primary px-5 py-2 text-sm font-semibold text-white transition-opacity active:scale-95 disabled:opacity-40"
+          >
+            {busy ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* Designed empty state — icon, heading, description and a routed CTA. Sized to
    fill the tab area so an empty profile never looks broken. */
 function EmptyState({ Icon, title, description, cta, onCta }) {
@@ -89,11 +288,27 @@ function EmptyState({ Icon, title, description, cta, onCta }) {
 
 export function UserProfile() {
   const navigate = useNavigate()
-  const { user, role, isHost, interests, savedIds, goingIds, updateAvatar } = useApp()
+  const { user, role, isHost, interests, savedIds, goingIds, updateAvatar, updateProfile } =
+    useApp()
   const toast = useToast()
   const [avatarOpen, setAvatarOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const avatarSrc = user?.avatar || DEFAULT_AVATAR
+
+  // Persist a profile edit. Rethrows so the modal can keep itself open and pin a
+  // 409 (handle taken) on the field; other failures surface as a toast here.
+  const onSaveProfile = async (fields) => {
+    try {
+      await updateProfile(fields)
+      toast.success('Profile updated.')
+    } catch (err) {
+      if (err.status !== 409) {
+        toast.error(err.message || 'Could not save profile. Please try again.')
+      }
+      throw err
+    }
+  }
 
   // Upload a picked image to S3 (presigned-URL flow in api.uploadAvatar), then
   // let context adopt the refreshed user so the new photo shows everywhere.
@@ -227,9 +442,18 @@ export function UserProfile() {
                   {pluralize(user?.followers ?? 0, 'follower')}
                 </span>
               </div>
+              {user?.bio && (
+                <p className="mt-3 max-w-lg text-sm leading-relaxed text-text-primary">
+                  {user.bio}
+                </p>
+              )}
             </div>
           </div>
-          <button className="inline-flex h-11 flex-shrink-0 items-center rounded-button border border-border-light bg-white px-5 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted hover:text-ink">
+          <button
+            type="button"
+            onClick={() => setEditOpen(true)}
+            className="inline-flex h-11 flex-shrink-0 items-center rounded-button border border-border-light bg-white px-5 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted hover:text-ink"
+          >
             Edit profile
           </button>
         </div>
@@ -311,6 +535,17 @@ export function UserProfile() {
           uploading={uploading}
           onUpload={onUpload}
           onClose={() => !uploading && setAvatarOpen(false)}
+        />
+      )}
+
+      {editOpen && (
+        <EditProfileModal
+          user={user}
+          avatarSrc={avatarSrc}
+          onUpload={onUpload}
+          uploading={uploading}
+          onSave={onSaveProfile}
+          onClose={() => setEditOpen(false)}
         />
       )}
     </div>

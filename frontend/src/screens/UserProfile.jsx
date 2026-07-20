@@ -72,11 +72,15 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
   )
 }
 
-/* Edit-profile modal — name, handle and bio. Prefills from the current user,
-   validates the handle client-side (mirrors the backend rule) so an obvious
-   typo doesn't round-trip, and PATCHes via updateProfile. A 409 from a taken
-   handle is surfaced on the handle field so the user can fix it in place. */
-function EditProfileModal({ user, onClose, onSave }) {
+/* Edit-profile modal — avatar, name, handle and bio. Prefills from the current
+   user, validates the handle client-side (mirrors the backend rule) so an
+   obvious typo doesn't round-trip, and PATCHes via updateProfile. A 409 from a
+   taken handle is surfaced on the handle field so the user can fix it in place.
+   The avatar row reuses the parent's S3 upload flow (onUpload/uploading) — the
+   same path as the full-screen AvatarModal — and persists immediately on pick,
+   independent of the Save button (which only commits the text fields). */
+function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSave }) {
+  const fileRef = useRef(null)
   const [name, setName] = useState(user?.name ?? '')
   // handleRaw is the stored handle (no @, may be null); fall back to empty.
   const [handle, setHandle] = useState(user?.handleRaw ?? '')
@@ -111,7 +115,7 @@ function EditProfileModal({ user, onClose, onSave }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onClick={() => !busy && onClose?.()}
+      onClick={() => !busy && !uploading && onClose?.()}
     >
       <div
         role="dialog"
@@ -126,7 +130,7 @@ function EditProfileModal({ user, onClose, onSave }) {
           <button
             type="button"
             aria-label="Close"
-            onClick={() => !busy && onClose?.()}
+            onClick={() => !busy && !uploading && onClose?.()}
             className="grid h-8 w-8 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface"
           >
             <X size={20} />
@@ -134,6 +138,46 @@ function EditProfileModal({ user, onClose, onSave }) {
         </div>
 
         <div className="space-y-4 px-5 py-4">
+          {/* avatar — reuses the parent's S3 upload; persists on pick */}
+          <div className="flex items-center gap-4">
+            <div className="relative flex-shrink-0">
+              <img
+                src={avatarSrc}
+                alt=""
+                className="h-16 w-16 rounded-full bg-surface object-cover"
+              />
+              {uploading && (
+                <span className="absolute inset-0 grid place-items-center rounded-full bg-black/40">
+                  <Spinner label="Uploading picture" />
+                </span>
+              )}
+            </div>
+            <div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  // Reset so re-picking the same file still fires onChange.
+                  e.target.value = ''
+                  if (file) onUpload(file)
+                }}
+              />
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => fileRef.current?.click()}
+                className="inline-flex h-9 items-center gap-2 rounded-button border border-border-light bg-white px-4 text-sm font-semibold text-ink transition-colors hover:border-text-muted disabled:opacity-60"
+              >
+                <Camera size={16} />
+                {uploading ? 'Uploading…' : 'Change picture'}
+              </button>
+              <p className="mt-1 text-xs text-text-muted">PNG, JPG, WebP or GIF · max 5MB</p>
+            </div>
+          </div>
+
           {/* display name */}
           <div>
             <label
@@ -203,7 +247,7 @@ function EditProfileModal({ user, onClose, onSave }) {
         <div className="flex justify-end gap-2 border-t border-border-light px-5 py-3.5">
           <button
             type="button"
-            onClick={() => !busy && onClose?.()}
+            onClick={() => !busy && !uploading && onClose?.()}
             className="rounded-button px-4 py-2 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface"
           >
             Cancel
@@ -211,7 +255,7 @@ function EditProfileModal({ user, onClose, onSave }) {
           <button
             type="button"
             onClick={submit}
-            disabled={busy}
+            disabled={busy || uploading}
             className="rounded-button bg-primary px-5 py-2 text-sm font-semibold text-white transition-opacity active:scale-95 disabled:opacity-40"
           >
             {busy ? 'Saving…' : 'Save'}
@@ -495,7 +539,14 @@ export function UserProfile() {
       )}
 
       {editOpen && (
-        <EditProfileModal user={user} onSave={onSaveProfile} onClose={() => setEditOpen(false)} />
+        <EditProfileModal
+          user={user}
+          avatarSrc={avatarSrc}
+          onUpload={onUpload}
+          uploading={uploading}
+          onSave={onSaveProfile}
+          onClose={() => setEditOpen(false)}
+        />
       )}
     </div>
   )

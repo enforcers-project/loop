@@ -111,7 +111,7 @@ export function OrganizerProfile() {
             />
             <div className="pb-1">
               <div className="flex items-center gap-2">
-                <h1 className="font-display text-2xl font-bold text-ink">{org.name}</h1>
+                <h1 className="font-display text-3xl font-bold text-ink">{org.name}</h1>
                 {org.verified && <VerifiedBadge size={20} />}
                 <RoleBadge role={org.role} />
               </div>

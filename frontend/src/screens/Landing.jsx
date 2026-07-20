@@ -165,7 +165,7 @@ export function Landing() {
 
         {/* single CTA */}
         <div className="mt-12 text-center">
-          <h2 className="font-display text-3xl font-bold text-ink">
+          <h2 className="font-display text-4xl font-bold text-ink">
             Your city is happening. Don’t miss it.
           </h2>
           <Link

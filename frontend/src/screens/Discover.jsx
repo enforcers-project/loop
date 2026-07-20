@@ -91,7 +91,7 @@ export function Discover() {
       ) : (
         <>
           {/* section heading — 24px above, 20px below to the grid */}
-          <h1 className="mb-5 mt-6 font-display text-[22px] font-bold leading-tight text-ink md:text-2xl">
+          <h1 className="mb-5 mt-6 font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
             {heading}
           </h1>
 

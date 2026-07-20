@@ -207,7 +207,7 @@ export function UserProfile() {
             </div>
             <div className="pb-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="font-display text-2xl font-bold text-ink">{displayName}</h1>
+                <h1 className="font-display text-3xl font-bold text-ink">{displayName}</h1>
                 <RoleBadge role={roleLabel} />
               </div>
               <p className="mt-1 text-sm font-medium text-text-secondary">

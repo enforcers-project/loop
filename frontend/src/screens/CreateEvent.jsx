@@ -134,7 +134,7 @@ export function CreateEvent() {
 
   return (
     <div className="mx-auto max-w-[1240px] px-5 pb-24 pt-6 md:pb-10">
-      <h1 className="font-display text-2xl font-bold text-ink">Create an event</h1>
+      <h1 className="font-display text-3xl font-bold text-ink">Create an event</h1>
       <p className="mt-1 text-sm text-text-secondary">
         Fill in the details — your live preview updates as you type.
       </p>

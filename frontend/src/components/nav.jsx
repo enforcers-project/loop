@@ -155,9 +155,7 @@ function ProfileMenu({ user, onLogout }) {
             <div className="truncate text-sm font-semibold text-ink">
               {user?.name || 'Your account'}
             </div>
-            {user?.email && (
-              <div className="truncate text-xs text-text-muted">{user.email}</div>
-            )}
+            {user?.email && <div className="truncate text-xs text-text-muted">{user.email}</div>}
           </div>
 
           <button role="menuitem" onClick={() => go('/profile')} className={itemClass}>

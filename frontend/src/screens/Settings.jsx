@@ -10,9 +10,7 @@ function Row({ title, description, children }) {
     <div className="flex items-center justify-between gap-4 border-b border-border-light px-5 py-4 last:border-b-0">
       <div className="min-w-0">
         <div className="text-sm font-semibold text-ink">{title}</div>
-        {description && (
-          <div className="mt-0.5 text-xs text-text-secondary">{description}</div>
-        )}
+        {description && <div className="mt-0.5 text-xs text-text-secondary">{description}</div>}
       </div>
       <div className="flex-shrink-0">{children}</div>
     </div>
@@ -54,10 +52,7 @@ export function Settings() {
       <p className="mt-1 text-sm text-text-secondary">Manage your account and preferences.</p>
 
       <section className="mt-6 overflow-hidden rounded-card border border-border-light bg-white">
-        <Row
-          title="Profile"
-          description={user?.email || 'View and edit your public profile.'}
-        >
+        <Row title="Profile" description={user?.email || 'View and edit your public profile.'}>
           <button
             onClick={() => navigate('/profile')}
             className="inline-flex h-9 items-center gap-1.5 rounded-button border border-border-light bg-white px-3 text-sm font-medium text-text-secondary hover:border-text-muted"

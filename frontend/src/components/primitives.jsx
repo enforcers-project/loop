@@ -193,6 +193,78 @@ export function GoingStack({ count, avatars, size = 'sm' }) {
 }
 
 /* --------------------------------------------------------------------------
+   Spinner — the app's canonical loading indicator. A brand-violet ring with a
+   transparent quarter, rotated by Tailwind's animate-spin. Sized in px so it
+   drops into buttons (sm), section placeholders (md), or full-screen loaders
+   (lg) without extra math.
+-------------------------------------------------------------------------- */
+export function Spinner({ size = 'md', className, label = 'Loading' }) {
+  const px = size === 'sm' ? 16 : size === 'lg' ? 36 : 24
+  const border = size === 'sm' ? 2 : size === 'lg' ? 4 : 3
+  return (
+    <span
+      role="status"
+      aria-label={label}
+      className={cn('inline-block animate-spin rounded-full', className)}
+      style={{
+        width: px,
+        height: px,
+        borderWidth: border,
+        borderStyle: 'solid',
+        borderColor: 'var(--color-primary)',
+        borderTopColor: 'transparent',
+      }}
+    />
+  )
+}
+
+/* --------------------------------------------------------------------------
+   PageLoader — full-viewport-height centered spinner for screens waiting on
+   their initial data. Height matches the app shell so it fills the main area
+   below the top nav (64px) without pushing the bottom bar off-screen.
+-------------------------------------------------------------------------- */
+export function PageLoader({ label = 'Loading' }) {
+  return (
+    <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center">
+      <Spinner size="lg" label={label} />
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   StickyRsvpBar — a floating pill that keeps the RSVP + Save controls in
+   reach after the hero CTA scrolls off. Light surface to match the body,
+   with a small poster thumb + price so context stays with the actions.
+
+   Controlled visibility: parent passes `visible` (usually driven by an
+   IntersectionObserver on the hero CTA), which fades + slides the pill in.
+-------------------------------------------------------------------------- */
+export function StickyRsvpBar({ poster, price, isFree, going, saved, onRsvp, onSave, visible }) {
+  return (
+    <div
+      className={cn(
+        'fixed bottom-4 left-1/2 z-40 -translate-x-1/2 transition-all duration-300',
+        visible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0',
+      )}
+    >
+      <div className="flex items-center gap-3 rounded-pill border border-border-light bg-white px-3 py-2 shadow-card-hover">
+        <img src={poster} alt="" className="h-10 w-10 flex-shrink-0 rounded-md object-cover" />
+        <div className="flex min-w-0 flex-col leading-tight pr-1">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+            {isFree ? 'Free' : price}
+          </span>
+          <span className="truncate text-sm font-semibold text-ink">Reserve your spot</span>
+        </div>
+        <SaveBtn sm saved={saved} onToggle={onSave} />
+        <RSVPBtn sm variant={going ? 'outline' : 'filled'} onClick={onRsvp}>
+          {going ? 'Going' : 'RSVP'}
+        </RSVPBtn>
+      </div>
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
    InlineAlert — a contextual error/info message rendered right next to the
    form or button that produced it (instead of a bottom-of-screen toast), so
    the user sees the feedback where they're looking. Renders nothing when

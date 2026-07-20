@@ -4,7 +4,7 @@ import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { StoriesRow, PostCard } from '../components/social'
 import { EventImage } from '../components/EventImage'
-import { FollowBtn, VerifiedBadge } from '../components/primitives'
+import { FollowBtn, PageLoader, VerifiedBadge } from '../components/primitives'
 
 /* Small square event thumbnail with the branded fallback baked in. */
 function Thumb({ event, size }) {
@@ -36,14 +36,28 @@ function SidebarCard({ title, children }) {
 
 export function SocialFeed() {
   const { followingIds, toggleFollow, user } = useApp()
-  const [posts, setPosts] = useState([])
-  const [events, setEvents] = useState([])
+  // null while a fetch is still in flight, so we can show a page-level spinner
+  // instead of an empty feed with a lonely stories row.
+  const [posts, setPosts] = useState(null)
+  const [events, setEvents] = useState(null)
   const [storyGroups, setStoryGroups] = useState([])
+  const loading = posts === null || events === null
 
   const near = nearForUser(user)
   const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
 
+  // Render-time reset when the geo key changes so we don't flash the prior
+  // location's feed under the new context; see FeaturedCard for the pattern.
+  const [fetchedKey, setFetchedKey] = useState('')
+  if (fetchedKey !== nearKey) {
+    setFetchedKey(nearKey)
+    setPosts(null)
+    setEvents(null)
+    setStoryGroups([])
+  }
+
   useEffect(() => {
+    let cancelled = false
     // Load the feed, then hydrate each post's comments (the feed carries only a
     // comment_count, not the comment bodies). Small N at demo scale.
     api.feedSocial().then(async (list) => {
@@ -53,10 +67,17 @@ export function SocialFeed() {
           comments: p.commentCount ? await api.postComments(p.id, { limit: 3 }) : [],
         })),
       )
-      setPosts(withComments)
+      if (!cancelled) setPosts(withComments)
     })
-    api.stories().then(setStoryGroups)
-    api.events({ sort: 'popular', near: nearForUser(user) }).then(setEvents)
+    api.stories().then((data) => {
+      if (!cancelled) setStoryGroups(data ?? [])
+    })
+    api.events({ sort: 'popular', near: nearForUser(user) }).then((data) => {
+      if (!cancelled) setEvents(data)
+    })
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nearKey])
 
@@ -70,6 +91,8 @@ export function SocialFeed() {
     )
   }
 
+  const postList = posts ?? []
+  const eventList = events ?? []
   const stories = [
     { name: 'You', avatar: user?.avatar ?? 'https://i.pravatar.cc/150?img=1', isYou: true },
     ...storyGroups.map((g) => ({
@@ -81,14 +104,22 @@ export function SocialFeed() {
     })),
   ]
 
-  const suggested = events
+  const suggested = eventList
     .map((e) => e.organizer)
     .filter((o) => !!o)
     .filter((o, i, arr) => arr.findIndex((x) => x.id === o.id) === i)
     .slice(0, 4)
 
-  const upcoming = events.slice(0, 3)
-  const trending = events.slice(0, 4)
+  const upcoming = eventList.slice(0, 3)
+  const trending = eventList.slice(0, 4)
+
+  if (loading) {
+    return (
+      <div className="loop-container pb-24 pt-6 md:pb-12">
+        <PageLoader label="Loading social feed" />
+      </div>
+    )
+  }
 
   return (
     <div className="loop-container pb-24 pt-6 md:pb-12">
@@ -147,7 +178,7 @@ export function SocialFeed() {
             <StoriesRow stories={stories} onOpen={openStory} />
           </div>
           <div className="mt-6 space-y-6">
-            {posts.map((p) => (
+            {postList.map((p) => (
               <PostCard key={p.id} post={p} />
             ))}
           </div>

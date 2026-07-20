@@ -263,6 +263,8 @@ export function toClientUser(u) {
     homeCity: u.home_city ?? null,
     homeLat: u.home_lat ?? null,
     homeLng: u.home_lng ?? null,
+    cover: u.cover_image_url ?? null,
+    joinedAt: u.created_at ?? null,
   }
 }
 

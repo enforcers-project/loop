@@ -3,8 +3,9 @@ import { MessageSquare, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { pluralize, timeAgo } from '../lib/utils'
+import { timeAgo } from '../lib/utils'
 import { VerifiedBadge } from './primitives'
+import { CommentReplies } from './CommentReplies'
 
 // Threaded comments on an EventDetail page (planning §7.3, work-plan #30).
 // Reads GET /api/events/:id/comments, posts via POST …/comments, and lets a
@@ -66,6 +67,16 @@ export function EventComments({ eventId, organizerId }) {
   }
 
   const count = comments?.length ?? 0
+
+  // Reply adapter for CommentReplies — bound to this event's endpoints. Delete
+  // is the shared DELETE /api/comments/:id (author or organizer).
+  const replyApi = {
+    list: (parentId) => api.eventComments(eventId, { parentId }),
+    add: (body, parentId) => api.addEventComment(eventId, body, parentId),
+    remove: (commentId) => api.deleteComment(commentId),
+  }
+  const canDeleteReply = (r) =>
+    (user?.id && (r.authorId === user.id || organizerId === user.id)) || false
 
   return (
     <section className="mx-auto max-w-[860px]">
@@ -137,11 +148,7 @@ export function EventComments({ eventId, organizerId }) {
                   <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-text-secondary">
                     {c.text}
                   </p>
-                  {c.replyCount > 0 && (
-                    <span className="mt-1 inline-block text-xs text-text-muted">
-                      {c.replyCount} {pluralize(c.replyCount, 'reply')}
-                    </span>
-                  )}
+                  <CommentReplies comment={c} api={replyApi} canDelete={canDeleteReply} />
                 </div>
               </li>
             )

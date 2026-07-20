@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Plus,
   Send,
+  Trash2,
   X,
 } from 'lucide-react'
 import { cn, formatCount, pluralize, timeAgo } from '../lib/utils'
@@ -17,6 +18,7 @@ import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { inputClass, Spinner, VerifiedBadge } from './primitives'
 import { EventImage } from './EventImage'
+import { CommentReplies } from './CommentReplies'
 
 const POST_KINDS = [
   { value: 'flyer', label: 'Flyer' },
@@ -493,6 +495,7 @@ export function StoryViewer({ groups, startIndex = 0, onClose, onViewed }) {
 -------------------------------------------------------------------------- */
 export function PostCard({ post }) {
   const { requireAuth, user } = useApp()
+  const toast = useToast()
   const [liked, setLiked] = useState(!!post.likedByMe)
   const [likeCount, setLikeCount] = useState(post.likes ?? 0)
   const [saved, setSaved] = useState(false)
@@ -503,6 +506,28 @@ export function PostCard({ post }) {
 
   const iconBtn = 'grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-surface'
   const when = timeAgo(post.timeAgo) || post.timeAgo
+
+  // Reply adapter for CommentReplies — bound to this post's endpoints. Delete is
+  // the shared DELETE /api/comments/:id (comment author or the post author).
+  const replyApi = {
+    list: (parentId) => api.postComments(post.id, { parentId }),
+    add: (body, parentId) => api.addComment(post.id, body, parentId),
+    remove: (commentId) => api.deleteComment(commentId),
+  }
+  const canDeleteComment = (c) =>
+    (user?.id && (c.authorId === user.id || post.organizer?.id === user.id)) || false
+
+  // Soft-delete a top-level comment; optimistic with restore-on-failure.
+  const removeComment = async (comment) => {
+    const prev = comments
+    setComments((list) => list.filter((c) => c.id !== comment.id))
+    try {
+      await api.deleteComment(comment.id)
+    } catch {
+      setComments(prev)
+      toast.error('Could not delete that comment.')
+    }
+  }
 
   // Optimistic like: flip + adjust the count immediately, then reconcile against
   // the server's authoritative count. Roll back both on failure.
@@ -607,9 +632,27 @@ export function PostCard({ post }) {
           <span className="font-semibold">{org?.handle?.replace('@', '')}</span> {post.caption}
         </p>
         {comments.map((c) => (
-          <p key={c.id} className="text-sm leading-relaxed text-text-secondary">
-            <span className="font-semibold text-ink">{c.author}</span> {c.text}
-          </p>
+          <div key={c.id} className="pt-0.5">
+            <div className="group flex items-start gap-1.5">
+              <p className="min-w-0 flex-1 text-sm leading-relaxed text-text-secondary">
+                <span className="font-semibold text-ink">{c.author}</span> {c.text}
+              </p>
+              {canDeleteComment(c) && (
+                <button
+                  onClick={() => removeComment(c)}
+                  className="mt-0.5 text-text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
+                  aria-label="Delete comment"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+            {/* Reply thread only for real (server) comments — a local echo has
+                no id the backend knows, so it can't accept a parent_comment_id. */}
+            {c.authorId != null && (
+              <CommentReplies comment={c} api={replyApi} canDelete={canDeleteComment} />
+            )}
+          </div>
         ))}
       </div>
 

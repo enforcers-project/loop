@@ -32,6 +32,11 @@ const UNFOLLOW_WEIGHT = -0.25
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const isUuid = (s) => typeof s === 'string' && UUID_RE.test(s)
 
+// Handle rules mirror signup (auth/routes.js): 3–30 chars, letters/numbers/_.
+const HANDLE_RE = /^[a-zA-Z0-9_]{3,30}$/
+const DISPLAY_NAME_MAX = 120
+const BIO_MAX = 500
+
 /** Does the viewer (if any) follow `targetId`? null when logged out. */
 async function resolveIsFollowing(viewerId, targetId) {
   if (!viewerId) return null
@@ -243,6 +248,72 @@ router.put('/:id/avatar', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('PUT /api/users/:id/avatar error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not save picture')
+  }
+})
+
+// --- PATCH /api/users/:id — edit own profile --------------------------------
+// Owner-only. Body may include any of { display_name, handle, bio }; only the
+// keys present are updated (partial patch). Empty string clears display_name /
+// bio; handle must match the signup format and stays unique (409 on clash).
+router.patch('/:id', requireAuth, async (req, res) => {
+  if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only edit your own profile')
+  }
+
+  const body = req.body ?? {}
+  const data = {}
+
+  if ('display_name' in body) {
+    const v = body.display_name
+    if (v != null && typeof v !== 'string') {
+      return fail(res, 422, 'VALIDATION_ERROR', 'display_name must be a string')
+    }
+    const trimmed = typeof v === 'string' ? v.trim() : ''
+    if (trimmed.length > DISPLAY_NAME_MAX) {
+      return fail(res, 422, 'VALIDATION_ERROR', `display_name too long (max ${DISPLAY_NAME_MAX})`)
+    }
+    data.displayName = trimmed || null
+  }
+
+  if ('handle' in body) {
+    const v = body.handle
+    // A blank handle clears it; otherwise it must match the signup format.
+    if (v == null || (typeof v === 'string' && v.trim() === '')) {
+      data.handle = null
+    } else if (typeof v !== 'string' || !HANDLE_RE.test(v.trim())) {
+      return fail(res, 422, 'VALIDATION_ERROR', 'handle must be 3–30 chars (letters, numbers, _)')
+    } else {
+      data.handle = v.trim()
+    }
+  }
+
+  if ('bio' in body) {
+    const v = body.bio
+    if (v != null && typeof v !== 'string') {
+      return fail(res, 422, 'VALIDATION_ERROR', 'bio must be a string')
+    }
+    const trimmed = typeof v === 'string' ? v.trim() : ''
+    if (trimmed.length > BIO_MAX) {
+      return fail(res, 422, 'VALIDATION_ERROR', `bio too long (max ${BIO_MAX})`)
+    }
+    data.bio = trimmed || null
+  }
+
+  if (Object.keys(data).length === 0) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'No editable fields provided')
+  }
+
+  try {
+    const updated = await prisma.user.update({ where: { id: req.user.id }, data })
+    return res.json({ data: toSelfUser(updated) })
+  } catch (err) {
+    // Unique handle collision — surface a clean 409 rather than a 500.
+    if (err.code === 'P2002') {
+      return fail(res, 409, 'CONFLICT', 'That handle is already taken')
+    }
+    console.error('PATCH /api/users/:id error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not save profile')
   }
 })
 

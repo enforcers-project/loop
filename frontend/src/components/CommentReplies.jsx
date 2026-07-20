@@ -82,7 +82,10 @@ export function CommentReplies({ comment, api, canDelete }) {
   return (
     <div className="mt-1">
       <div className="flex items-center gap-3 text-xs font-semibold text-text-muted">
-        <button onClick={() => setComposing((v) => !v)} className="transition-colors hover:text-ink">
+        <button
+          onClick={() => setComposing((v) => !v)}
+          className="transition-colors hover:text-ink"
+        >
           Reply
         </button>
         {count > 0 && (

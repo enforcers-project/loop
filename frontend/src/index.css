@@ -200,3 +200,14 @@ a,
   background: linear-gradient(90deg, #1f1f27 25%, #2a2a33 37%, #1f1f27 63%);
   background-size: 200% 100%;
 }
+
+/* Story viewer progress bar — the active frame fills left-to-right over its
+   display duration (duration is set inline per frame). */
+@keyframes story-progress {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}

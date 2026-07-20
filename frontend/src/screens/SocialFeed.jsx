@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { PenSquare } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
-import { StoriesRow, PostCard, Composer } from '../components/social'
+import { StoriesRow, StoryViewer, PostCard, Composer } from '../components/social'
 import { EventImage } from '../components/EventImage'
 import { FollowBtn, PageLoader, Spinner, VerifiedBadge } from '../components/primitives'
 import { formatCount } from '../lib/utils'
@@ -57,6 +57,7 @@ export function SocialFeed() {
   const [cursor, setCursor] = useState(null) // next page cursor; null = no more
   const [loadingMore, setLoadingMore] = useState(false)
   const [composer, setComposer] = useState(null) // 'post' | 'story' | null
+  const [viewerIndex, setViewerIndex] = useState(null) // group index being viewed, or null
   const loading = posts === null || events === null
 
   const near = nearForUser(user)
@@ -125,13 +126,37 @@ export function SocialFeed() {
     return () => io.disconnect()
   }, [cursor, loadMore])
 
-  // Mark a story group viewed when its ring is tapped (idempotent server-side),
-  // then flip it to the muted "all viewed" state locally.
-  const openStory = (group) => {
-    const ids = (group.stories ?? []).map((s) => s.id).filter(Boolean)
-    ids.forEach((id) => api.viewStory(id))
+  // The groups the viewer pages through, in the same order as the rings (minus
+  // the leading "You" tile). Only groups that actually have media are viewable.
+  const viewerGroups = storyGroups
+    .filter((g) => (g.stories?.length ?? 0) > 0)
+    .map((g) => ({
+      id: g.author?.id,
+      name: g.author?.name ?? '',
+      avatar: g.author?.avatar ?? '',
+      stories: g.stories ?? [],
+    }))
+
+  // Open the full-screen viewer at the tapped author's group. `ring` is the
+  // flattened row item, whose `id` is the author id — find that author's index
+  // within the viewable groups (the row's leading "You" tile has no group).
+  const openStory = (ring) => {
+    const idx = viewerGroups.findIndex((g) => g.id === ring.id)
+    if (idx >= 0) setViewerIndex(idx)
+  }
+
+  // Mark one frame viewed server-side (idempotent). Once every frame in a group
+  // has been seen, flip that ring to the muted "all viewed" state.
+  const onStoryViewed = (storyId) => {
+    api.viewStory(storyId)
     setStoryGroups((prev) =>
-      prev.map((g) => (g.author?.id === group.author?.id ? { ...g, allViewed: true } : g)),
+      prev.map((g) => {
+        const stories = (g.stories ?? []).map((s) =>
+          s.id === storyId ? { ...s, viewedByMe: true } : s,
+        )
+        const allViewed = stories.length > 0 && stories.every((s) => s.viewedByMe)
+        return stories.some((s) => s.id === storyId) ? { ...g, stories, allViewed } : g
+      }),
     )
   }
 
@@ -320,6 +345,15 @@ export function SocialFeed() {
 
       {composer && (
         <Composer mode={composer} onClose={() => setComposer(null)} onCreated={onCreated} />
+      )}
+
+      {viewerIndex !== null && viewerGroups[viewerIndex] && (
+        <StoryViewer
+          groups={viewerGroups}
+          startIndex={viewerIndex}
+          onClose={() => setViewerIndex(null)}
+          onViewed={onStoryViewed}
+        />
       )}
     </div>
   )

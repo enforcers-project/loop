@@ -1,5 +1,16 @@
-import { useRef, useState } from 'react'
-import { Bookmark, Heart, ImagePlus, Link2, MessageCircle, Plus, Send, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  Heart,
+  ImagePlus,
+  Link2,
+  MessageCircle,
+  Plus,
+  Send,
+  X,
+} from 'lucide-react'
 import { cn, formatCount, pluralize, timeAgo } from '../lib/utils'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
@@ -293,6 +304,183 @@ export function StoriesRow({ stories, onOpen, onAddStory }) {
           </span>
         </button>
       ))}
+    </div>
+  )
+}
+
+const STORY_MS = 5000 // how long each story frame is shown before auto-advancing
+
+/* --------------------------------------------------------------------------
+   StoryViewer — full-screen Instagram-style viewer. Receives the ordered list
+   of viewable groups (each `{ id, name, avatar, stories:[{id, mediaUrl,
+   caption, createdAt}] }`) and the index of the group that was tapped. Frames
+   auto-advance every STORY_MS; tapping the left/right half or the arrow keys
+   steps between frames and rolls over into the next/previous author. Each frame
+   fires `onViewed(storyId)` once so the parent can mark it seen server-side.
+-------------------------------------------------------------------------- */
+export function StoryViewer({ groups, startIndex = 0, onClose, onViewed }) {
+  const [gi, setGi] = useState(startIndex) // current group index
+  const [si, setSi] = useState(0) // current story index within the group
+  const [paused, setPaused] = useState(false)
+  const seenRef = useRef(new Set()) // story ids we've already reported viewed
+
+  const group = groups[gi]
+  const story = group?.stories?.[si]
+
+  // Step forward one frame; roll into the next author, or close past the last.
+  const next = () => {
+    const count = group?.stories?.length ?? 0
+    if (si < count - 1) {
+      setSi((v) => v + 1)
+    } else if (gi < groups.length - 1) {
+      setGi((v) => v + 1)
+      setSi(0)
+    } else {
+      onClose?.()
+    }
+  }
+
+  // Step back one frame; roll into the previous author's last frame.
+  const prev = () => {
+    if (si > 0) {
+      setSi((v) => v - 1)
+    } else if (gi > 0) {
+      const pg = gi - 1
+      setGi(pg)
+      setSi(Math.max(0, (groups[pg]?.stories?.length ?? 1) - 1))
+    }
+  }
+
+  // Report each frame viewed exactly once as it becomes visible.
+  useEffect(() => {
+    if (!story?.id || seenRef.current.has(story.id)) return
+    seenRef.current.add(story.id)
+    onViewed?.(story.id)
+  }, [story?.id, onViewed])
+
+  // Auto-advance timer, reset whenever the frame changes; paused on hold.
+  useEffect(() => {
+    if (paused || !story) return
+    const t = setTimeout(next, STORY_MS)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gi, si, paused, story?.id])
+
+  // Keyboard: arrows navigate, Esc closes.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'ArrowRight') next()
+      else if (e.key === 'ArrowLeft') prev()
+      else if (e.key === 'Escape') onClose?.()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gi, si])
+
+  if (!group || !story) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-0 sm:p-4">
+      <button
+        type="button"
+        aria-label="Close stories"
+        onClick={onClose}
+        className="absolute right-4 top-4 z-20 grid h-10 w-10 place-items-center rounded-full text-white/90 transition-colors hover:bg-white/10"
+      >
+        <X size={24} />
+      </button>
+
+      {/* desktop prev/next affordances */}
+      {(gi > 0 || si > 0) && (
+        <button
+          type="button"
+          aria-label="Previous story"
+          onClick={prev}
+          className="absolute left-2 top-1/2 z-20 hidden -translate-y-1/2 place-items-center rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20 sm:grid"
+        >
+          <ChevronLeft size={24} />
+        </button>
+      )}
+      {(gi < groups.length - 1 || si < (group.stories?.length ?? 0) - 1) && (
+        <button
+          type="button"
+          aria-label="Next story"
+          onClick={next}
+          className="absolute right-2 top-1/2 z-20 hidden -translate-y-1/2 place-items-center rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20 sm:grid"
+        >
+          <ChevronRight size={24} />
+        </button>
+      )}
+
+      <div className="relative flex h-full w-full max-w-[420px] flex-col overflow-hidden bg-black sm:h-[85vh] sm:rounded-card">
+        {/* progress bars — one per frame in this author's group */}
+        <div className="absolute left-0 right-0 top-0 z-10 flex gap-1 px-3 pt-3">
+          {group.stories.map((s, i) => (
+            <div key={s.id ?? i} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/30">
+              <div
+                className={cn('h-full rounded-full bg-white', i < si && 'w-full', i > si && 'w-0')}
+                style={
+                  i === si
+                    ? {
+                        animation: paused ? 'none' : `story-progress ${STORY_MS}ms linear forwards`,
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* author header */}
+        <div className="absolute left-0 right-0 top-0 z-10 flex items-center gap-3 px-4 pb-3 pt-6">
+          <img
+            src={group.avatar}
+            alt=""
+            className="h-9 w-9 rounded-full border border-white/40 bg-surface object-cover"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-white">{group.name}</p>
+            {story.createdAt && (
+              <p className="text-xs text-white/70">{timeAgo(story.createdAt)} ago</p>
+            )}
+          </div>
+        </div>
+
+        {/* media — hold to pause; tap left/right halves to navigate */}
+        <div
+          className="relative flex flex-1 items-center justify-center"
+          onPointerDown={() => setPaused(true)}
+          onPointerUp={() => setPaused(false)}
+          onPointerLeave={() => setPaused(false)}
+        >
+          <img
+            src={story.mediaUrl}
+            alt={story.caption || ''}
+            className="max-h-full max-w-full object-contain"
+          />
+          {/* tap zones sit above the image but below header/close */}
+          <button
+            type="button"
+            aria-label="Previous"
+            onClick={prev}
+            className="absolute inset-y-0 left-0 w-1/3"
+          />
+          <button
+            type="button"
+            aria-label="Next"
+            onClick={next}
+            className="absolute inset-y-0 right-0 w-2/3"
+          />
+        </div>
+
+        {/* caption */}
+        {story.caption && (
+          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pb-5 pt-10">
+            <p className="text-sm leading-relaxed text-white">{story.caption}</p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -860,4 +860,51 @@ export const api = {
         events,
       }
     }),
+
+  // Conversational assistant drawer (planning §7.6, work-plan #31). Persists
+  // threads server-side via ai_conversations + ai_messages, retrieval grounded
+  // in pgvector when embedding keys are set (keyword fallback otherwise), reply
+  // drafted by Groq when GROQ_API_KEY is set (template fallback otherwise).
+  //
+  // Fallback strategy: when the backend is unreachable, everything degrades to
+  // the legacy in-memory /ai/search path so the drawer still renders. `start`
+  // and `get` return a synthetic id ('mock') the frontend recognizes to skip
+  // the hydration fetch and stay stateless.
+  ai: {
+    startConversation: async () => {
+      try {
+        return await request('/ai/conversations', { method: 'POST', body: {} })
+      } catch {
+        return { id: 'mock', title: null, created_at: new Date().toISOString() }
+      }
+    },
+    getConversation: async (id) => {
+      if (!id || id === 'mock') return { id: 'mock', messages: [] }
+      try {
+        return await request(`/ai/conversations/${id}`)
+      } catch {
+        return { id, messages: [] }
+      }
+    },
+    sendMessage: async (id, content) => {
+      // Real thread: persist + ground on the backend.
+      if (id && id !== 'mock') {
+        try {
+          const data = await request(`/ai/conversations/${id}/messages`, {
+            method: 'POST',
+            body: { content },
+          })
+          return {
+            reply: data.message.content,
+            events: (data.events ?? []).map(toEventCardShape),
+          }
+        } catch {
+          // fall through to the legacy one-shot path
+        }
+      }
+      // Legacy one-shot / logged-out / offline fallback.
+      const res = await api.aiSearch(content)
+      return { reply: res.reply, events: (res.events ?? []).map(toEventCardShape) }
+    },
+  },
 }

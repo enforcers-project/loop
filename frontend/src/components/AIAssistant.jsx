@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, X, Send } from 'lucide-react'
 import { api } from '../lib/api'
@@ -9,6 +9,15 @@ const SUGGESTIONS = [
   'Afrobeats party near me',
   'Pickup soccer on Sunday',
 ]
+
+// Persist the thread id across drawer open/close and page refresh so a user's
+// conversation history stays intact. Cleared on logout by AppContext.
+const STORAGE_KEY = 'loop.assistantConversationId'
+
+const WELCOME_MESSAGE = {
+  role: 'assistant',
+  content: "Hey! I'm Loop AI. Tell me what you're in the mood for and I'll find events near you.",
+}
 
 /* Mini event result card rendered inline in the drawer. */
 function MiniEventCard({ event, onClick }) {
@@ -34,22 +43,69 @@ export function AIAssistant() {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      text: "Hey! I'm Loop AI. Tell me what you're in the mood for and I'll find events near you.",
-    },
-  ])
+  const [conversationId, setConversationId] = useState(null)
+  const [messages, setMessages] = useState([WELCOME_MESSAGE])
+  const startedRef = useRef(false)
+
+  // On first open, hydrate an existing thread if we have one in storage, else
+  // start a fresh conversation. Guarded so a fast double-open only fires once.
+  useEffect(() => {
+    if (!open || startedRef.current) return
+    startedRef.current = true
+    let cancelled = false
+
+    const stored = sessionStorage.getItem(STORAGE_KEY)
+    const ensure = stored
+      ? api.ai.getConversation(stored).then((conv) => {
+          // A stale id (server-side deleted / different user) resolves to an
+          // empty `messages` array with the same id — treat that as usable so
+          // we don't spin up a duplicate thread on every open.
+          if (conv?.id) return conv
+          return api.ai.startConversation()
+        })
+      : api.ai.startConversation()
+
+    ensure
+      .then((conv) => {
+        if (cancelled || !conv?.id) return
+        setConversationId(conv.id)
+        if (conv.id !== 'mock') sessionStorage.setItem(STORAGE_KEY, conv.id)
+        if (Array.isArray(conv.messages) && conv.messages.length) {
+          setMessages([
+            WELCOME_MESSAGE,
+            ...conv.messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+              // Legacy history has no attached events — the drawer just shows
+              // the reply text.
+            })),
+          ])
+        }
+      })
+      .catch(() => {
+        // Non-fatal — the drawer still works via the legacy one-shot path.
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   const ask = async (q) => {
     const query = q.trim()
-    if (!query) return
+    if (!query || thinking) return
     setInput('')
-    setMessages((m) => [...m, { role: 'user', text: query }])
+    setMessages((m) => [...m, { role: 'user', content: query }])
     setThinking(true)
-    const res = await api.aiSearch(query)
-    setThinking(false)
-    setMessages((m) => [...m, { role: 'assistant', text: res.reply, events: res.events }])
+    try {
+      const res = await api.ai.sendMessage(conversationId, query)
+      setMessages((m) => [
+        ...m,
+        { role: 'assistant', content: res.reply, events: res.events ?? [] },
+      ])
+    } finally {
+      setThinking(false)
+    }
   }
 
   return (
@@ -105,7 +161,7 @@ export function AIAssistant() {
                     : 'bg-surface text-text-primary',
                 )}
               >
-                {m.text}
+                {m.content}
               </div>
               {m.events && m.events.length > 0 && (
                 <div className="mt-2 space-y-2">

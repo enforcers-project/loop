@@ -188,6 +188,13 @@ export function AppProvider({ children }) {
     goingTouched.current = new Set()
     followTouched.current = new Set()
     savedTouched.current = new Set()
+    // Drop the assistant's persisted thread id so the next signed-in user
+    // doesn't inherit the previous session's conversation.
+    try {
+      sessionStorage.removeItem('loop.assistantConversationId')
+    } catch {
+      // sessionStorage can throw in private-mode iframes — non-fatal.
+    }
   }, [])
 
   const setInterests = useCallback((ids) => setInterestsState(ids), [])

@@ -15,6 +15,7 @@ import notificationsRouter from './notifications/routes.js'
 import { attachSession } from './auth/middleware.js'
 import recommendationsRouter from './recommendations/routes.js'
 import embeddingsRouter from './embeddings/routes.js'
+import aiConversationsRouter from './ai/routes.js'
 import preferencesRouter from './preferences/routes.js'
 import socialRouter from './social/routes.js'
 import { startScheduler } from './jobs/index.js'
@@ -154,6 +155,9 @@ app.use('/api', interactionsRouter)
 
 // --- AI / Embeddings routes (§9.2B) ------------------------------------------
 app.use('/api/ai', embeddingsRouter)
+
+// --- AI conversations (planning §7.6, work-plan #31) -------------------------
+app.use('/api/ai', aiConversationsRouter)
 
 // --- Preference vectors (§9.2C, issue #20) -----------------------------------
 app.use('/api', preferencesRouter)

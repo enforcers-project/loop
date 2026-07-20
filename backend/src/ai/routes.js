@@ -36,7 +36,9 @@ function serializeMessage(m) {
 }
 
 function titleFromQuery(q) {
-  const clean = String(q ?? '').trim().slice(0, 60)
+  const clean = String(q ?? '')
+    .trim()
+    .slice(0, 60)
   return clean || 'New chat'
 }
 

@@ -87,10 +87,9 @@ export function EventDetail() {
   useEffect(() => {
     const el = heroCtaRef.current
     if (!el) return
-    const io = new IntersectionObserver(
-      ([entry]) => setPillVisible(!entry.isIntersecting),
-      { rootMargin: '0px 0px -40px 0px' },
-    )
+    const io = new IntersectionObserver(([entry]) => setPillVisible(!entry.isIntersecting), {
+      rootMargin: '0px 0px -40px 0px',
+    })
     io.observe(el)
     return () => io.disconnect()
   }, [event])

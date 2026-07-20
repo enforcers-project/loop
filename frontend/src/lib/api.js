@@ -46,7 +46,11 @@ const isBackendRow = (e) => e && typeof e === 'object' && 'is_free' in e
 
 // Rationale arrives as a string (mock) or an object { text, signal } (real
 // recommendations). recommendationLabel() expects a string, so flatten it.
-const rationaleText = (r) => (r == null ? undefined : typeof r === 'string' ? r : r.text)
+const rationaleText = (r) => {
+  if (r == null) return undefined
+  const text = typeof r === 'string' ? r : r.text
+  return text || undefined
+}
 
 export function toEventCardShape(e) {
   if (!isBackendRow(e)) return e
@@ -176,6 +180,21 @@ async function request(path, { method = 'GET', body } = {}) {
     throw err
   }
   return json?.data
+}
+
+/**
+ * Approximate quantile of a numeric array — used to derive the "top X%" cutoff
+ * for popularity-gated badges without pulling a stats lib. Uses the linear
+ * interpolation Type-7 method (matches R/NumPy's default). Empty input → 0.
+ */
+function quantile(values, p) {
+  if (!values.length) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const pos = (sorted.length - 1) * p
+  const base = Math.floor(pos)
+  const rest = pos - base
+  if (sorted[base + 1] !== undefined) return sorted[base] + rest * (sorted[base + 1] - sorted[base])
+  return sorted[base]
 }
 
 function mockFilter({ category, isFree, isSports, q }) {
@@ -531,15 +550,29 @@ export const api = {
       const cats = new Set(
         MOCK_INTERESTS.filter((i) => interests.includes(i.id)).map((i) => i.category),
       )
-      return MOCK_EVENTS.map(withOrganizer)
-        .map((e) => ({
-          e,
-          score: (cats.has(e.category) ? 100000 : 0) + e.rsvpCount + 2 * e.saveCount,
-        }))
-        .sort((a, b) => b.score - a.score)
-        .map(({ e }) =>
-          cats.size && !cats.has(e.category) ? { ...e, rationale: 'Popular near you' } : e,
-        )
+      // Reserve "Popular near you" for the ~15% of events with the strongest
+      // RSVP+save signal (see planning §6 recommender). A badge that fires on
+      // every card stops meaning anything — the popularity cutoff is what turns
+      // it into real social proof. Everything below the cutoff falls back to
+      // the category chip via EventCard's showRationale gate.
+      const scored = MOCK_EVENTS.map(withOrganizer).map((e) => ({
+        e,
+        popularity: e.rsvpCount + 2 * e.saveCount,
+        score: (cats.has(e.category) ? 100000 : 0) + e.rsvpCount + 2 * e.saveCount,
+      }))
+      const popularityCutoff = quantile(
+        scored.map((s) => s.popularity),
+        0.85,
+      )
+      return scored.sort((a, b) => b.score - a.score).map(({ e, popularity }) => {
+        // Category-matched events keep the recommender's own rationale.
+        if (!cats.size || cats.has(e.category)) return e
+        // Out-of-category: only the truly popular ones get the "Popular near
+        // you" chip; the rest render with just the category badge.
+        return popularity >= popularityCutoff
+          ? { ...e, rationale: 'Popular near you' }
+          : { ...e, rationale: undefined }
+      })
     })
     const arr = list ?? []
     if (arr.length > 0) return arr.map(toEventCardShape)

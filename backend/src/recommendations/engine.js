@@ -479,7 +479,16 @@ function generateRationale(item, affinityMap, topSignals, socialScores = new Map
     return { text: 'Trending nearby', signal: null }
   }
 
-  return { text: 'Popular near you', signal: null }
+  // Mid-tier events return a null rationale so the client-side EventCard
+  // falls back to the category chip. Reserving "Popular near you" for high-
+  // popularity events (>0.75 normalized) keeps the badge meaningful — if every
+  // card flashes the same social-proof pill it stops reading as a signal at
+  // all. Values below the cutoff render with just the category badge.
+  if (item.popularity > 0.75) {
+    return { text: 'Popular near you', signal: null }
+  }
+
+  return { text: null, signal: null }
 }
 
 function signalKeyFromTop(topSignal) {

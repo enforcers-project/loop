@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext'
 import { CatRow, FilterBar, SearchBar } from '../components/rows'
 import { EventGrid } from '../components/EventCard'
 import { PageLoader } from '../components/primitives'
+import { pluralize } from '../lib/utils'
 
 const EMPTY_FILTERS = {
   free: false,
@@ -67,8 +68,8 @@ export function Discover() {
 
   const heading =
     cat !== 'All'
-      ? `${filtered.length} ${cat} event${filtered.length === 1 ? '' : 's'} near you`
-      : `${filtered.length} event${filtered.length === 1 ? '' : 's'} near you this week`
+      ? `${filtered.length} ${cat} ${pluralize(filtered.length, 'event')} near you`
+      : `${filtered.length} ${pluralize(filtered.length, 'event')} near you this week`
 
   return (
     <div className="loop-container pb-24 pt-4 md:pb-12">

@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext'
 import { StoriesRow, PostCard } from '../components/social'
 import { EventImage } from '../components/EventImage'
 import { FollowBtn, PageLoader, VerifiedBadge } from '../components/primitives'
+import { formatCount } from '../lib/utils'
 
 /* Small square event thumbnail with the branded fallback baked in. */
 function Thumb({ event, size }) {
@@ -197,7 +198,9 @@ export function SocialFeed() {
                         {e.title}
                       </p>
                       <div className="mt-0.5 flex items-center gap-1.5">
-                        <span className="text-xs text-text-muted">{e.rsvpCount} going</span>
+                        <span className="text-xs text-text-muted">
+                          {formatCount(e.rsvpCount ?? 0)} going
+                        </span>
                         {e.organizer?.verified && <VerifiedBadge size={11} />}
                       </div>
                     </div>

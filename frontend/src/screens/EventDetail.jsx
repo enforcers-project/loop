@@ -4,7 +4,7 @@ import { ArrowLeft, Calendar, MapPin, MessageSquare, ShieldCheck, Share2 } from 
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { CATEGORY_COLOR } from '../lib/utils'
+import { CATEGORY_COLOR, pluralize } from '../lib/utils'
 import {
   FollowBtn,
   GoingStack,
@@ -217,7 +217,8 @@ export function EventDetail() {
                   <span className="text-xl font-bold">{event.isFree ? 'Free' : event.price}</span>
                   {event.capacity != null && (
                     <span className="text-xs text-white/70">
-                      {Math.max(0, event.capacity - goingCount)} spots left
+                      {Math.max(0, event.capacity - goingCount)}{' '}
+                      {pluralize(Math.max(0, event.capacity - goingCount), 'spot')} left
                     </span>
                   )}
                 </div>

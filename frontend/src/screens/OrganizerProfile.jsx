@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
-import { cn, formatCount } from '../lib/utils'
+import { cn, formatCount, pluralize } from '../lib/utils'
 import { FollowBtn, PageLoader, RoleBadge, VerifiedBadge } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 
@@ -117,10 +117,12 @@ export function OrganizerProfile() {
               </div>
               <div className="mt-1 flex items-center gap-4 text-sm text-text-secondary">
                 <span>
-                  <strong className="text-ink">{formatCount(followerCount)}</strong> followers
+                  <strong className="text-ink">{formatCount(followerCount)}</strong>{' '}
+                  {pluralize(followerCount, 'follower')}
                 </span>
                 <span>
-                  <strong className="text-ink">{events.length}</strong> events
+                  <strong className="text-ink">{events.length}</strong>{' '}
+                  {pluralize(events.length, 'event')}
                 </span>
               </div>
             </div>

@@ -110,14 +110,16 @@ export function AIAssistant() {
 
   return (
     <>
-      {/* floating trigger — fixed bottom-right */}
+      {/* floating trigger — fixed bottom-right. The floating sparkle is the
+          only entry point to the AI drawer, so the button carries both an
+          aria-label (screen readers) and a native tooltip (hover reveal) so
+          sighted users never have to guess what the icon does. */}
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          /* Sits above the mobile bottom bar + safe area on small screens,
-             bottom-right on desktop. */
           className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-white shadow-card-hover transition-transform hover:scale-105 md:bottom-6 md:right-6"
           aria-label="Ask Loop AI"
+          title="Ask Loop AI"
         >
           <Sparkles size={24} />
         </button>

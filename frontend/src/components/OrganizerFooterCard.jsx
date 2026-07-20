@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
-import { formatCount } from '../lib/utils'
+import { formatCount, pluralize } from '../lib/utils'
 import { FollowBtn, VerifiedBadge, RoleBadge } from './primitives'
 
 /**
@@ -39,13 +39,13 @@ export function OrganizerFooterCard({ organizer, eventCount }) {
             {typeof organizer.followers === 'number' && (
               <span>
                 <span className="font-semibold text-ink">{formatCount(organizer.followers)}</span>{' '}
-                followers
+                {pluralize(organizer.followers, 'follower')}
               </span>
             )}
             {typeof eventCount === 'number' && eventCount > 0 && (
               <span>
                 <span className="font-semibold text-ink">{eventCount}</span>{' '}
-                {eventCount === 1 ? 'event' : 'events'}
+                {pluralize(eventCount, 'event')}
               </span>
             )}
           </div>

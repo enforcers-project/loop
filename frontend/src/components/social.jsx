@@ -11,7 +11,7 @@ import {
   Send,
   X,
 } from 'lucide-react'
-import { cn, formatCount, timeAgo } from '../lib/utils'
+import { cn, formatCount, pluralize, timeAgo } from '../lib/utils'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
@@ -600,7 +600,9 @@ export function PostCard({ post }) {
 
       {/* likes + caption + comments */}
       <div className="space-y-1.5 px-4 pb-2 pt-1.5">
-        <div className="text-sm font-semibold text-ink">{formatCount(likeCount)} likes</div>
+        <div className="text-sm font-semibold text-ink">
+          {formatCount(likeCount)} {pluralize(likeCount, 'like')}
+        </div>
         <p className="text-sm leading-relaxed text-text-primary">
           <span className="font-semibold">{org?.handle?.replace('@', '')}</span> {post.caption}
         </p>

@@ -26,6 +26,22 @@ export function formatCount(n) {
   return String(n)
 }
 
+const IRREGULAR_PLURALS = { person: 'people' }
+
+/**
+ * English plural for a simple noun. Handles the common suffix rules (…y → …ies,
+ * …s/x/z/ch/sh → …es) and a small irregulars map, defaulting to "+s". Only for
+ * short countable nouns rendered right after a number — e.g. `${n} ${pluralize(n, 'like')}`.
+ */
+export function pluralize(n, word) {
+  if (n === 1) return word
+  const irregular = IRREGULAR_PLURALS[word]
+  if (irregular) return irregular
+  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`
+  if (/(s|x|z|ch|sh)$/i.test(word)) return `${word}es`
+  return `${word}s`
+}
+
 /**
  * Compact relative time ("3h", "2d", "just now") from an ISO timestamp — used
  * by the SocialFeed PostCard where the mock previously hardcoded `timeAgo`.

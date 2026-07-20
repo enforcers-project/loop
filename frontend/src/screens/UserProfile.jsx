@@ -4,7 +4,7 @@ import { Bookmark, CalendarHeart, Sparkles, Camera, X } from 'lucide-react'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { cn, formatCount } from '../lib/utils'
+import { cn, formatCount, pluralize } from '../lib/utils'
 import { RoleBadge, Spinner } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
@@ -224,7 +224,7 @@ export function UserProfile() {
                   <strong className="font-semibold text-ink">
                     {formatCount(user?.followers ?? 0)}
                   </strong>{' '}
-                  followers
+                  {pluralize(user?.followers ?? 0, 'follower')}
                 </span>
               </div>
             </div>

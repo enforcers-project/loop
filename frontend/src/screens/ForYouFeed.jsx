@@ -205,7 +205,11 @@ export function ForYouFeed() {
             </div>
           )}
 
-          {/* grid — 24px below hero */}
+          {/* grid — 24px below hero. Every card carries its own rationale
+              chip (from the recommendation engine) — "Because you like X",
+              "Friends going", "Popular near you", etc. — so the feel of
+              personalization comes from the labels on each card, not from
+              editorial rails (those live on Discover). */}
           <div className="mt-6">
             {rest.length > 0 ? (
               <EventGrid events={rest} showRationale />

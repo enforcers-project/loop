@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Calendar, MapPin, MessageSquare, ShieldCheck, Share2 } from 'lucide-react'
+import { ArrowLeft, Calendar, MapPin, ShieldCheck, Share2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
@@ -16,6 +16,7 @@ import {
   VerifiedBadge,
 } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
+import { EventComments } from '../components/EventComments'
 import { EventMap } from '../components/EventMap'
 import { OrganizerFooterCard } from '../components/OrganizerFooterCard'
 
@@ -279,20 +280,10 @@ export function EventDetail() {
           address={event.address}
         />
 
-        {/* Comments — real posts only. Empty state invites the first commenter
-            instead of faking activity with hardcoded demo authors that appear
-            on every event including 0-going ones. Post is disabled until the
-            backend endpoint lands so the button never fires a lying toast. */}
-        <section className="mx-auto max-w-[860px]">
-          <h2 className="font-display text-2xl font-bold text-ink">Comments</h2>
-          <div className="mt-4 flex flex-col items-center gap-2 rounded-card border border-dashed border-border-light bg-surface px-6 py-10 text-center">
-            <MessageSquare size={24} className="text-text-muted" aria-hidden="true" />
-            <p className="text-sm font-semibold text-ink">Be the first to say something</p>
-            <p className="max-w-sm text-xs text-text-muted">
-              Comments are coming soon — check back once RSVPs pick up.
-            </p>
-          </div>
-        </section>
+        {/* Comments — real threaded comments backed by /api/events/:id/comments
+            (#30). The composer, list, and author/organizer delete all live in
+            EventComments. */}
+        <EventComments eventId={event.id} organizerId={event.organizer?.id} />
 
         {/* Organizer footer — hosted-by module with follow + link to profile.
             eventCount is intentionally omitted until the backend surfaces a

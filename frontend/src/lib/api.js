@@ -306,9 +306,11 @@ function toClientComment(c) {
   const author = toClientAuthor(c.author)
   return {
     id: c.id,
+    authorId: c.author?.id ?? null,
     author: author?.name ?? 'Someone',
     authorHandle: author?.handle ?? '',
     authorAvatar: author?.avatar ?? DEFAULT_AVATAR,
+    verified: author?.verified ?? false,
     text: c.body,
     parentId: c.parent_comment_id ?? null,
     replyCount: c.reply_count ?? 0,
@@ -867,6 +869,27 @@ export const api = {
       method: 'POST',
       body: { body, ...(parentCommentId ? { parent_comment_id: parentCommentId } : {}) },
     }).then(toClientComment),
+
+  // Comments on an event (GET/POST /api/events/:id/comments; backend #30).
+  // Same contract + client shape as post comments, keyed on the event id.
+  eventComments: async (id, { parentId, cursor, limit } = {}) => {
+    const qs = new URLSearchParams()
+    if (parentId) qs.set('parentId', parentId)
+    if (cursor) qs.set('cursor', cursor)
+    if (limit) qs.set('limit', String(limit))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    const list = await get(`/events/${id}/comments${suffix}`, () => [])
+    return (list ?? []).map(toClientComment)
+  },
+  addEventComment: (id, body, parentCommentId) =>
+    request(`/events/${id}/comments`, {
+      method: 'POST',
+      body: { body, ...(parentCommentId ? { parent_comment_id: parentCommentId } : {}) },
+    }).then(toClientComment),
+
+  // Soft-delete a comment (DELETE /api/comments/:id; backend #30). Works for
+  // both event and post comments; returns nothing (204) on success.
+  deleteComment: (id) => request(`/comments/${id}`, { method: 'DELETE' }),
 
   // Mark a story viewed (POST /api/stories/:id/view; backend #29). Idempotent
   // and fire-and-forget — a failed seen-marker never blocks the UI, so we

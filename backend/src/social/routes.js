@@ -59,6 +59,25 @@ async function emitInteraction(tx, { type, req, post }) {
   })
 }
 
+/**
+ * Interaction row for a comment on an EventDetail page — mirrors src/engagement
+ * (surface 'event_detail', carries category_id for the recommender). Kept
+ * separate from the post/social emitInteraction so each surface stays honest.
+ */
+async function emitEventCommentInteraction(tx, { req, event }) {
+  await tx.interactionEvent.create({
+    data: {
+      userId: req.user.id,
+      sessionId: req.sessionId ?? null,
+      eventId: event.id,
+      categoryId: event.categoryId ?? null,
+      interactionType: 'comment',
+      surface: 'event_detail',
+      weight: 0.7,
+    },
+  })
+}
+
 /** Load a post or return null; minimal columns the mutation handlers need. */
 async function loadPost(id) {
   if (!isUuid(id)) return null
@@ -560,6 +579,170 @@ router.post('/stories/:id/view', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('POST /api/stories/:id/view error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not mark story viewed')
+  }
+})
+
+// --- GET /api/events/:id/comments — threaded comments on an event -----------
+// Public. ?parentId= scopes to replies of one comment (else top-level, where
+// parent_comment_id IS NULL). Excludes soft-deleted (deleted_at IS NOT NULL).
+// Mirrors GET /api/posts/:id/comments exactly, keyed on eventId instead.
+router.get('/events/:id/comments', async (req, res) => {
+  const { id } = req.params
+  if (!isUuid(id)) return fail(res, 404, 'NOT_FOUND', 'Event not found')
+
+  try {
+    const event = await prisma.event.findUnique({ where: { id }, select: { id: true } })
+    if (!event) return fail(res, 404, 'NOT_FOUND', 'Event not found')
+
+    const limit = clampLimit(req.query.limit)
+    const where = { eventId: id, deletedAt: null }
+    where.parentCommentId = isUuid(req.query.parentId) ? req.query.parentId : null
+    if (req.query.cursor) {
+      const cur = new Date(req.query.cursor)
+      if (!isNaN(cur)) where.createdAt = { lt: cur }
+    }
+
+    const rows = await prisma.comment.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      select: COMMENT_SELECT,
+    })
+
+    let nextCursor = null
+    if (rows.length > limit) {
+      rows.pop()
+      nextCursor = rows[rows.length - 1].createdAt.toISOString()
+    }
+
+    return res.json({ data: rows.map(toComment), nextCursor })
+  } catch (err) {
+    console.error('GET /api/events/:id/comments error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not load comments')
+  }
+})
+
+// --- POST /api/events/:id/comments — comment / reply on an event -------------
+// Events carry no denormalized comment_count column (only posts do), so there's
+// no count to bump here — the visible list is the source of truth.
+router.post('/events/:id/comments', requireAuth, async (req, res) => {
+  const { id } = req.params
+  if (!isUuid(id)) return fail(res, 404, 'NOT_FOUND', 'Event not found')
+
+  const { body, parent_comment_id } = req.body ?? {}
+  if (!body || typeof body !== 'string' || !body.trim()) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'body is required')
+  }
+  if (parent_comment_id != null && !isUuid(parent_comment_id)) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'parent_comment_id must be a valid id')
+  }
+
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id },
+      select: { id: true, categoryId: true, organizerId: true, title: true },
+    })
+    if (!event) return fail(res, 404, 'NOT_FOUND', 'Event not found')
+
+    // A reply must target a live comment on THIS event.
+    if (parent_comment_id) {
+      const parent = await prisma.comment.findUnique({
+        where: { id: parent_comment_id },
+        select: { id: true, eventId: true, deletedAt: true },
+      })
+      if (!parent || parent.eventId !== id || parent.deletedAt) {
+        return fail(res, 404, 'NOT_FOUND', 'Parent comment not found')
+      }
+    }
+
+    const created = await prisma.$transaction(async (tx) => {
+      const created = await tx.comment.create({
+        data: {
+          authorId: req.user.id,
+          eventId: id,
+          parentCommentId: parent_comment_id ?? null,
+          body: body.trim(),
+        },
+        select: COMMENT_SELECT,
+      })
+      await emitEventCommentInteraction(tx, { req, event })
+      return created
+    })
+
+    // Notify the event's organizer (skip self-comments). Best-effort.
+    if (event.organizerId && event.organizerId !== req.user.id) {
+      prisma.notification
+        .create({
+          data: {
+            userId: event.organizerId,
+            type: parent_comment_id ? 'comment_reply' : 'system',
+            channel: 'in_app',
+            actorId: req.user.id,
+            eventId: id,
+            title: `${req.user.displayName || 'Someone'} commented on ${event.title}`,
+            body: body.trim().slice(0, 140),
+            metadata: { event_id: id, comment_id: created.id },
+          },
+        })
+        .catch(() => {})
+    }
+
+    return res.status(201).json({ data: toComment(created) })
+  } catch (err) {
+    console.error('POST /api/events/:id/comments error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not add comment')
+  }
+})
+
+// --- DELETE /api/comments/:id — soft-delete (event OR post comment) ----------
+// Sets deleted_at (never hard-deletes, preserving thread structure for replies)
+// and, for a post comment, DECREMENTS posts.comment_count so the shown count
+// matches visible comments (the audit fix). Idempotent: a re-delete is a no-op
+// 204. Auth: comment author OR the parent content's owner (event organizer /
+// post author).
+router.delete('/comments/:id', requireAuth, async (req, res) => {
+  const { id } = req.params
+  if (!isUuid(id)) return fail(res, 404, 'NOT_FOUND', 'Comment not found')
+
+  try {
+    const comment = await prisma.comment.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        authorId: true,
+        eventId: true,
+        postId: true,
+        deletedAt: true,
+        event: { select: { organizerId: true } },
+        post: { select: { authorId: true } },
+      },
+    })
+    if (!comment) return fail(res, 404, 'NOT_FOUND', 'Comment not found')
+
+    // Already soft-deleted — idempotent success, no double-decrement.
+    if (comment.deletedAt) return res.status(204).end()
+
+    const ownerId = comment.event?.organizerId ?? comment.post?.authorId ?? null
+    const allowed = comment.authorId === req.user.id || ownerId === req.user.id
+    if (!allowed) {
+      return fail(res, 403, 'FORBIDDEN', 'Not allowed to delete this comment')
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.comment.update({ where: { id }, data: { deletedAt: new Date() } })
+      // Only posts track a denormalized count; keep it in step with visible rows.
+      if (comment.postId) {
+        await tx.post.update({
+          where: { id: comment.postId },
+          data: { commentCount: { decrement: 1 } },
+        })
+      }
+    })
+
+    return res.status(204).end()
+  } catch (err) {
+    console.error('DELETE /api/comments/:id error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not delete comment')
   }
 })
 

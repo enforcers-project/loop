@@ -757,6 +757,25 @@ export const api = {
       },
     }),
 
+  // Upload a post/story image to S3 and return its public URL. Two steps,
+  // mirroring uploadAvatar: (1) ask for a presigned PUT URL, (2) PUT the bytes
+  // straight to S3 (they never touch our server). `kind` picks the S3 folder
+  // ('post' | 'story'). Throws on failure; the 503 { code:'NOT_CONFIGURED' }
+  // surfaces via err.status so the Composer can fall back to a URL input.
+  uploadSocialImage: async (file, kind = 'post') => {
+    const { upload_url, public_url } = await request('/uploads/social-image', {
+      method: 'POST',
+      body: { content_type: file.type, kind },
+    })
+    const put = await fetch(upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    })
+    if (!put.ok) throw new Error(`Upload failed (${put.status})`)
+    return public_url
+  },
+
   // Story rings grouped by author (GET /api/stories; backend #29). Each group is
   // { author, allViewed, stories:[{ id, mediaUrl, viewedByMe, ... }] }. Falls
   // back to an empty list (the StoriesRow still shows the "Your story" tile).

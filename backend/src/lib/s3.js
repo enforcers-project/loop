@@ -44,20 +44,22 @@ export function isAllowedContentType(type) {
 }
 
 /**
- * Mint a presigned PUT URL for a user's new avatar. The object key is namespaced
- * per user (avatars/:userId/:stamp.ext) so uploads don't collide and the newest
- * one wins. Returns { uploadUrl, publicUrl, key }:
+ * Mint a presigned PUT URL for a user's image upload. The object key is
+ * namespaced per folder + user (`:folder/:userId/:stamp.ext`) so uploads don't
+ * collide across users or features and the newest one wins. `folder` defaults to
+ * 'avatars' so the original avatar call site is unchanged; social media passes
+ * 'posts' / 'stories'. Returns { uploadUrl, publicUrl, key }:
  *   - uploadUrl: PUT the raw file bytes here with the same Content-Type (expires).
- *   - publicUrl: the stable https URL to store on the user + render in <img>.
+ *   - publicUrl: the stable https URL to store on the row + render in <img>.
  * `stamp` is passed in (Date.now() is unavailable in some execution contexts and
  * the caller already has a request clock) to keep keys unique.
  */
-export async function presignPutUrl({ userId, contentType, stamp }) {
+export async function presignPutUrl({ userId, contentType, stamp, folder = 'avatars' }) {
   if (!client) throw new Error('S3 is not configured')
   const ext = EXT_BY_TYPE[contentType]
   if (!ext) throw new Error(`Unsupported content type: ${contentType}`)
 
-  const key = `avatars/${userId}/${stamp}.${ext}`
+  const key = `${folder}/${userId}/${stamp}.${ext}`
   const command = new PutObjectCommand({
     Bucket: BUCKET,
     Key: key,

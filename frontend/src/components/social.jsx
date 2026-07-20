@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { Bookmark, Heart, ImagePlus, MessageCircle, Plus, Send, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Bookmark, Heart, ImagePlus, Link2, MessageCircle, Plus, Send, X } from 'lucide-react'
 import { cn, formatCount, timeAgo } from '../lib/utils'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { inputClass, VerifiedBadge } from './primitives'
+import { inputClass, Spinner, VerifiedBadge } from './primitives'
 import { EventImage } from './EventImage'
 
 const POST_KINDS = [
@@ -13,22 +13,52 @@ const POST_KINDS = [
   { value: 'update', label: 'Update' },
 ]
 
+const ACCEPT_IMAGE = 'image/png,image/jpeg,image/webp,image/gif'
+
 /* --------------------------------------------------------------------------
-   Composer — modal to create a post or a story. Both need a persistable image
-   URL (there's no post-image upload endpoint yet), so the image is entered as a
-   URL and previewed live. `onCreated(kind, result)` lets the SocialFeed prepend
-   a new post or refetch its story rings without a full reload.
+   Composer — modal to create a post or a story. The image is uploaded to S3 via
+   the presign flow (api.uploadSocialImage) and the resulting public URL is what
+   createPost/createStory persists. When uploads aren't configured (503) the
+   picker falls back to a paste-a-URL input so the feed still works in dev.
+   `onCreated(kind, result)` lets the SocialFeed prepend a new post or refetch
+   its story rings without a full reload.
 -------------------------------------------------------------------------- */
 export function Composer({ mode = 'post', onClose, onCreated }) {
   const toast = useToast()
-  const [imageUrl, setImageUrl] = useState('')
+  const fileRef = useRef(null)
+  const [imageUrl, setImageUrl] = useState('') // final persisted URL (S3 or pasted)
   const [caption, setCaption] = useState('')
   const [kind, setKind] = useState('update')
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  // Flip to a paste-a-URL input when S3 uploads aren't available (503).
+  const [urlMode, setUrlMode] = useState(false)
 
   const isStory = mode === 'story'
   const captionMax = isStory ? 160 : 2200
-  const canSubmit = imageUrl.trim() && !busy
+  const canSubmit = imageUrl.trim() && !busy && !uploading
+
+  // Upload the picked file to S3; on 503 (uploads unconfigured) switch to the
+  // URL-input fallback instead of erroring.
+  const onPickFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // let re-picking the same file fire onChange again
+    if (!file) return
+    setUploading(true)
+    try {
+      const url = await api.uploadSocialImage(file, isStory ? 'story' : 'post')
+      setImageUrl(url)
+    } catch (err) {
+      if (err.status === 503) {
+        setUrlMode(true)
+        toast.info('Uploads unavailable — paste an image URL instead')
+      } else {
+        toast.error(err.message || 'Could not upload image. Please try again.')
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const submit = async () => {
     const url = imageUrl.trim()
@@ -86,38 +116,79 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          {/* image URL + live preview */}
+          {/* image — upload to S3, with a paste-a-URL fallback when unconfigured */}
           <div>
             <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
-              {isStory ? 'Media URL' : 'Image URL'}
+              {isStory ? 'Story media' : 'Post image'}
             </span>
-            {imageUrl.trim() ? (
+
+            {/* live preview once we have a URL */}
+            {imageUrl.trim() && (
               <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-input bg-surface">
-                <img
-                  src={imageUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none'
-                  }}
-                  onLoad={(e) => {
-                    e.currentTarget.style.display = 'block'
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="mb-2 flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-input border-2 border-dashed border-border-light bg-surface text-text-muted">
-                <ImagePlus size={28} />
-                <span className="text-sm">Paste an image URL below</span>
+                <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  aria-label="Remove image"
+                  onClick={() => setImageUrl('')}
+                  className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+                >
+                  <X size={18} />
+                </button>
               </div>
             )}
-            <input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://…"
-              type="url"
-              className={inputClass}
-            />
+
+            {/* picker (default) or URL input (fallback) when no image yet */}
+            {!imageUrl.trim() &&
+              (urlMode ? (
+                <input
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="https://…"
+                  type="url"
+                  autoFocus
+                  className={inputClass}
+                />
+              ) : (
+                <label
+                  className={cn(
+                    'flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-input border-2 border-dashed border-border-light bg-surface text-text-muted transition-colors hover:border-primary',
+                    uploading && 'pointer-events-none opacity-70',
+                  )}
+                >
+                  {uploading ? (
+                    <>
+                      <Spinner label="Uploading image" />
+                      <span className="text-sm">Uploading…</span>
+                    </>
+                  ) : (
+                    <>
+                      <ImagePlus size={28} />
+                      <span className="text-sm">
+                        {isStory ? 'Upload story media' : 'Upload an image'}
+                      </span>
+                    </>
+                  )}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept={ACCEPT_IMAGE}
+                    className="hidden"
+                    onChange={onPickFile}
+                  />
+                </label>
+              ))}
+
+            {/* toggle between upload and paste-a-URL */}
+            {!imageUrl.trim() && !uploading && (
+              <button
+                type="button"
+                onClick={() => setUrlMode((v) => !v)}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                <Link2 size={14} />
+                {urlMode ? 'Upload a file instead' : 'Paste an image URL instead'}
+              </button>
+            )}
           </div>
 
           {/* kind — posts only */}

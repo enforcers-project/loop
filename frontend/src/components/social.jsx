@@ -1,24 +1,198 @@
 import { useState } from 'react'
-import { Bookmark, Heart, MessageCircle, Plus, Send } from 'lucide-react'
+import { Bookmark, Heart, ImagePlus, MessageCircle, Plus, Send, X } from 'lucide-react'
 import { cn, formatCount, timeAgo } from '../lib/utils'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
-import { VerifiedBadge } from './primitives'
+import { useToast } from '../context/ToastContext'
+import { inputClass, VerifiedBadge } from './primitives'
 import { EventImage } from './EventImage'
+
+const POST_KINDS = [
+  { value: 'flyer', label: 'Flyer' },
+  { value: 'recap', label: 'Recap' },
+  { value: 'update', label: 'Update' },
+]
+
+/* --------------------------------------------------------------------------
+   Composer — modal to create a post or a story. Both need a persistable image
+   URL (there's no post-image upload endpoint yet), so the image is entered as a
+   URL and previewed live. `onCreated(kind, result)` lets the SocialFeed prepend
+   a new post or refetch its story rings without a full reload.
+-------------------------------------------------------------------------- */
+export function Composer({ mode = 'post', onClose, onCreated }) {
+  const toast = useToast()
+  const [imageUrl, setImageUrl] = useState('')
+  const [caption, setCaption] = useState('')
+  const [kind, setKind] = useState('update')
+  const [busy, setBusy] = useState(false)
+
+  const isStory = mode === 'story'
+  const captionMax = isStory ? 160 : 2200
+  const canSubmit = imageUrl.trim() && !busy
+
+  const submit = async () => {
+    const url = imageUrl.trim()
+    if (!url || busy) return
+    setBusy(true)
+    try {
+      if (isStory) {
+        await api.createStory({ mediaUrl: url, caption: caption.trim() || undefined })
+        toast.success('Story posted')
+        onCreated?.('story')
+      } else {
+        const post = await api.createPost({
+          kind,
+          imageUrl: url,
+          caption: caption.trim() || undefined,
+        })
+        toast.success('Post published')
+        onCreated?.('post', post)
+      }
+      onClose?.()
+    } catch (err) {
+      toast.error(
+        err.message || `Could not publish ${isStory ? 'story' : 'post'}. Please try again.`,
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      onClick={() => !busy && onClose?.()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={isStory ? 'Add to your story' : 'Create a post'}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md overflow-hidden rounded-card bg-white shadow-hero"
+      >
+        {/* header */}
+        <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
+          <h2 className="text-base font-bold text-ink">
+            {isStory ? 'Add to your story' : 'Create a post'}
+          </h2>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => !busy && onClose?.()}
+            className="grid h-8 w-8 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          {/* image URL + live preview */}
+          <div>
+            <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
+              {isStory ? 'Media URL' : 'Image URL'}
+            </span>
+            {imageUrl.trim() ? (
+              <div className="relative mb-2 aspect-square w-full overflow-hidden rounded-input bg-surface">
+                <img
+                  src={imageUrl}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
+                  onLoad={(e) => {
+                    e.currentTarget.style.display = 'block'
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="mb-2 flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-input border-2 border-dashed border-border-light bg-surface text-text-muted">
+                <ImagePlus size={28} />
+                <span className="text-sm">Paste an image URL below</span>
+              </div>
+            )}
+            <input
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://…"
+              type="url"
+              className={inputClass}
+            />
+          </div>
+
+          {/* kind — posts only */}
+          {!isStory && (
+            <div className="flex gap-2">
+              {POST_KINDS.map((k) => (
+                <button
+                  key={k.value}
+                  type="button"
+                  onClick={() => setKind(k.value)}
+                  className={cn(
+                    'rounded-pill px-3.5 py-1.5 text-sm font-medium transition-colors',
+                    kind === k.value
+                      ? 'bg-primary text-white'
+                      : 'bg-surface text-text-secondary hover:bg-border-light',
+                  )}
+                >
+                  {k.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* caption */}
+          <div>
+            <textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value.slice(0, captionMax))}
+              placeholder={isStory ? 'Add a caption…' : 'Write a caption…'}
+              rows={3}
+              className={cn(inputClass, 'resize-none')}
+            />
+            <div className="mt-1 text-right text-xs text-text-muted">
+              {caption.length}/{captionMax}
+            </div>
+          </div>
+        </div>
+
+        {/* footer */}
+        <div className="flex justify-end gap-2 border-t border-border-light px-5 py-3.5">
+          <button
+            type="button"
+            onClick={() => !busy && onClose?.()}
+            className="rounded-button px-4 py-2 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!canSubmit}
+            className="rounded-button bg-primary px-5 py-2 text-sm font-semibold text-white transition-opacity active:scale-95 disabled:opacity-40"
+          >
+            {busy ? 'Posting…' : isStory ? 'Share story' : 'Post'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /* --------------------------------------------------------------------------
    StoriesRow — horizontal avatar ring row; labels allow 2 lines, w-16.
-   `onOpen(story)` fires when a ring is tapped so the parent can mark it viewed.
+   `onOpen(story)` fires when a ring is tapped so the parent can mark it viewed;
+   `onAddStory()` fires when the caller taps their own "Your story" tile.
    Rings the caller has already fully viewed render in a muted gray instead of
    the gradient.
 -------------------------------------------------------------------------- */
-export function StoriesRow({ stories, onOpen }) {
+export function StoriesRow({ stories, onOpen, onAddStory }) {
   return (
     <div className="scrollbar-hide -mx-1 flex gap-4 overflow-x-auto px-1 pb-1">
       {stories.map((s, i) => (
         <button
           key={s.id ?? i}
-          onClick={() => !s.isYou && onOpen?.(s)}
+          onClick={() => (s.isYou ? onAddStory?.() : onOpen?.(s))}
           className="flex w-[68px] flex-shrink-0 flex-col items-center gap-1.5"
           aria-label={s.isYou ? 'Add to your story' : `${s.name}'s story`}
         >

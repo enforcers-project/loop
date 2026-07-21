@@ -983,7 +983,7 @@ const EVENTS = [
     capacity: 80,
     ageMin: null,
     ageLabel: 'All ages',
-    flyerUrl: 'https://images.unsplash.com/photo-1475721027785-f74eccf877e2?w=800',
+    flyerUrl: 'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=800',
   },
   {
     slug: 'women-in-tech-brunch',

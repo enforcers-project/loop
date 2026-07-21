@@ -4,8 +4,8 @@ import { useApp } from '../context/AppContext'
 import { cn } from '../lib/utils'
 import { FormField, PasswordField, InlineAlert, inputClass } from '../components/primitives'
 
-// Two roles only. Hosting pickup runs is an Organizer sub-capability toggled
-// below (not a role) — a plain attendee can't host. See planning §3/§10.
+// Two roles only. Every organizer can host pickup sports runs — no sub-role
+// toggle at signup. Attendees can't host. See planning §3/§10.
 const ROLES = [
   { id: 'attendee', label: 'Attendee', blurb: 'Discover & RSVP' },
   { id: 'organizer', label: 'Organizer', blurb: 'Create & manage events' },
@@ -54,7 +54,6 @@ export function Auth() {
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState('attendee')
-  const [isHost, setIsHost] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   // Inline error shown right above the submit button (instead of a bottom-of-
   // screen toast), so the feedback appears where the user is looking.
@@ -63,8 +62,8 @@ export function Auth() {
   // can nudge the user to click "Continue with Google" once more to finish.
   const [googleSignupHint, setGoogleSignupHint] = useState(false)
 
-  // Hosting is organizer-only; drop the flag if they aren't signing up as one.
-  const wantsHost = role === 'organizer' && isHost
+  // Every organizer signup grants host capability; attendees never host.
+  const wantsHost = role === 'organizer'
 
   // --- Google sign-in ---------------------------------------------------------
   const googleEnabled = !!GOOGLE_CLIENT_ID
@@ -245,25 +244,6 @@ export function Auth() {
                   ))}
                 </div>
 
-                {/* Host is an organizer sub-capability — only offered to organizers. */}
-                {role === 'organizer' && (
-                  <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-button border border-border-light bg-white px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      checked={isHost}
-                      onChange={(e) => setIsHost(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-border-light text-primary"
-                    />
-                    <span>
-                      <span className="block text-sm font-semibold text-ink">
-                        I host pickup sports runs
-                      </span>
-                      <span className="block text-xs text-text-muted">
-                        Unlocks rosters, positions &amp; skill levels
-                      </span>
-                    </span>
-                  </label>
-                )}
               </div>
             )}
 

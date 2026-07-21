@@ -16,6 +16,8 @@ import { attachSession } from './auth/middleware.js'
 import recommendationsRouter from './recommendations/routes.js'
 import embeddingsRouter from './embeddings/routes.js'
 import aiConversationsRouter from './ai/routes.js'
+import aiFlyerRouter from './ai/flyer.js'
+import aiDescriptionRouter from './ai/description.js'
 import preferencesRouter from './preferences/routes.js'
 import socialRouter from './social/routes.js'
 import { startScheduler } from './jobs/index.js'
@@ -24,7 +26,10 @@ const app = express()
 const PORT = Number(process.env.PORT) || 3000
 
 app.use(cors({ origin: true, credentials: true }))
-app.use(express.json())
+// 10mb ceiling accommodates AI-generated flyers (base64 data URLs are ~2-4 MB
+// for a portrait PNG). Regular JSON payloads are tiny; the ceiling only kicks
+// in on the create-event write path.
+app.use(express.json({ limit: '10mb' }))
 app.use(cookieParser())
 
 // Resolve the caller on every request: attach req.user from the JWT cookie, and
@@ -158,6 +163,14 @@ app.use('/api/ai', embeddingsRouter)
 
 // --- AI conversations (planning §7.6, work-plan #31) -------------------------
 app.use('/api/ai', aiConversationsRouter)
+
+// --- AI flyer generation for organizers on Create Event ----------------------
+// POST /api/ai/flyer  — OpenAI gpt-image-1, returns base64 data URL.
+app.use('/api/ai', aiFlyerRouter)
+
+// --- AI description writer for organizers on Create Event --------------------
+// POST /api/ai/description  — Groq llama-3.3-70b, returns plain text.
+app.use('/api/ai', aiDescriptionRouter)
 
 // --- Preference vectors (§9.2C, issue #20) -----------------------------------
 app.use('/api', preferencesRouter)

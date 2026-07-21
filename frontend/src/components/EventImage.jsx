@@ -42,6 +42,11 @@ export function EventImage({
   showLabel = true,
 }) {
   const [status, setStatus] = useState(src ? 'loading' : 'error')
+  // Aspect ratio drives fit: landscape photos (typical Ticketmaster/SeatGeek
+  // posters) look best with object-cover so the tile is fully filled.
+  // Portrait AI flyers get object-contain so the title/text at the top and
+  // bottom of the flyer isn't cropped by the tile edges.
+  const [portrait, setPortrait] = useState(false)
 
   const visual = category ? CATEGORY_VISUAL[category] : DEFAULT_VISUAL
   const { Icon } = visual
@@ -49,15 +54,30 @@ export function EventImage({
 
   return (
     <div className="absolute inset-0 h-full w-full overflow-hidden bg-surface">
+      {/* Blurred backdrop fills any letterbox gap for portrait flyers, so
+          they read as intentional rather than "floating on grey". */}
+      {portrait && status === 'loaded' && src && (
+        <img
+          src={src}
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-xl"
+        />
+      )}
       {status !== 'error' && src && (
         <img
           src={src}
           alt={alt ?? ''}
           loading="lazy"
-          onLoad={() => setStatus('loaded')}
+          onLoad={(e) => {
+            const img = e.currentTarget
+            if (img.naturalHeight > img.naturalWidth) setPortrait(true)
+            setStatus('loaded')
+          }}
           onError={() => setStatus('error')}
           className={cn(
-            'h-full w-full object-cover transition-opacity duration-300',
+            'relative h-full w-full transition-opacity duration-300',
+            portrait ? 'object-contain' : 'object-cover',
             status === 'loaded' ? 'opacity-100' : 'opacity-0',
             className,
           )}

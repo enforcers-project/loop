@@ -64,13 +64,21 @@ export function VerifiedBadge({ size = 16 }) {
    RoleBadge — pill with role-specific tinted bg + text
 -------------------------------------------------------------------------- */
 export function RoleBadge({ role }) {
-  const s = ROLE_STYLE[role]
+  if (!role) return null
+  // Backend roles are lowercase ('organizer', 'attendee'); the ROLE_STYLE map
+  // keys off Title Case display labels. Try the raw value first, then the
+  // Title Case form, then fall back to the neutral Attendee tint so an unknown
+  // role never crashes the render.
+  const label = String(role)
+  const key =
+    ROLE_STYLE[label] != null ? label : label.charAt(0).toUpperCase() + label.slice(1).toLowerCase()
+  const s = ROLE_STYLE[key] ?? ROLE_STYLE.Attendee
   return (
     <span
       className="inline-flex items-center rounded-pill px-2.5 py-1 text-xs font-semibold"
       style={{ backgroundColor: s.bg, color: s.text }}
     >
-      {role}
+      {key}
     </span>
   )
 }

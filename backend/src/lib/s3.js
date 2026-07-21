@@ -78,3 +78,27 @@ export function bucketPublicPrefix() {
   if (!BUCKET || !REGION) return null
   return `https://${BUCKET}.s3.${REGION}.amazonaws.com/`
 }
+
+/**
+ * Upload raw bytes to S3 from the server. Used when the file originates on the
+ * backend (e.g. AI-generated flyers coming back from OpenAI) — no presigned
+ * round-trip needed. Returns the public URL. Follows the same key convention
+ * as presignPutUrl (folder/userId/stamp.ext) so both paths share layout.
+ */
+export async function putObject({ userId, contentType, stamp, folder, body }) {
+  if (!client) throw new Error('S3 is not configured')
+  const ext = EXT_BY_TYPE[contentType]
+  if (!ext) throw new Error(`Unsupported content type: ${contentType}`)
+
+  const key = `${folder}/${userId}/${stamp}.${ext}`
+  await client.send(
+    new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  )
+  const publicUrl = `https://${BUCKET}.s3.${REGION}.amazonaws.com/${key}`
+  return { publicUrl, key }
+}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Calendar, ImagePlus, Lock, MapPin, Sparkles } from 'lucide-react'
+import { ImagePlus, Lock, MapPin, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
 import { FormField, InlineAlert, inputClass } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
@@ -12,6 +12,27 @@ import { api } from '../lib/api'
 const CATEGORIES = ['Music', 'Nightlife', 'Sports', 'Networking', 'Food', 'Campus']
 
 const POSITION_TEMPLATE = 'Goalkeeper, Defender, Midfielder, Forward'
+
+// Tone presets for the description writer. Matches TONES in backend/src/ai/description.js.
+const DESC_TONES = [
+  { key: 'hype', label: 'Hype' },
+  { key: 'chill', label: 'Chill' },
+  { key: 'professional', label: 'Professional' },
+  { key: 'playful', label: 'Playful' },
+]
+
+// Style presets the organizer picks with one tap. Matches STYLE_PRESETS in
+// backend/src/ai/flyer.js — the backend appends the art-direction wording.
+const FLYER_STYLES = [
+  { key: 'bold', label: 'Bold' },
+  { key: 'minimal', label: 'Minimal' },
+  { key: 'retro', label: 'Retro' },
+  { key: 'photo', label: 'Photo' },
+]
+
+// Cap client-side too so an organizer can't burn through their budget on one
+// indecisive draft — the backend enforces the same limit per user/hour.
+const MAX_FLYER_GENERATIONS = 3
 
 export function CreateEvent() {
   // Posting a pickup run requires the host sub-capability (organizer + is_host).
@@ -43,6 +64,90 @@ export function CreateEvent() {
   // Inline publish error, shown right above the Publish button instead of a
   // bottom-of-screen toast. Success stays a toast (the page navigates away).
   const [error, setError] = useState('')
+
+  // AI flyer generation state — panel opens under the dropzone.
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiStyle, setAiStyle] = useState('bold')
+  const [aiError, setAiError] = useState('')
+  const [aiPreview, setAiPreview] = useState(null)
+  const [aiCount, setAiCount] = useState(0)
+
+  const generateFlyer = useMutation({
+    mutationFn: () =>
+      api.generateFlyer({
+        prompt: aiPrompt.trim(),
+        style: aiStyle,
+        title: title.trim(),
+        category,
+      }),
+    onSuccess: (result) => {
+      // Server returns either { url } (uploaded to S3) or { data_url } (local
+      // dev without AWS creds). Both are usable in <img src>.
+      setAiPreview(result?.url ?? result?.data_url ?? null)
+      setAiCount((n) => n + 1)
+    },
+    onError: (err) => setAiError(err?.message || 'Could not generate flyer — please try again.'),
+  })
+
+  const onGenerateFlyer = () => {
+    setAiError('')
+    const prompt = aiPrompt.trim()
+    if (!prompt) return setAiError('Describe what you want on the flyer.')
+    if (aiCount >= MAX_FLYER_GENERATIONS) {
+      return setAiError(`Reached ${MAX_FLYER_GENERATIONS} generations. Pick one to continue.`)
+    }
+    generateFlyer.mutate()
+  }
+
+  const applyGeneratedFlyer = () => {
+    if (!aiPreview) return
+    setFlyer(aiPreview)
+    setAiOpen(false)
+    setAiPreview(null)
+    toast.success('AI flyer applied.')
+  }
+
+  // AI description writer state — inline row above the description textarea.
+  const [descTone, setDescTone] = useState('hype')
+  const [descError, setDescError] = useState('')
+  // Prior description text so a single "Undo" reverts a bad rewrite.
+  const [descPrev, setDescPrev] = useState(null)
+
+  const generateDescription = useMutation({
+    mutationFn: () =>
+      api.generateDescription({
+        title: title.trim(),
+        category,
+        tone: descTone,
+        notes: description.trim(),
+      }),
+    onSuccess: (result) => {
+      const text = result?.text?.trim()
+      if (!text) {
+        setDescError('AI writer returned nothing — try again.')
+        return
+      }
+      setDescPrev(description)
+      setDescription(text)
+    },
+    onError: (err) =>
+      setDescError(err?.message || 'Could not write description — please try again.'),
+  })
+
+  const onWriteDescription = () => {
+    setDescError('')
+    if (!title.trim() && !description.trim()) {
+      return setDescError('Add a title or a rough draft first.')
+    }
+    generateDescription.mutate()
+  }
+
+  const onUndoDescription = () => {
+    if (descPrev == null) return
+    setDescription(descPrev)
+    setDescPrev(null)
+  }
 
   const previewEvent = {
     id: 'preview',
@@ -142,9 +247,26 @@ export function CreateEvent() {
       <div className="mt-6 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px]">
         {/* form */}
         <div className="space-y-5">
-          {/* flyer upload */}
+          {/* flyer upload — plus AI generation panel */}
           <div>
-            <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">Flyer</span>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[13px] font-medium text-text-secondary">Flyer</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setAiOpen((v) => !v)
+                  setAiError('')
+                  if (!aiPrompt && (title || description)) {
+                    const seed = [title, category, description].filter(Boolean).join(', ')
+                    setAiPrompt(seed)
+                  }
+                }}
+                className="flex items-center gap-1.5 rounded-pill bg-primary/10 px-3 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
+              >
+                <Sparkles size={13} />
+                {aiOpen ? 'Hide AI generator' : 'Generate with AI'}
+              </button>
+            </div>
             <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-border-light bg-surface text-text-muted transition-colors hover:border-primary">
               {flyer ? (
                 <img src={flyer} alt="" className="h-full w-full rounded-card object-cover" />
@@ -164,6 +286,95 @@ export function CreateEvent() {
                 }}
               />
             </label>
+
+            {aiOpen && (
+              <div className="mt-3 space-y-3 rounded-card border border-border-light bg-white p-4">
+                <div>
+                  <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
+                    Describe your flyer
+                  </span>
+                  <textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    rows={3}
+                    placeholder="Afro Nation rooftop, warm neon lights, Oakland skyline at dusk…"
+                    className={cn(inputClass, 'resize-none')}
+                  />
+                  <p className="mt-1 text-[11px] text-text-muted">
+                    Your title, date and venue overlay on top later — this is the background image.
+                  </p>
+                </div>
+
+                <div>
+                  <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
+                    Style
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {FLYER_STYLES.map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => setAiStyle(s.key)}
+                        className={cn(
+                          'rounded-pill border px-3 py-1.5 text-xs font-medium transition-colors',
+                          aiStyle === s.key
+                            ? 'border-primary bg-primary text-white'
+                            : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <InlineAlert message={aiError} />
+
+                {aiPreview && (
+                  <div className="rounded-card border border-border-light bg-surface p-2">
+                    <img
+                      src={aiPreview}
+                      alt="AI generated flyer"
+                      className="mx-auto h-64 w-auto rounded-card object-cover"
+                    />
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={applyGeneratedFlyer}
+                        className="flex-1 rounded-button bg-accent py-2 text-sm font-semibold text-white transition-transform active:scale-95"
+                      >
+                        Use this flyer
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onGenerateFlyer}
+                        disabled={generateFlyer.isPending || aiCount >= MAX_FLYER_GENERATIONS}
+                        className="flex items-center gap-1.5 rounded-button border border-border-light bg-white px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <RefreshCw size={14} /> Regenerate
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[11px] text-text-muted">
+                    {aiCount}/{MAX_FLYER_GENERATIONS} generations used
+                  </span>
+                  {!aiPreview && (
+                    <button
+                      type="button"
+                      onClick={onGenerateFlyer}
+                      disabled={generateFlyer.isPending || aiCount >= MAX_FLYER_GENERATIONS}
+                      className="flex items-center gap-1.5 rounded-button bg-primary px-4 py-2 text-sm font-semibold text-white transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Sparkles size={14} />
+                      {generateFlyer.isPending ? 'Generating…' : 'Generate flyer'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <FormField label="Event title">
@@ -205,18 +416,17 @@ export function CreateEvent() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Date">
-              <div className="relative">
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className={cn(inputClass, 'pr-10')}
-                />
-                <Calendar
-                  size={16}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
-                />
-              </div>
+              {/* Native date input; clicking anywhere on the field opens the
+                  picker (Chrome/Safari support showPicker()). Only one calendar
+                  glyph shows — the browser's built-in one. */}
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                onClick={(e) => e.currentTarget.showPicker?.()}
+                onFocus={(e) => e.currentTarget.showPicker?.()}
+                className={cn(inputClass, 'cursor-pointer')}
+              />
             </FormField>
             <FormField label="Time">
               <input
@@ -282,29 +492,67 @@ export function CreateEvent() {
 
           {/* description + AI write */}
           <div>
-            <div className="mb-1.5 flex items-center justify-between">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
               <span className="text-[13px] font-medium text-text-secondary">Description</span>
-              {/* AI assist ships in Sprint 3 (#25). Disabled placeholder for now. */}
-              <button
-                type="button"
-                disabled
-                title="Coming soon"
-                className="flex cursor-not-allowed items-center gap-1.5 rounded-pill bg-surface px-3 py-1 text-xs font-semibold text-text-muted"
-              >
-                <Sparkles size={13} />
-                Write with AI
-                <span className="ml-0.5 flex items-center gap-0.5 text-[10px] font-medium text-text-muted">
-                  <Lock size={9} /> Soon
-                </span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                {descPrev != null && (
+                  <button
+                    type="button"
+                    onClick={onUndoDescription}
+                    className="flex items-center gap-1 rounded-pill bg-surface px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-border-light"
+                    title="Restore your original text"
+                  >
+                    <Undo2 size={12} /> Undo
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onWriteDescription}
+                  disabled={generateDescription.isPending}
+                  className="flex items-center gap-1.5 rounded-pill bg-primary/10 px-3 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Sparkles size={13} />
+                  {generateDescription.isPending
+                    ? 'Writing…'
+                    : description.trim()
+                      ? 'Rewrite with AI'
+                      : 'Write with AI'}
+                </button>
+              </div>
+            </div>
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-medium text-text-muted">Tone:</span>
+              {DESC_TONES.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setDescTone(t.key)}
+                  className={cn(
+                    'rounded-pill border px-2.5 py-0.5 text-[11px] font-medium transition-colors',
+                    descTone === t.key
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
             <textarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value)
+                if (descPrev != null) setDescPrev(null)
+              }}
               rows={4}
               placeholder="Tell people what to expect…"
               className={cn(inputClass, 'resize-none')}
             />
+            {descError && (
+              <div className="mt-2">
+                <InlineAlert message={descError} />
+              </div>
+            )}
           </div>
 
           {/* AI auto-tag panel — disabled placeholder; real tagging is #24 (Sprint 3). */}

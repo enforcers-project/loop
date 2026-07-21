@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bookmark, CalendarHeart, Sparkles, Camera, MapPin, X } from 'lucide-react'
+import { Bookmark, CalendarHeart, CalendarPlus, Sparkles, Camera, MapPin, X } from 'lucide-react'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
@@ -334,13 +334,25 @@ export function UserProfile() {
   }
   // Two logic roles + the host capability drive the display RoleBadge:
   // an organizer-host shows the green "Sports Host" tint (per planning §5).
-  const roleLabel = role === 'organizer' ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
-  const [tab, setTab] = useState('Saved')
+  const isOrganizer = role === 'organizer'
+  const roleLabel = isOrganizer ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
+  // Organizers get an extra "Events" tab (their own published events) before
+  // Saved. Attendees never see it — they can't create events.
+  const tabs = isOrganizer
+    ? ['Events', 'Saved', 'Going', 'Interests']
+    : ['Saved', 'Going', 'Interests']
+  const [tab, setTab] = useState(isOrganizer ? 'Events' : 'Saved')
+  // upcoming | past sub-toggle inside the Events tab — mirrors OrganizerProfile
+  // so a user gets the same split of their own events they'd see publicly.
+  const [eventStatus, setEventStatus] = useState('upcoming')
   // null while a fetch is in flight, so the tab area can show a spinner
   // instead of empty-state cards flashing in before real data arrives.
   const [savedEvents, setSavedEvents] = useState(null)
   const [goingEvents, setGoingEvents] = useState(null)
   const [allInterests, setAllInterests] = useState(null)
+  // Keyed by status so upcoming/past can be fetched independently and cached
+  // per-user; past loads lazily when the user first clicks its sub-toggle.
+  const [myEvents, setMyEvents] = useState({ upcoming: null, past: null })
 
   // Render-time reset when the profile owner changes so we don't flash the
   // previous user's saved/going lists before the new fetch lands. See
@@ -351,6 +363,7 @@ export function UserProfile() {
     setAllInterests(null)
     setSavedEvents(null)
     setGoingEvents(null)
+    setMyEvents({ upcoming: null, past: null })
   }
 
   // Load the user's *actual* saved / going events from the backend — not a
@@ -373,14 +386,33 @@ export function UserProfile() {
     }
   }, [user?.id])
 
+  // Organizer's own published events — same endpoint as OrganizerProfile.
+  // Fetch only what the current sub-toggle needs; past is deferred until the
+  // user asks for it. Skip entirely for attendees so we don't spend the round
+  // trip on a tab they'll never see.
+  useEffect(() => {
+    if (!user?.id || !isOrganizer) return
+    if (myEvents[eventStatus] !== null) return
+    let cancelled = false
+    api.myEventCards(user.id, eventStatus).then((data) => {
+      if (cancelled) return
+      setMyEvents((prev) => ({ ...prev, [eventStatus]: data }))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id, isOrganizer, eventStatus, myEvents])
+
   // Still gate on the live sets so an in-session unsave / cancel hides a card
   // immediately, before a refetch — the fetched list is the source of truth,
   // the Set is the just-now override.
   const saved = (savedEvents ?? []).filter((e) => savedIds.has(e.id))
   const going = (goingEvents ?? []).filter((e) => goingIds.has(e.id))
   const myInterests = (allInterests ?? []).filter((i) => interests.includes(i.id))
+  const myEventsList = myEvents[eventStatus] ?? []
   const displayName = user?.name?.trim() || 'Alex Carter'
   const tabLoading =
+    (tab === 'Events' && myEvents[eventStatus] === null) ||
     (tab === 'Saved' && savedEvents === null) ||
     (tab === 'Going' && goingEvents === null) ||
     (tab === 'Interests' && allInterests === null)
@@ -476,7 +508,7 @@ export function UserProfile() {
 
         {/* tabs */}
         <div className="mt-8 flex gap-7 border-b border-border-light">
-          {['Saved', 'Going', 'Interests'].map((t) => (
+          {tabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -494,10 +526,49 @@ export function UserProfile() {
 
         {/* content — always tall enough that an empty tab never looks broken */}
         <div className="mt-8 min-h-[340px]">
+          {tab === 'Events' && (
+            /* upcoming/past sub-toggle sits above the grid so the split reads
+               as a filter over the same list, not a peer of the top-level tabs. */
+            <div className="mb-5 flex gap-6 border-b border-border-light">
+              {['upcoming', 'past'].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setEventStatus(s)}
+                  className={cn(
+                    '-mb-px border-b-2 pb-2.5 text-sm font-medium capitalize transition-colors',
+                    eventStatus === s
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-text-secondary hover:text-ink',
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+
           {tabLoading ? (
             <div className="flex min-h-[340px] items-center justify-center">
               <Spinner size="lg" label="Loading" />
             </div>
+          ) : tab === 'Events' ? (
+            myEventsList.length > 0 ? (
+              <EventGrid events={myEventsList} />
+            ) : (
+              <EmptyState
+                Icon={CalendarPlus}
+                title={eventStatus === 'upcoming' ? 'No upcoming events yet' : 'No past events yet'}
+                description={
+                  eventStatus === 'upcoming'
+                    ? 'Create an event and it will show up here for your followers to find.'
+                    : 'Events you host will move here after their start time.'
+                }
+                cta={eventStatus === 'upcoming' ? 'Create event' : 'Back to upcoming'}
+                onCta={() =>
+                  eventStatus === 'upcoming' ? navigate('/create') : setEventStatus('upcoming')
+                }
+              />
+            )
           ) : tab === 'Interests' ? (
             myInterests.length > 0 ? (
               <div className="flex flex-wrap gap-2">

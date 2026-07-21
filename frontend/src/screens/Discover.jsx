@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { LayoutGrid, MapPin, Map as MapIcon } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { CatRow, FilterBar, SearchBar } from '../components/rows'
 import { EventGrid } from '../components/EventCard'
+import { EventsMap } from '../components/EventsMap'
 import { PageLoader } from '../components/primitives'
 import { cn, pluralize } from '../lib/utils'
 
@@ -115,11 +117,16 @@ export function Discover() {
   const [cat, setCat] = useState('All')
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [view, setView] = useState('list') // 'list' | 'map'
+  // Non-null when the user picked a place from the map's search box. Takes
+  // priority over the profile's home location so "events near X" reflects the
+  // search. Null → fall back to nearForUser(user).
+  const [locationOverride, setLocationOverride] = useState(null) // { lat, lng, city }
   // null while the events fetch is in flight, so the screen can show a
   // spinner instead of "0 events near you".
   const [events, setEvents] = useState(null)
 
-  const near = nearForUser(user)
+  const near = locationOverride ?? nearForUser(user)
   const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
 
   // Render-time reset when the fetch input changes so stale rows don't flash
@@ -132,7 +139,7 @@ export function Discover() {
 
   useEffect(() => {
     let cancelled = false
-    api.events({ near: nearForUser(user) }).then((data) => {
+    api.events({ near }).then((data) => {
       if (!cancelled) setEvents(data)
     })
     return () => {
@@ -202,16 +209,41 @@ export function Discover() {
         <FilterBar filters={filters} onToggle={toggle} />
       </div>
 
+      {locationOverride && (
+        <div className="mt-3 flex items-center gap-2 rounded-pill border border-primary/30 bg-primary-light px-3 py-1.5 text-xs font-medium text-primary">
+          <MapPin size={12} />
+          <span>Showing events near {locationOverride.city}</span>
+          <button
+            type="button"
+            onClick={() => setLocationOverride(null)}
+            className="ml-auto font-semibold underline-offset-2 hover:underline"
+          >
+            Reset
+          </button>
+        </div>
+      )}
+
       {events === null ? (
         <PageLoader label="Loading events" />
       ) : filtersActive ? (
         <>
-          {/* section heading — 24px above, 20px below to the grid */}
-          <h1 className="mb-5 mt-6 font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
-            {heading}
-          </h1>
+          {/* section heading + list/map toggle */}
+          <div className="mb-5 mt-6 flex items-center justify-between gap-3">
+            <h1 className="font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
+              {heading}
+            </h1>
+            <ViewToggle value={view} onChange={setView} />
+          </div>
 
-          {filtered.length > 0 ? (
+          {view === 'map' ? (
+            <EventsMap
+              events={filtered}
+              viewLat={near?.lat}
+              viewLng={near?.lng}
+              searchLocation={locationOverride}
+              onLocationChange={setLocationOverride}
+            />
+          ) : filtered.length > 0 ? (
             <EventGrid events={filtered} />
           ) : (
             <p className="py-16 text-center text-sm text-text-muted">
@@ -238,6 +270,40 @@ export function Discover() {
       ) : (
         <p className="py-16 text-center text-sm text-text-muted">No events near you yet.</p>
       )}
+    </div>
+  )
+}
+
+function ViewToggle({ value, onChange }) {
+  const OPTS = [
+    { key: 'list', label: 'List', Icon: LayoutGrid },
+    { key: 'map', label: 'Map', Icon: MapIcon },
+  ]
+  return (
+    <div
+      role="tablist"
+      aria-label="View mode"
+      className="flex flex-shrink-0 items-center rounded-pill border border-border-light bg-white p-1"
+    >
+      {OPTS.map(({ key, label, Icon }) => {
+        const active = value === key
+        return (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(key)}
+            className={cn(
+              'flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-xs font-semibold transition-colors',
+              active ? 'bg-primary text-white' : 'text-text-secondary hover:text-ink',
+            )}
+          >
+            <Icon size={14} />
+            {label}
+          </button>
+        )
+      })}
     </div>
   )
 }

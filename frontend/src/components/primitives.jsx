@@ -193,28 +193,28 @@ export function GoingStack({ count, avatars = [], size = 'sm' }) {
 }
 
 /* --------------------------------------------------------------------------
-   Spinner — the app's canonical loading indicator. A brand-violet ring with a
-   transparent quarter, rotated by Tailwind's animate-spin. Sized in px so it
-   drops into buttons (sm), section placeholders (md), or full-screen loaders
-   (lg) without extra math.
+   Spinner — the app's canonical loading indicator. Ten brand-violet bars
+   fanned around a center, each pulsing outward on a staggered delay (see
+   `.loop-spinner` in index.css). Sized in px so it drops into buttons (sm),
+   section placeholders (md), or full-screen loaders (lg) without extra math.
 -------------------------------------------------------------------------- */
 export function Spinner({ size = 'md', className, label = 'Loading' }) {
-  const px = size === 'sm' ? 16 : size === 'lg' ? 36 : 24
-  const border = size === 'sm' ? 2 : size === 'lg' ? 4 : 3
+  // Container box; the 10 bars orbit outside it, so visual footprint is ~6.5× px.
+  const px = size === 'sm' ? 2.5 : size === 'lg' ? 6 : 4
   return (
     <span
       role="status"
       aria-label={label}
-      className={cn('inline-block animate-spin rounded-full', className)}
-      style={{
-        width: px,
-        height: px,
-        borderWidth: border,
-        borderStyle: 'solid',
-        borderColor: 'var(--color-primary)',
-        borderTopColor: 'transparent',
-      }}
-    />
+      className={cn('loop-spinner', className)}
+      style={{ width: px, height: px }}
+    >
+      {Array.from({ length: 10 }, (_, i) => (
+        <span
+          key={i}
+          style={{ '--rotation': (i + 1) * 36, '--delay': (i + 1) / 10 }}
+        />
+      ))}
+    </span>
   )
 }
 

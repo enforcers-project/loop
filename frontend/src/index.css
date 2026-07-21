@@ -216,3 +216,41 @@ a,
     width: 100%;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Loop spinner — 10 brand-violet bars fanned around a center, each pulsing
+   outward on a staggered delay. Adapted from a Uiverse.io pattern (credit:
+   PriyanshuGupta28) and recolored to use `--color-primary`. Container size is
+   set inline (Spinner size prop); every child scales as a % of that box.
+--------------------------------------------------------------------------- */
+.loop-spinner {
+  position: relative;
+  display: inline-block;
+}
+.loop-spinner > span {
+  position: absolute;
+  width: 50%;
+  height: 150%;
+  background: var(--color-primary);
+  border-radius: 1px;
+  transform: rotate(calc(var(--rotation) * 1deg)) translate(0, 150%);
+  animation: loop-spinner-pulse 1s calc(var(--delay) * 1s) infinite ease;
+}
+
+@keyframes loop-spinner-pulse {
+  0%,
+  10%,
+  20%,
+  30%,
+  50%,
+  60%,
+  70%,
+  80%,
+  90%,
+  100% {
+    transform: rotate(calc(var(--rotation) * 1deg)) translate(0, 150%);
+  }
+  50% {
+    transform: rotate(calc(var(--rotation) * 1deg)) translate(0, 225%);
+  }
+}

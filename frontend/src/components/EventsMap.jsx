@@ -124,9 +124,7 @@ export function EventsMap({
   // Missing-key case is a render-time constant — no effect needed. Async load
   // failure lands in `scriptError` from the loader promise below.
   const configured = isGoogleMapsConfigured()
-  const loadError = configured
-    ? scriptError
-    : 'Maps setup is missing — set VITE_GOOGLE_MAPS_KEY.'
+  const loadError = configured ? scriptError : 'Maps setup is missing — set VITE_GOOGLE_MAPS_KEY.'
 
   // Load the SDK + create the map instance once.
   useEffect(() => {

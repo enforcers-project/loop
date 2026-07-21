@@ -163,9 +163,7 @@ function ViewToggle({ value, onChange }) {
             onClick={() => onChange(key)}
             className={cn(
               'flex items-center gap-1.5 rounded-pill px-3 py-1.5 text-xs font-semibold transition-colors',
-              active
-                ? 'bg-primary text-white'
-                : 'text-text-secondary hover:text-ink',
+              active ? 'bg-primary text-white' : 'text-text-secondary hover:text-ink',
             )}
           >
             <Icon size={14} />

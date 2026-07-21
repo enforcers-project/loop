@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LayoutGrid, MapPin, Map as MapIcon } from 'lucide-react'
+import { LayoutGrid, MapPin, Map as MapIcon, X } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { CatRow, FilterBar, SearchBar } from '../components/rows'
@@ -127,6 +127,16 @@ export function Discover() {
   // spinner instead of "0 events near you".
   const [events, setEvents] = useState(null)
 
+  // Natural-language search state (work-plan #22). `nlResults` is non-null once
+  // a search runs; it holds the AI-ranked events and flips the screen into
+  // search mode (pills + results, browse UI hidden). `nlPills` are the removable
+  // parsed-filter chips, `nlLabel` is the label-shape that produced them (posted
+  // back on pill-removal so the parse is skipped). `nlLoading` gates a spinner.
+  const [nlResults, setNlResults] = useState(null)
+  const [nlPills, setNlPills] = useState([])
+  const [nlLabel, setNlLabel] = useState(null)
+  const [nlLoading, setNlLoading] = useState(false)
+
   const near = locationOverride ?? nearForUser(user)
   const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
 
@@ -151,135 +161,211 @@ export function Discover() {
 
   const toggle = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }))
 
+  // Run a natural-language search. `label` is passed only on pill-removal (to
+  // skip the LLM re-parse); a fresh Enter-search omits it so the query is parsed.
+  const runSearch = async (label) => {
+    const q = query.trim()
+    if (!q) {
+      clearSearch()
+      return
+    }
+    setNlLoading(true)
+    try {
+      const res = await api.nlSearch(q, label)
+      setNlResults(res.events)
+      setNlPills(res.pills)
+      setNlLabel(res.label)
+    } finally {
+      setNlLoading(false)
+    }
+  }
+
+  // Remove one parsed-filter pill: drop its key from the label and re-run with
+  // the remainder so the LLM doesn't re-add it. Removing the last pill keeps the
+  // search (semantic match on the raw query) but with no hard constraints.
+  const removePill = (key) => {
+    const nextLabel = { ...(nlLabel ?? {}) }
+    delete nextLabel[key]
+    setNlLabel(nextLabel)
+    runSearch(nextLabel)
+  }
+
+  const clearSearch = () => {
+    setNlResults(null)
+    setNlPills([])
+    setNlLabel(null)
+  }
+
+  // Local browse filtering (only used when NOT in NL-search mode). NL results
+  // are already ranked + constrained server-side, so we render them as-is.
   const filtered = useMemo(() => {
     return (events ?? []).filter((e) => {
       if (cat !== 'All' && e.category !== cat) return false
       if (filters.free && !e.isFree) return false
       if (filters.sports && !e.isSports) return false
-      if (query.trim()) {
-        const n = query.toLowerCase()
-        if (
-          !e.title.toLowerCase().includes(n) &&
-          !e.tags.some((t) => t.toLowerCase().includes(n)) &&
-          !e.category.toLowerCase().includes(n) &&
-          !e.city.toLowerCase().includes(n)
-        )
-          return false
-      }
       return true
     })
-  }, [events, cat, filters, query])
+  }, [events, cat, filters])
 
-  // Default browse: no category, no refinements, no query → editorial rails.
-  // Any active filter/category/query flips to a single filtered grid so the
-  // user sees exactly what they asked for without the rails muddying the view.
+  // Default browse: no category, no refinements → editorial rails. Any active
+  // filter/category flips to a single filtered grid so the user sees exactly
+  // what they asked for without the rails muddying the view. (Query no longer
+  // counts — it drives NL search on Enter, not the local browse grid.)
   const filtersActive =
-    cat !== 'All' ||
-    filters.free ||
-    filters.today ||
-    filters.weekend ||
-    filters.sports ||
-    query.trim().length > 0
+    cat !== 'All' || filters.free || filters.today || filters.weekend || filters.sports
 
   const rails = useMemo(
     () => (!filtersActive ? buildRails(events ?? []) : []),
     [events, filtersActive],
   )
 
-  const heading =
+  const searching = nlResults !== null
+
+  const browseHeading =
     cat !== 'All'
       ? `${filtered.length} ${cat} ${pluralize(filtered.length, 'event')} near you`
       : `${filtered.length} ${pluralize(filtered.length, 'event')} near you this week`
+
+  const searchHeading = `${nlResults?.length ?? 0} ${pluralize(nlResults?.length ?? 0, 'result')} for "${query.trim()}"`
 
   return (
     <div className="loop-container pb-24 pt-4 md:pb-12">
       <SearchBar
         value={query}
-        onChange={setQuery}
-        placeholder="Search events, venues, organizers…"
+        onChange={(v) => {
+          setQuery(v)
+          // Clearing the box exits search mode back to the browse experience.
+          if (!v.trim()) clearSearch()
+        }}
+        onSubmit={() => runSearch()}
+        placeholder="Try 'free Afrobeats party this weekend'"
       />
 
-      {/* "Near me" chip — surfaces the saved home + radius that's driving the
-          near-you filter, and links to Settings to change it. Hidden when the
-          user has an active locationOverride pick (the search-chip below takes
-          over the same role). */}
-      {!locationOverride && (
-        <div className="mt-3">
-          <NearMeChip />
-        </div>
-      )}
-
-      {/* filters — first row categories, second row quick filters */}
-      <div className="mt-4">
-        <CatRow active={cat} onChange={setCat} />
-      </div>
-      <div className="mt-2">
-        <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-text-muted">
-          Refine
-        </span>
-        <FilterBar filters={filters} onToggle={toggle} />
-      </div>
-
-      {locationOverride && (
-        <div className="mt-3 flex items-center gap-2 rounded-pill border border-primary/30 bg-primary-light px-3 py-1.5 text-xs font-medium text-primary">
-          <MapPin size={12} />
-          <span>Showing events near {locationOverride.city}</span>
-          <button
-            type="button"
-            onClick={() => setLocationOverride(null)}
-            className="ml-auto font-semibold underline-offset-2 hover:underline"
-          >
-            Reset
-          </button>
-        </div>
-      )}
-
-      {events === null ? (
-        <PageLoader label="Loading events" />
-      ) : filtersActive ? (
+      {searching ? (
+        /* ---- NL-search mode: pills + AI-ranked results ------------------- */
         <>
-          {/* section heading + list/map toggle */}
-          <div className="mb-5 mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h1 className="font-display text-xl font-bold leading-tight text-ink sm:text-[28px] md:text-3xl">
-              {heading}
-            </h1>
-            <ViewToggle value={view} onChange={setView} />
-          </div>
+          {/* Parsed-filter pills — one removable chip per hard constraint the
+              LLM extracted. Removing a pill re-runs without that constraint. */}
+          {nlPills.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-text-muted">Filters:</span>
+              {nlPills.map((p) => (
+                <button
+                  key={p.key}
+                  onClick={() => removePill(p.key)}
+                  className="inline-flex items-center gap-1 rounded-pill bg-primary px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                  aria-label={`Remove ${p.label} filter`}
+                >
+                  {p.label}
+                  <X size={13} />
+                </button>
+              ))}
+            </div>
+          )}
 
-          {view === 'map' ? (
-            <EventsMap
-              events={filtered}
-              viewLat={near?.lat}
-              viewLng={near?.lng}
-              searchLocation={locationOverride}
-              onLocationChange={setLocationOverride}
-            />
-          ) : filtered.length > 0 ? (
-            <EventGrid events={filtered} />
+          {nlLoading ? (
+            <PageLoader label="Searching" />
           ) : (
-            <p className="py-16 text-center text-sm text-text-muted">
-              No events match those filters. Try clearing a few.
-            </p>
+            <>
+              <h1 className="mb-5 mt-6 font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
+                {searchHeading}
+              </h1>
+              {nlResults.length > 0 ? (
+                <EventGrid events={nlResults} />
+              ) : (
+                <p className="py-16 text-center text-sm text-text-muted">
+                  No events match. Try removing a filter or rewording your search.
+                </p>
+              )}
+            </>
           )}
         </>
-      ) : rails.length > 0 ? (
-        <div className="mt-6">
-          {rails.map((r, i) => (
-            <section key={r.title}>
-              <h2
-                className={cn(
-                  'mb-4 font-display text-2xl font-bold text-ink',
-                  i === 0 ? '' : 'mt-10',
-                )}
-              >
-                {r.title}
-              </h2>
-              <EventGrid events={r.events} />
-            </section>
-          ))}
-        </div>
       ) : (
-        <p className="py-16 text-center text-sm text-text-muted">No events near you yet.</p>
+        /* ---- Browse mode: near-me chip, filters, rails / grid / map ------ */
+        <>
+          {/* "Near me" chip — surfaces the saved home + radius that's driving
+              the near-you filter, and links to Settings to change it. Hidden
+              when the user has an active locationOverride pick (the search-chip
+              below takes over the same role). */}
+          {!locationOverride && (
+            <div className="mt-3">
+              <NearMeChip />
+            </div>
+          )}
+
+          {/* filters — first row categories, second row quick filters */}
+          <div className="mt-4">
+            <CatRow active={cat} onChange={setCat} />
+          </div>
+          <div className="mt-2">
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-text-muted">
+              Refine
+            </span>
+            <FilterBar filters={filters} onToggle={toggle} />
+          </div>
+
+          {locationOverride && (
+            <div className="mt-3 flex items-center gap-2 rounded-pill border border-primary/30 bg-primary-light px-3 py-1.5 text-xs font-medium text-primary">
+              <MapPin size={12} />
+              <span>Showing events near {locationOverride.city}</span>
+              <button
+                type="button"
+                onClick={() => setLocationOverride(null)}
+                className="ml-auto font-semibold underline-offset-2 hover:underline"
+              >
+                Reset
+              </button>
+            </div>
+          )}
+
+          {events === null ? (
+            <PageLoader label="Loading events" />
+          ) : filtersActive ? (
+            <>
+              {/* section heading + list/map toggle */}
+              <div className="mb-5 mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h1 className="font-display text-xl font-bold leading-tight text-ink sm:text-[28px] md:text-3xl">
+                  {browseHeading}
+                </h1>
+                <ViewToggle value={view} onChange={setView} />
+              </div>
+
+              {view === 'map' ? (
+                <EventsMap
+                  events={filtered}
+                  viewLat={near?.lat}
+                  viewLng={near?.lng}
+                  searchLocation={locationOverride}
+                  onLocationChange={setLocationOverride}
+                />
+              ) : filtered.length > 0 ? (
+                <EventGrid events={filtered} />
+              ) : (
+                <p className="py-16 text-center text-sm text-text-muted">
+                  No events match those filters. Try clearing a few.
+                </p>
+              )}
+            </>
+          ) : rails.length > 0 ? (
+            <div className="mt-6">
+              {rails.map((r, i) => (
+                <section key={r.title}>
+                  <h2
+                    className={cn(
+                      'mb-4 font-display text-2xl font-bold text-ink',
+                      i === 0 ? '' : 'mt-10',
+                    )}
+                  >
+                    {r.title}
+                  </h2>
+                  <EventGrid events={r.events} />
+                </section>
+              ))}
+            </div>
+          ) : (
+            <p className="py-16 text-center text-sm text-text-muted">No events near you yet.</p>
+          )}
+        </>
       )}
     </div>
   )

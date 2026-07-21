@@ -56,11 +56,16 @@
   --shadow-card-hover: 0 6px 28px rgba(11, 11, 15, 0.12);
   --shadow-hero: 0 8px 40px rgba(11, 11, 15, 0.14);
 
-  /* Breakpoints (Figma: 390 / 768 / 1440) */
+  /* Breakpoints. The Figma frames are 390 (mobile) / 768 (tablet) / 1440
+     (desktop); md maps tablet exactly and 2xl maps the desktop frame. sm/lg/xl
+     are intermediate stops. In-app content still caps at the 1280 .loop-container
+     for line-length hygiene — 2xl is a hook for anything that must key off the
+     full 1440 desktop frame (e.g. Landing, which spans max-w-[1440px]). */
   --breakpoint-sm: 640px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
   --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1440px;
 }
 
 /* ---------------------------------------------------------------------------

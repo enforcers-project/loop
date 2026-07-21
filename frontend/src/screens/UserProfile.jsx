@@ -114,7 +114,7 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={() => !busy && !uploading && onClose?.()}
     >
       <div
@@ -122,7 +122,7 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
         aria-modal="true"
         aria-label="Edit profile"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md overflow-hidden rounded-card bg-white shadow-hero"
+        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-h-[85vh] sm:max-w-md sm:rounded-card"
       >
         {/* header */}
         <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
@@ -137,7 +137,7 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
           </button>
         </div>
 
-        <div className="space-y-4 px-5 py-4">
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {/* avatar — reuses the parent's S3 upload; persists on pick */}
           <div className="flex items-center gap-4">
             <div className="relative flex-shrink-0">

@@ -7,6 +7,7 @@ import {
   Users,
   Search,
   User,
+  LogIn,
   LogOut,
   Settings,
   Moon,
@@ -221,7 +222,7 @@ function ProfileMenu({ user, onLogout }) {
 -------------------------------------------------------------------------- */
 export function BottomBar() {
   const { pathname } = useLocation()
-  const { role } = useApp()
+  const { isLoggedIn, role } = useApp()
   const canCreate = role === 'organizer'
 
   const tab = (to, Icon, label) => {
@@ -244,7 +245,9 @@ export function BottomBar() {
     <nav className="fixed inset-x-0 bottom-0 z-30 flex items-center border-t border-border-light bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
       {tab('/feed', Home, 'For You')}
       {tab('/discover', Compass, 'Discover')}
-      {canCreate ? (
+      {/* Logged-out phones still get the three public sections + a login CTA;
+          the elevated Create button and Profile tab are login-only. */}
+      {isLoggedIn && canCreate ? (
         <Link
           to="/create"
           className="-mt-6 flex flex-1 flex-col items-center"
@@ -258,7 +261,7 @@ export function BottomBar() {
         tab('/social', Search, 'Search')
       )}
       {tab('/social', Users, 'Social')}
-      {tab('/profile', User, 'Profile')}
+      {isLoggedIn ? tab('/profile', User, 'Profile') : tab('/auth?mode=login', LogIn, 'Log in')}
     </nav>
   )
 }

@@ -225,14 +225,23 @@ export function AppProvider({ children }) {
     [user?.id, adopt],
   )
 
-  // Persist the user's home city + coords and mirror them onto the local user
-  // so any screen reading `user.homeCity/homeLat/homeLng` sees the fresh value
-  // without waiting for a /me refresh.
+  // Persist the user's home city + coords + optional radius and mirror them
+  // onto the local user so any screen reading `user.homeCity/homeLat/homeLng/
+  // locationRadiusKm` sees the fresh value without waiting for a /me refresh.
   const saveLocation = useCallback(
-    async ({ city, lat, lng, placeId }) => {
-      const res = await api.saveLocation(user?.id, { city, lat, lng, placeId })
+    async ({ city, lat, lng, placeId, radiusKm }) => {
+      const res = await api.saveLocation(user?.id, { city, lat, lng, placeId, radiusKm })
       setUser((prev) =>
-        prev ? { ...prev, homeCity: city, homeLat: lat ?? null, homeLng: lng ?? null } : prev,
+        prev
+          ? {
+              ...prev,
+              homeCity: city,
+              homeLat: lat ?? null,
+              homeLng: lng ?? null,
+              homePlaceId: placeId ?? null,
+              ...(radiusKm != null ? { locationRadiusKm: radiusKm } : {}),
+            }
+          : prev,
       )
       return res
     },

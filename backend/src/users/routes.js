@@ -123,17 +123,19 @@ router.put('/:id/interests', requireAuth, async (req, res) => {
 })
 
 // --- PUT /api/users/:id/location --------------------------------------------
-// Body: { city: string, lat?: number, lng?: number, place_id?: string }
+// Body: { city: string, lat?: number, lng?: number, place_id?: string,
+//         radius_km?: number }
 // Persists the caller's home location so the recommender's geo pre-filter
 // (recommendations/engine.js: earth_distance radius when lat/lng present,
 // else city ILIKE) actually has something to filter on. Onboarding calls this;
-// a user can update it later from their profile.
+// a user can update it later from their profile. `radius_km` sets how wide the
+// "near me" search reaches — 1–500km, defaults to the current stored value.
 router.put('/:id/location', requireAuth, async (req, res) => {
   if (req.user.id !== req.params.id) {
     return fail(res, 403, 'FORBIDDEN', 'You can only edit your own location')
   }
 
-  const { city, lat, lng, place_id } = req.body ?? {}
+  const { city, lat, lng, place_id, radius_km } = req.body ?? {}
   if (typeof city !== 'string' || !city.trim()) {
     return fail(res, 422, 'VALIDATION_ERROR', 'city is required')
   }
@@ -161,18 +163,26 @@ router.put('/:id/location', requireAuth, async (req, res) => {
     }
   }
 
+  let radiusKmNum = null
+  if (radius_km != null) {
+    radiusKmNum = Number(radius_km)
+    if (!Number.isFinite(radiusKmNum) || radiusKmNum < 1 || radiusKmNum > 500) {
+      return fail(res, 422, 'VALIDATION_ERROR', 'radius_km must be between 1 and 500')
+    }
+    radiusKmNum = Math.round(radiusKmNum)
+  }
+
   const placeId = typeof place_id === 'string' && place_id.trim() ? place_id.trim() : null
 
   try {
-    const updated = await prisma.user.update({
-      where: { id: req.user.id },
-      data: {
-        homeCity: city.trim(),
-        homeLat: latNum,
-        homeLng: lngNum,
-        homePlaceId: placeId,
-      },
-    })
+    const data = {
+      homeCity: city.trim(),
+      homeLat: latNum,
+      homeLng: lngNum,
+      homePlaceId: placeId,
+    }
+    if (radiusKmNum != null) data.locationRadiusKm = radiusKmNum
+    const updated = await prisma.user.update({ where: { id: req.user.id }, data })
     return res.json({ data: toSelfUser(updated) })
   } catch (err) {
     console.error('PUT /api/users/:id/location error:', err)

@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext'
 import { CatRow, FilterBar, SearchBar } from '../components/rows'
 import { EventGrid } from '../components/EventCard'
 import { EventsMap } from '../components/EventsMap'
+import { NearMeChip } from '../components/NearMeChip'
 import { PageLoader } from '../components/primitives'
 import { cn, pluralize } from '../lib/utils'
 
@@ -197,6 +198,16 @@ export function Discover() {
         onChange={setQuery}
         placeholder="Search events, venues, organizers…"
       />
+
+      {/* "Near me" chip — surfaces the saved home + radius that's driving the
+          near-you filter, and links to Settings to change it. Hidden when the
+          user has an active locationOverride pick (the search-chip below takes
+          over the same role). */}
+      {!locationOverride && (
+        <div className="mt-3">
+          <NearMeChip />
+        </div>
+      )}
 
       {/* filters — first row categories, second row quick filters */}
       <div className="mt-4">

@@ -134,6 +134,28 @@ export function AppProvider({ children }) {
     }
   }, [user?.id])
 
+  // Hydrate the user's onboarding interest picks whenever the logged-in user
+  // changes. Without this, `interests` stayed empty across a page reload or a
+  // fresh login — so the profile "Interests" tab looked like the user had
+  // never picked any (even though they were persisted in user_interests) and
+  // the For-You recommender got no interest signal until the user re-ran
+  // onboarding. Best-effort — api.userInterests swallows its own errors and
+  // clears on logout below. Only adopt when the server response is non-empty:
+  // signup adopts the user before onboarding commits picks, so this effect can
+  // fire *while onboarding is still on screen* and return []; overwriting
+  // would wipe the picks the onboarding step just set locally.
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    api.userInterests(user.id).then((ids) => {
+      if (cancelled) return
+      if (ids.length > 0) setInterestsState(ids)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
+
   // Real login: POST /auth/login, then adopt the returned user. Throws on bad
   // credentials so the Auth screen can surface the message.
   const login = useCallback(
@@ -198,6 +220,19 @@ export function AppProvider({ children }) {
   }, [])
 
   const setInterests = useCallback((ids) => setInterestsState(ids), [])
+
+  // Persist an updated interest set (from the profile "Edit interests" modal)
+  // and mirror it onto local state so the tab + For-You feed reflect the new
+  // picks immediately. Throws on failure so the caller can keep its modal open
+  // and show a toast.
+  const updateInterests = useCallback(
+    async (ids) => {
+      const res = await api.saveInterests(user?.id, ids)
+      setInterestsState(ids)
+      return res
+    },
+    [user?.id],
+  )
 
   // Upload a new profile picture and adopt the refreshed user so every screen
   // reading `user.avatar` updates immediately (no /me round-trip). Throws on
@@ -405,6 +440,7 @@ export function AppProvider({ children }) {
         logout,
         requireAuth,
         setInterests,
+        updateInterests,
         updateAvatar,
         updateProfile,
         saveLocation,

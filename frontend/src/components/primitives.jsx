@@ -221,7 +221,7 @@ export function Spinner({ size = 'md', className, label = 'Loading' }) {
 /* --------------------------------------------------------------------------
    PageLoader — full-viewport-height centered spinner for screens waiting on
    their initial data. Height matches the app shell so it fills the main area
-   below the top nav (64px) without pushing the bottom bar off-screen.
+   below the top nav (80px) without pushing the bottom bar off-screen.
 -------------------------------------------------------------------------- */
 export function PageLoader({ label = 'Loading' }) {
   return (
@@ -284,7 +284,10 @@ export function StickyRsvpBar({
       aria-hidden={!visible}
       inert={!visible ? '' : undefined}
       className={cn(
-        'fixed bottom-4 left-1/2 z-40 w-[min(calc(100vw-2rem),34rem)] -translate-x-1/2 transition-all duration-300',
+        // Mobile: lift above the fixed BottomBar (h-16 + safe area) so the bar
+        // never sits on top of the bottom nav. Desktop has no BottomBar, so it
+        // drops back to a normal bottom-4 gutter.
+        'fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[min(calc(100vw-2rem),34rem)] -translate-x-1/2 transition-all duration-300 md:bottom-4',
         visible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0',
       )}
     >

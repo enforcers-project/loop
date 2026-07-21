@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Sparkles, X, Send } from 'lucide-react'
 import { api } from '../lib/api'
 import { cn } from '../lib/utils'
@@ -40,6 +40,10 @@ function MiniEventCard({ event, onClick }) {
 
 export function AIAssistant() {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  // Event/Sports detail routes float a StickyRsvpBar that shares the FAB's
+  // bottom band on mobile; lift the FAB above it there so the two don't overlap.
+  const hasStickyBar = /^\/(event|sports)\//.test(pathname)
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [thinking, setThinking] = useState(false)
@@ -117,7 +121,14 @@ export function AIAssistant() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-white shadow-card-hover transition-transform hover:scale-105 md:bottom-6 md:right-6"
+          className={cn(
+            'fixed right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-white shadow-card-hover transition-transform hover:scale-105 md:bottom-6 md:right-6',
+            // Sit above the BottomBar by default; on detail routes sit higher
+            // still so the FAB clears the floating StickyRsvpBar on mobile.
+            hasStickyBar
+              ? 'bottom-[calc(9rem+env(safe-area-inset-bottom))]'
+              : 'bottom-[calc(5rem+env(safe-area-inset-bottom))]',
+          )}
           aria-label="Ask Loop AI"
           title="Ask Loop AI"
         >

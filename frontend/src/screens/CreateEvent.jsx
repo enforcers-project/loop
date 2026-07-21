@@ -203,7 +203,7 @@ export function CreateEvent() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Date">
               <div className="relative">
                 <input
@@ -228,7 +228,7 @@ export function CreateEvent() {
             </FormField>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Venue">
               <div className="relative">
                 <input
@@ -253,7 +253,7 @@ export function CreateEvent() {
             </FormField>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <FormField label="Price ($)">
               <input
                 value={price}
@@ -348,7 +348,7 @@ export function CreateEvent() {
 
               {isSports && (
                 <div className="mt-4 space-y-4 border-t border-border-light pt-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <FormField label="Players needed">
                       <input
                         value={playersNeeded}

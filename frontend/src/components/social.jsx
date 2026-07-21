@@ -103,7 +103,7 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={() => !busy && onClose?.()}
     >
       <div
@@ -111,7 +111,7 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
         aria-modal="true"
         aria-label={isStory ? 'Add to your story' : 'Create a post'}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md overflow-hidden rounded-card bg-white shadow-hero"
+        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-h-[85vh] sm:max-w-md sm:rounded-card"
       >
         {/* header */}
         <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
@@ -128,7 +128,7 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
           </button>
         </div>
 
-        <div className="space-y-4 px-5 py-4">
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {/* image — upload to S3, with a paste-a-URL fallback when unconfigured */}
           <div>
             <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
@@ -272,12 +272,12 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
 -------------------------------------------------------------------------- */
 export function StoriesRow({ stories, onOpen, onAddStory }) {
   return (
-    <div className="scrollbar-hide -mx-1 flex gap-4 overflow-x-auto px-1 pb-1">
+    <div className="scrollbar-hide -mx-1 flex snap-x snap-proximity gap-4 overflow-x-auto px-1 pb-1">
       {stories.map((s, i) => (
         <button
           key={s.id ?? i}
           onClick={() => (s.isYou ? onAddStory?.() : onOpen?.(s))}
-          className="flex w-[68px] flex-shrink-0 flex-col items-center gap-1.5"
+          className="flex w-[68px] flex-shrink-0 snap-start flex-col items-center gap-1.5"
           aria-label={s.isYou ? 'Add to your story' : `${s.name}'s story`}
         >
           <span

@@ -34,6 +34,21 @@ function PreviewCard({ event }) {
   )
 }
 
+/* Skeleton placeholder matching PreviewCard's footprint so the hero preview
+   grid and carousel hold their shape (no layout shift / blank row) while the
+   popular-events fetch is in flight. */
+function PreviewCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-card bg-dark-card">
+      <div className="loop-skeleton h-28 w-full" />
+      <div className="space-y-2 p-3">
+        <div className="loop-skeleton h-3.5 w-3/4 rounded" />
+        <div className="loop-skeleton h-3 w-1/2 rounded" />
+      </div>
+    </div>
+  )
+}
+
 const VALUE_PROPS = [
   {
     icon: Sparkles,
@@ -53,20 +68,21 @@ const VALUE_PROPS = [
 ]
 
 export function Landing() {
-  const [events, setEvents] = useState([])
+  const [events, setEvents] = useState(null)
   useEffect(() => {
-    api.events({ sort: 'popular' }).then(setEvents)
+    api.events({ sort: 'popular' }).then((rows) => setEvents(rows ?? []))
   }, [])
 
-  const preview = events.slice(0, 3)
-  const carousel = events.slice(0, 8)
+  const loading = events === null
+  const preview = (events ?? []).slice(0, 3)
+  const carousel = (events ?? []).slice(0, 8)
 
   return (
     <div className="min-h-screen bg-white">
       {/* dark hero */}
       <div className="relative overflow-hidden bg-ink">
         {/* blurred bg image */}
-        {events[0] && (
+        {events?.[0] && (
           <img
             src={events[0].poster}
             alt=""
@@ -121,9 +137,9 @@ export function Landing() {
 
             {/* 3 event preview cards */}
             <div className="mx-auto mt-6 grid max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
-              {preview.map((e) => (
-                <PreviewCard key={e.id} event={e} />
-              ))}
+              {loading
+                ? Array.from({ length: 3 }).map((_, i) => <PreviewCardSkeleton key={i} />)
+                : preview.map((e) => <PreviewCard key={e.id} event={e} />)}
             </div>
           </div>
 
@@ -132,12 +148,18 @@ export function Landing() {
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/55">
               Happening near you
             </p>
-            <div className="scrollbar-hide flex gap-4 overflow-x-auto pb-2">
-              {carousel.map((e) => (
-                <div key={e.id} className="w-64 flex-shrink-0">
-                  <PreviewCard event={e} />
-                </div>
-              ))}
+            <div className="scrollbar-hide flex snap-x snap-proximity gap-4 overflow-x-auto pb-2">
+              {loading
+                ? Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="w-64 flex-shrink-0 snap-start">
+                      <PreviewCardSkeleton />
+                    </div>
+                  ))
+                : carousel.map((e) => (
+                    <div key={e.id} className="w-64 flex-shrink-0 snap-start">
+                      <PreviewCard event={e} />
+                    </div>
+                  ))}
             </div>
           </div>
         </div>

@@ -82,8 +82,9 @@ function Shell() {
         </Routes>
       </main>
 
-      {/* mobile bottom bar + AI assistant only inside the app */}
-      {!bare && isLoggedIn && <BottomBar />}
+      {/* Mobile bottom bar shows on every in-app route (logged-out phones need
+          it to reach Feed/Discover/Social); the AI assistant stays login-only. */}
+      {!bare && <BottomBar />}
       {!bare && isLoggedIn && <AIAssistant />}
     </div>
   )

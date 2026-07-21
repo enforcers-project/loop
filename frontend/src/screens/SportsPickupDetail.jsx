@@ -164,44 +164,46 @@ export function SportsPickupDetail() {
         </h2>
 
         <div className="mt-4 overflow-hidden rounded-card border border-border-light">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-surface text-xs uppercase tracking-wide text-text-muted">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Player</th>
-                <th className="px-4 py-3 font-semibold">Position</th>
-                <th className="px-4 py-3 font-semibold">Skill</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border-light">
-              {claimed.map((p, i) => (
-                <tr key={i} className="bg-white">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <img src={p.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
-                      <span className="font-medium text-ink">{p.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-text-secondary">{p.position}</td>
-                  <td className="px-4 py-3">
-                    <SkillBadge skill={p.skill} />
-                  </td>
+          <div className="scrollbar-hide overflow-x-auto">
+            <table className="w-full min-w-[420px] text-left text-sm">
+              <thead className="bg-surface text-xs uppercase tracking-wide text-text-muted">
+                <tr>
+                  <th className="px-4 py-3 font-semibold">Player</th>
+                  <th className="px-4 py-3 font-semibold">Position</th>
+                  <th className="px-4 py-3 font-semibold">Skill</th>
                 </tr>
-              ))}
-              {/* open slots */}
-              {Array.from({ length: Math.max(0, needed - claimed.length) }).map((_, i) => (
-                <tr key={`open-${i}`} className="bg-surface/40">
-                  <td className="px-4 py-3 text-text-muted" colSpan={3}>
-                    <span className="flex items-center gap-2">
-                      <span className="grid h-8 w-8 place-items-center rounded-full border border-dashed border-border-light text-text-muted">
-                        +
+              </thead>
+              <tbody className="divide-y divide-border-light">
+                {claimed.map((p, i) => (
+                  <tr key={i} className="bg-white">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <img src={p.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+                        <span className="font-medium text-ink">{p.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-text-secondary">{p.position}</td>
+                    <td className="px-4 py-3">
+                      <SkillBadge skill={p.skill} />
+                    </td>
+                  </tr>
+                ))}
+                {/* open slots */}
+                {Array.from({ length: Math.max(0, needed - claimed.length) }).map((_, i) => (
+                  <tr key={`open-${i}`} className="bg-surface/40">
+                    <td className="px-4 py-3 text-text-muted" colSpan={3}>
+                      <span className="flex items-center gap-2">
+                        <span className="grid h-8 w-8 place-items-center rounded-full border border-dashed border-border-light text-text-muted">
+                          +
+                        </span>
+                        Open slot
                       </span>
-                      Open slot
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* waitlist */}

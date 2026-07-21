@@ -8,6 +8,7 @@ import { CatRow, SearchBar, pillBase, pillSelected, pillUnselected } from '../co
 import { cn } from '../lib/utils'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
+import { NearMeChip } from '../components/NearMeChip'
 import {
   AIChip,
   AlmostFullBadge,
@@ -174,10 +175,17 @@ export function ForYouFeed() {
         <SearchBar value={query} onChange={setQuery} city={user?.homeCity} />
       </div>
 
+      {/* "Near me" chip — shows the current location + radius that's shaping
+          this feed, and deep-links to Settings to change it. Only appears once
+          the user has a saved home location. */}
+      <div className="mt-3">
+        <NearMeChip />
+      </div>
+
       {/* filter row — Trending/Following toggles sit attached to the category
           chips; a selected toggle swaps the feed source, deselecting it (or
           picking the other) returns to the default For You recommendations. */}
-      <div className="mt-5">
+      <div className="mt-4">
         <CatRow
           active={cat}
           onChange={setCat}

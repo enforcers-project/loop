@@ -300,6 +300,11 @@ export function toClientUser(u) {
     homeCity: u.home_city ?? null,
     homeLat: u.home_lat ?? null,
     homeLng: u.home_lng ?? null,
+    homePlaceId: u.home_place_id ?? null,
+    // "Near me" radius in kilometers. Feeds the recommender's geo pre-filter
+    // and the /events?radiusKm query the ForYou/Discover screens send. Defaults
+    // to 40 (matches the backend Prisma default).
+    locationRadiusKm: u.location_radius_km ?? 40,
     cover: u.cover_image_url ?? null,
     joinedAt: u.created_at ?? null,
   }
@@ -404,11 +409,17 @@ function mockPostToBackend(p) {
 
 // Build a `near` filter for api.events() from the client user. Prefers lat/lng
 // (backend does an earth_distance radius query when both are present), else
-// falls back to city ILIKE. Returns null when nothing is set.
+// falls back to city ILIKE. Carries the user's stored radius so a saved
+// preference of "10 mi" narrows the /events?radiusKm query the same way the
+// recommender's pre-filter uses it. Returns null when nothing is set.
 export function nearForUser(user) {
   if (!user) return null
   if (user.homeLat != null && user.homeLng != null) {
-    return { lat: user.homeLat, lng: user.homeLng }
+    return {
+      lat: user.homeLat,
+      lng: user.homeLng,
+      radiusKm: user.locationRadiusKm ?? 40,
+    }
   }
   if (user.homeCity) return { city: user.homeCity }
   return null
@@ -550,16 +561,29 @@ export const api = {
   // Commit the user's home location (PUT /users/:id/location). Feeds the
   // recommender's geo pre-filter — with lat/lng it does a real radius search
   // (earth_distance in engine.js), else falls back to city name matching.
-  saveLocation: (userId, { city, lat, lng, placeId }) =>
+  // `radiusKm` optionally updates the stored "near me" radius the recommender
+  // + /events geo query use (1–500km, backend defaults it to 40).
+  saveLocation: (userId, { city, lat, lng, placeId, radiusKm }) =>
     userId
-      ? put(`/users/${userId}/location`, { city, lat, lng, place_id: placeId }, () => ({
-          city,
-          lat,
-          lng,
-          place_id: placeId,
-          pending: true,
-        }))
-      : Promise.resolve({ city, lat, lng, place_id: placeId, pending: true }),
+      ? put(
+          `/users/${userId}/location`,
+          {
+            city,
+            lat,
+            lng,
+            place_id: placeId,
+            ...(radiusKm != null ? { radius_km: radiusKm } : {}),
+          },
+          () => ({
+            city,
+            lat,
+            lng,
+            place_id: placeId,
+            radius_km: radiusKm,
+            pending: true,
+          }),
+        )
+      : Promise.resolve({ city, lat, lng, place_id: placeId, radius_km: radiusKm, pending: true }),
 
   // GET /api/events. `near` is the caller's home location (from nearForUser());
   // with both lat + lng the backend does an earth_distance radius query

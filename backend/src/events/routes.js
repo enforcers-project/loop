@@ -219,19 +219,24 @@ router.get('/:id', async (req, res) => {
 // GET /api/events/:id/related
 router.get('/:id/related', async (req, res) => {
   try {
-    const event = await prisma.event.findUnique({
+    const sourceEvent = await prisma.event.findUnique({
       where: { id: req.params.id },
-      select: { id: true, categoryId: true },
+      select: { id: true, categoryId: true, city: true },
     })
 
-    if (!event) {
+    if (!sourceEvent) {
       return res.status(404).json({ error: { message: 'Event not found' } })
     }
 
+    // Primary: same category + same city. Recommending a Washington DC taco
+    // event on a San Francisco taco event page is worse than showing nothing —
+    // "related" implies the user could plausibly attend, and cross-country
+    // events fail that bar.
     let related = await prisma.event.findMany({
       where: {
-        categoryId: event.categoryId,
-        id: { not: event.id },
+        categoryId: sourceEvent.categoryId,
+        city: { equals: sourceEvent.city, mode: 'insensitive' },
+        id: { not: sourceEvent.id },
         status: 'published',
         startsAt: { gte: new Date() },
       },
@@ -244,11 +249,32 @@ router.get('/:id/related', async (req, res) => {
       },
     })
 
-    // Fallback: if no same-category events, just grab recent ones
+    // Fallback 1: same category, any city — still topically relevant when the
+    // local same-category well is dry.
     if (related.length === 0) {
       related = await prisma.event.findMany({
         where: {
-          id: { not: event.id },
+          categoryId: sourceEvent.categoryId,
+          id: { not: sourceEvent.id },
+          status: 'published',
+          startsAt: { gte: new Date() },
+        },
+        take: 6,
+        orderBy: { startsAt: 'asc' },
+        include: {
+          category: true,
+          organizer: true,
+          sportsDetail: true,
+        },
+      })
+    }
+
+    // Fallback 2: any category, any city — last-resort recency so the section
+    // never renders empty when we do have upcoming events.
+    if (related.length === 0) {
+      related = await prisma.event.findMany({
+        where: {
+          id: { not: sourceEvent.id },
           status: 'published',
           startsAt: { gte: new Date() },
         },

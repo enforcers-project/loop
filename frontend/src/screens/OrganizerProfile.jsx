@@ -110,8 +110,10 @@ export function OrganizerProfile() {
               className="h-24 w-24 rounded-full border-4 border-white object-cover shadow-card"
             />
             <div className="pb-1">
-              <div className="flex items-center gap-2">
-                <h1 className="font-display text-3xl font-bold text-ink">{org.name}</h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="min-w-0 break-words font-display text-3xl font-bold text-ink">
+                  {org.name}
+                </h1>
                 {org.verified && <VerifiedBadge size={20} />}
                 <RoleBadge role={org.role} />
               </div>

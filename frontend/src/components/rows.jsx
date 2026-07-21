@@ -3,7 +3,7 @@ import { cn } from '../lib/utils'
 
 /* Single selected-state standard across the app: filled #6D5EFC + white text. */
 export const pillBase =
-  'flex-shrink-0 whitespace-nowrap rounded-pill px-4 py-2 text-sm font-medium transition-colors border'
+  'flex-shrink-0 snap-start whitespace-nowrap rounded-pill px-4 py-2 text-sm font-medium transition-colors border'
 export const pillSelected = 'bg-primary text-white border-primary'
 export const pillUnselected =
   'bg-white text-text-secondary border-border-light hover:border-text-muted'
@@ -18,7 +18,7 @@ const CATS = ['All', 'Music', 'Nightlife', 'Sports', 'Networking', 'Food', 'Camp
 // chips. A thin divider separates them from the categories when present.
 export function CatRow({ active, onChange, leading }) {
   return (
-    <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
+    <div className="scrollbar-hide -mx-4 flex snap-x snap-proximity gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
       {leading && (
         <>
           {leading}
@@ -52,7 +52,7 @@ const FILTER_DEFS = [
 
 export function FilterBar({ filters, onToggle }) {
   return (
-    <div className="scrollbar-hide -mx-4 flex gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
+    <div className="scrollbar-hide -mx-4 flex snap-x snap-proximity gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
       {FILTER_DEFS.map((f) => (
         <button
           key={f.key}

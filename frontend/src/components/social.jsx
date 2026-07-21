@@ -272,12 +272,12 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
 -------------------------------------------------------------------------- */
 export function StoriesRow({ stories, onOpen, onAddStory }) {
   return (
-    <div className="scrollbar-hide -mx-1 flex gap-4 overflow-x-auto px-1 pb-1">
+    <div className="scrollbar-hide -mx-1 flex snap-x snap-proximity gap-4 overflow-x-auto px-1 pb-1">
       {stories.map((s, i) => (
         <button
           key={s.id ?? i}
           onClick={() => (s.isYou ? onAddStory?.() : onOpen?.(s))}
-          className="flex w-[68px] flex-shrink-0 flex-col items-center gap-1.5"
+          className="flex w-[68px] flex-shrink-0 snap-start flex-col items-center gap-1.5"
           aria-label={s.isYou ? 'Add to your story' : `${s.name}'s story`}
         >
           <span

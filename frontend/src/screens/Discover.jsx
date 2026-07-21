@@ -196,7 +196,9 @@ export function Discover() {
         <CatRow active={cat} onChange={setCat} />
       </div>
       <div className="mt-2">
-        <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-text-muted">Refine</span>
+        <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-text-muted">
+          Refine
+        </span>
         <FilterBar filters={filters} onToggle={toggle} />
       </div>
 
@@ -234,9 +236,7 @@ export function Discover() {
           ))}
         </div>
       ) : (
-        <p className="py-16 text-center text-sm text-text-muted">
-          No events near you yet.
-        </p>
+        <p className="py-16 text-center text-sm text-text-muted">No events near you yet.</p>
       )}
     </div>
   )

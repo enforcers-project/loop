@@ -131,29 +131,9 @@ app.use('/api/users', usersRouter)
 // --- Notifications (followed-organizer bell feed; §7.5, work-plan #27) -------
 app.use('/api/notifications', notificationsRouter)
 
-// --- AI assistant / NL search stub (grounded in real events) ----------------
-// POST /api/ai/search { q } -> { reply, events: Event[] }
-app.post('/api/ai/search', (req, res) => {
-  const q = String(req.body?.q ?? '').toLowerCase()
-  let matches = EVENTS.map(withOrganizer)
-  if (q) {
-    // Evidence-only lightweight parse: free, weekend, category/tag keywords.
-    if (q.includes('free')) matches = matches.filter((e) => e.isFree)
-    const catHit = CATEGORIES.find((c) => q.includes(c.name.toLowerCase()))
-    if (catHit) matches = matches.filter((e) => e.category === catHit.name)
-    const kw = matches.filter(
-      (e) =>
-        e.title.toLowerCase().includes(q) ||
-        e.tags.some((t) => t.toLowerCase().includes(q.replace('#', ''))),
-    )
-    if (kw.length) matches = kw
-  }
-  const events = matches.slice(0, 3)
-  const reply = events.length
-    ? `I found ${events.length} event${events.length > 1 ? 's' : ''} that match. Here are the top picks:`
-    : `I couldn't find an exact match, but here are some popular events near you:`
-  ok(res, { reply, events: events.length ? events : EVENTS.slice(0, 3).map(withOrganizer) })
-})
+// NOTE: the real NL-search endpoint (POST /api/ai/search, work-plan #22) lives
+// in ai/routes.js (mounted below at /api/ai) — LLM filter-parse → pgvector
+// re-rank with removable pills. The old in-memory keyword stub was removed here.
 
 // --- Interactions (behavior-signal beacon, §7.7) -----------------------------
 app.use('/api', interactionsRouter)

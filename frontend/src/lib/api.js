@@ -1066,6 +1066,34 @@ export const api = {
       }
     }),
 
+  // Natural-language event search (POST /api/ai/search, work-plan #22). Parses
+  // the query into hard constraints (Groq LLM → regex fallback), pgvector
+  // re-ranks, and returns removable filter `pills` + the `label` that produced
+  // them. To remove a pill, pass the remaining `label` back so the parse is
+  // skipped (the LLM won't re-add the dropped filter). Returns EventCard-shaped
+  // events; degrades to the legacy keyword mock when the backend is offline.
+  nlSearch: async (q, label) => {
+    const res = await post(
+      '/ai/search',
+      { q, ...(label ? { label } : {}) },
+      // Offline fallback: no LLM/pills, just keyword-matched mock events.
+      () => {
+        const n = String(q ?? '').toLowerCase()
+        let matches = MOCK_EVENTS.map(withOrganizer)
+        if (n.includes('free')) matches = matches.filter((e) => e.isFree)
+        const cat = MOCK_CATEGORIES.find((c) => n.includes(c.name.toLowerCase()))
+        if (cat) matches = matches.filter((e) => e.category === cat.name)
+        return { reply: '', events: matches.slice(0, 12), pills: [], label: {} }
+      },
+    )
+    return {
+      reply: res.reply ?? '',
+      events: (res.events ?? []).map(toEventCardShape),
+      pills: res.pills ?? [],
+      label: res.label ?? {},
+    }
+  },
+
   // Conversational assistant drawer (planning §7.6, work-plan #31). Persists
   // threads server-side via ai_conversations + ai_messages, retrieval grounded
   // in pgvector when embedding keys are set (keyword fallback otherwise), reply

@@ -4,14 +4,110 @@ import { useApp } from '../context/AppContext'
 import { CatRow, FilterBar, SearchBar } from '../components/rows'
 import { EventGrid } from '../components/EventCard'
 import { PageLoader } from '../components/primitives'
-import { pluralize } from '../lib/utils'
+import { cn, pluralize } from '../lib/utils'
 
 const EMPTY_FILTERS = {
   free: false,
   today: false,
   weekend: false,
   sports: false,
-  nearby: false,
+}
+
+/**
+ * Build editorial rails for the default browse state (no category, no
+ * refinement filters, no query). Each rail picks up to `n` events from the
+ * source list; a shared `used` Set drives top-down dedup so an event only
+ * appears in one rail. Order matters — earlier rails get first pick of any
+ * event that would otherwise appear in multiple rails.
+ *
+ * Rails, in priority order:
+ *   1. Trending this week      — top by goingCount (social proof)
+ *   2. Almost full             — RSVP count ≥ 90% of capacity (scarcity — same
+ *                                signal the AlmostFullBadge uses on cards)
+ *   3. New this week           — published within the last 7 days, newest first
+ *   4. Free tonight            — isFree
+ *   5. Pickup runs             — isSports (dedicated sports rail so soccer/hoops
+ *                                don't get buried by nightlife)
+ *   6. Coming up this weekend  — Fri/Sat/Sun by starts_at
+ */
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+
+function buildRails(events, now = Date.now()) {
+  const used = new Set()
+  const take = (list, n) => {
+    const out = []
+    for (const e of list) {
+      if (out.length >= n) break
+      if (used.has(e.id)) continue
+      used.add(e.id)
+      out.push(e)
+    }
+    return out
+  }
+
+  const rails = []
+
+  const trending = take(
+    [...events].sort((a, b) => (b.goingCount ?? 0) - (a.goingCount ?? 0)),
+    6,
+  )
+  if (trending.length) rails.push({ title: 'Trending this week', events: trending })
+
+  // Same threshold the card badge uses (rsvp_count ≥ 0.9 * capacity). Order by
+  // how-full ratio so the tightest ones surface first.
+  const almostFull = take(
+    events
+      .filter((e) => e.almostFull === true)
+      .sort((a, b) => {
+        const ra = a.capacity ? (a.goingCount ?? 0) / a.capacity : 0
+        const rb = b.capacity ? (b.goingCount ?? 0) / b.capacity : 0
+        return rb - ra
+      }),
+    6,
+  )
+  if (almostFull.length) rails.push({ title: 'Almost full', events: almostFull })
+
+  const newThisWeek = take(
+    events
+      .filter((e) => {
+        if (!e.publishedAt) return false
+        const t = Date.parse(e.publishedAt)
+        if (isNaN(t)) return false
+        return now - t <= WEEK_MS
+      })
+      .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)),
+    6,
+  )
+  if (newThisWeek.length) rails.push({ title: 'New this week', events: newThisWeek })
+
+  const free = take(
+    events.filter((e) => e.isFree === true),
+    6,
+  )
+  if (free.length) rails.push({ title: 'Free tonight', events: free })
+
+  const pickup = take(
+    events.filter((e) => e.isSports === true),
+    6,
+  )
+  if (pickup.length) rails.push({ title: 'Pickup runs', events: pickup })
+
+  // Fri/Sat/Sun by starts_at (0 = Sun, 5 = Fri, 6 = Sat).
+  const weekend = take(
+    events
+      .filter((e) => {
+        if (!e.isoDate) return false
+        const d = new Date(e.isoDate)
+        if (isNaN(d.getTime())) return false
+        const day = d.getDay()
+        return day === 0 || day === 5 || day === 6
+      })
+      .sort((a, b) => new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime()),
+    6,
+  )
+  if (weekend.length) rails.push({ title: 'Coming up this weekend', events: weekend })
+
+  return rails
 }
 
 export function Discover() {
@@ -66,6 +162,22 @@ export function Discover() {
     })
   }, [events, cat, filters, query])
 
+  // Default browse: no category, no refinements, no query → editorial rails.
+  // Any active filter/category/query flips to a single filtered grid so the
+  // user sees exactly what they asked for without the rails muddying the view.
+  const filtersActive =
+    cat !== 'All' ||
+    filters.free ||
+    filters.today ||
+    filters.weekend ||
+    filters.sports ||
+    query.trim().length > 0
+
+  const rails = useMemo(
+    () => (!filtersActive ? buildRails(events ?? []) : []),
+    [events, filtersActive],
+  )
+
   const heading =
     cat !== 'All'
       ? `${filtered.length} ${cat} ${pluralize(filtered.length, 'event')} near you`
@@ -84,12 +196,15 @@ export function Discover() {
         <CatRow active={cat} onChange={setCat} />
       </div>
       <div className="mt-2">
+        <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-text-muted">
+          Refine
+        </span>
         <FilterBar filters={filters} onToggle={toggle} />
       </div>
 
       {events === null ? (
         <PageLoader label="Loading events" />
-      ) : (
+      ) : filtersActive ? (
         <>
           {/* section heading — 24px above, 20px below to the grid */}
           <h1 className="mb-5 mt-6 font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
@@ -104,6 +219,24 @@ export function Discover() {
             </p>
           )}
         </>
+      ) : rails.length > 0 ? (
+        <div className="mt-6">
+          {rails.map((r, i) => (
+            <section key={r.title}>
+              <h2
+                className={cn(
+                  'mb-4 font-display text-2xl font-bold text-ink',
+                  i === 0 ? '' : 'mt-10',
+                )}
+              >
+                {r.title}
+              </h2>
+              <EventGrid events={r.events} />
+            </section>
+          ))}
+        </div>
+      ) : (
+        <p className="py-16 text-center text-sm text-text-muted">No events near you yet.</p>
       )}
     </div>
   )

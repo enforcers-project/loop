@@ -49,10 +49,14 @@ function seedCounts(evt) {
   return { rsvpCount, saveCount }
 }
 
-// One real organizer User (UUID PK) so the follow graph + OrganizerProfile work
-// end-to-end against the DB (the rest of the demo organizers are mock-only).
-// Fixed id keeps the profile URL stable across reseeds. password_hash null =
-// a seed-only account you can't log into (log in as any other user to follow it).
+// Seeded organizer Users (UUID PKs) so the follow graph + OrganizerProfile
+// work end-to-end against the DB (the rest of the demo organizers are
+// mock-only). Fixed ids keep profile URLs stable across reseeds.
+// password_hash null = a seed-only account you can't log into (log in as
+// any other user to follow it). One organizer per category so every seeded
+// event gets host attribution — critical for "who's hosting?" parity across
+// the feed. music + nightlife share Lagos Nights (that's the flagship
+// organizer with posts/stories already tied to its slug-linked events).
 const ORGANIZER = {
   id: '00000000-0000-4000-8000-000000000026',
   email: 'lagosnights@loop.demo',
@@ -67,6 +71,89 @@ const ORGANIZER = {
   bio: 'Bringing the biggest Afrobeats & Amapiano nights to the Bay. Rooftops, warehouses, good vibes only.',
   homeCity: 'San Francisco',
 }
+
+// Additional per-category organizers so every seeded event has a host.
+// Same shape as ORGANIZER; schema only permits organizerKind values
+// { organizer, promoter } — 'sports_host' is not a valid enum, so the
+// sports organizer uses isHost=true on top of organizerKind='promoter'
+// to signal "hosts pickup runs" without breaking Prisma validation.
+const SPORTS_ORGANIZER = {
+  id: '00000000-0000-4000-8000-000000000027',
+  email: 'baypickup@loop.demo',
+  role: 'organizer',
+  organizerKind: 'promoter',
+  isHost: true,
+  displayName: 'Bay Area Pickup',
+  handle: 'baypickup',
+  isVerified: true,
+  avatarUrl: 'https://i.pravatar.cc/150?img=14',
+  coverImageUrl: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=1200&q=80',
+  bio: 'Weekly pickup runs across the Bay — soccer, hoops, volleyball, running clubs. All levels, real ballers.',
+  homeCity: 'Oakland',
+}
+
+const NETWORKING_ORGANIZER = {
+  id: '00000000-0000-4000-8000-000000000028',
+  email: 'techbay@loop.demo',
+  role: 'organizer',
+  organizerKind: 'promoter',
+  isHost: false,
+  displayName: 'TechBay Collective',
+  handle: 'techbay',
+  isVerified: true,
+  avatarUrl: 'https://i.pravatar.cc/150?img=15',
+  coverImageUrl: 'https://images.unsplash.com/photo-1515187029135-18ee286d815b?w=1200&q=80',
+  bio: 'Meetups, mixers, and career fairs for Bay Area builders. Free events, warm intros.',
+  homeCity: 'San Francisco',
+}
+
+const FOOD_ORGANIZER = {
+  id: '00000000-0000-4000-8000-000000000029',
+  email: 'tasteofthetown@loop.demo',
+  role: 'organizer',
+  organizerKind: 'promoter',
+  isHost: false,
+  displayName: 'Taste of the Town',
+  handle: 'tasteofthetown',
+  isVerified: true,
+  avatarUrl: 'https://i.pravatar.cc/150?img=16',
+  coverImageUrl: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=1200&q=80',
+  bio: 'Pop-ups, tastings, and food festivals across the Bay. If it eats or drinks, we cover it.',
+  homeCity: 'San Francisco',
+}
+
+const CAMPUS_ORGANIZER = {
+  id: '00000000-0000-4000-8000-000000000030',
+  email: 'campusunion@loop.demo',
+  role: 'organizer',
+  organizerKind: 'promoter',
+  isHost: false,
+  displayName: 'Campus Union',
+  handle: 'campusunion',
+  isVerified: true,
+  avatarUrl: 'https://i.pravatar.cc/150?img=17',
+  coverImageUrl: 'https://images.unsplash.com/photo-1523580494863-6f3031224c94?w=1200&q=80',
+  bio: 'Cal + Bay Area campus events. Block parties, study jams, film nights, hackathons.',
+  homeCity: 'Berkeley',
+}
+
+// Category → organizer user id lookup. Music + nightlife share Lagos Nights.
+const ORGANIZER_BY_CATEGORY = {
+  music: ORGANIZER.id,
+  nightlife: ORGANIZER.id,
+  sports: SPORTS_ORGANIZER.id,
+  networking: NETWORKING_ORGANIZER.id,
+  food: FOOD_ORGANIZER.id,
+  campus: CAMPUS_ORGANIZER.id,
+}
+
+const ALL_ORGANIZERS = [
+  ORGANIZER,
+  SPORTS_ORGANIZER,
+  NETWORKING_ORGANIZER,
+  FOOD_ORGANIZER,
+  CAMPUS_ORGANIZER,
+]
 
 // Demo attendee accounts. Fixed UUIDs so the social graph (post comments,
 // future follows, etc.) stays stable across reseeds. They exist to hydrate the
@@ -1589,14 +1676,14 @@ async function main() {
   const cats = await prisma.category.findMany()
   const catBySlug = Object.fromEntries(cats.map((c) => [c.slug, c.id]))
 
-  console.log('Seeding demo organizer user...')
-  await prisma.user.upsert({
-    where: { id: ORGANIZER.id },
-    update: ORGANIZER,
-    create: ORGANIZER,
-  })
-  // Categories this organizer "owns" — its events show on the profile tabs.
-  const ORGANIZER_CATEGORIES = new Set(['music', 'nightlife'])
+  console.log('Seeding demo organizer users...')
+  for (const org of ALL_ORGANIZERS) {
+    await prisma.user.upsert({
+      where: { id: org.id },
+      update: org,
+      create: org,
+    })
+  }
 
   console.log('Seeding demo attendee users...')
   for (const attendee of ATTENDEES) {
@@ -1626,10 +1713,10 @@ async function main() {
   for (const evt of EVENTS) {
     const { category, sportsDetail, positions, ...eventData } = evt
 
-    // Attribute this organizer's categories to the real organizer user so its
-    // profile has events to show; everything else stays organizer-less (synced-
-    // style). organizerId is set in both create + update so reseeds stay correct.
-    const organizerId = ORGANIZER_CATEGORIES.has(category) ? ORGANIZER.id : null
+    // Every seeded category has a dedicated organizer user so the "hosted by"
+    // slot on every card resolves to a real DB user (uniform social proof).
+    // organizerId is set in both create + update so reseeds stay correct.
+    const organizerId = ORGANIZER_BY_CATEGORY[category] ?? null
 
     const { rsvpCount, saveCount } = seededByslug.get(evt.slug)
 

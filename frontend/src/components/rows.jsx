@@ -7,6 +7,10 @@ export const pillBase =
 export const pillSelected = 'bg-primary text-white border-primary'
 export const pillUnselected =
   'bg-white text-text-secondary border-border-light hover:border-text-muted'
+/* Lighter, quieter pill used by the FilterBar so the "Refine" row reads as
+   a secondary control rather than a second category strip. */
+export const pillFilterUnselected =
+  'bg-surface text-text-secondary border-transparent hover:bg-border-light'
 
 /* --------------------------------------------------------------------------
    CatRow — horizontal scrollable category chip row
@@ -47,7 +51,6 @@ const FILTER_DEFS = [
   { key: 'today', label: 'Today' },
   { key: 'weekend', label: 'This weekend' },
   { key: 'sports', label: 'Pickup runs' },
-  { key: 'nearby', label: 'Nearby' },
 ]
 
 export function FilterBar({ filters, onToggle }) {
@@ -58,7 +61,7 @@ export function FilterBar({ filters, onToggle }) {
           key={f.key}
           onClick={() => onToggle(f.key)}
           aria-pressed={filters[f.key]}
-          className={cn(pillBase, filters[f.key] ? pillSelected : pillUnselected)}
+          className={cn(pillBase, filters[f.key] ? pillSelected : pillFilterUnselected)}
         >
           {f.label}
         </button>

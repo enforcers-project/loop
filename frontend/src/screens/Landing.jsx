@@ -92,11 +92,11 @@ export function Landing() {
         <div className="relative">
           <LandingNav />
 
-          <div className="mx-auto max-w-[1440px] px-5 pb-14 pt-10 text-center md:pt-16">
+          <div className="mx-auto max-w-[1440px] px-5 pb-10 pt-8 text-center sm:pb-14 sm:pt-10 md:pt-16">
             <span className="inline-flex items-center gap-1.5 rounded-pill bg-white/10 px-3 py-1 text-xs font-medium text-white/80">
               <Sparkles size={13} /> AI-powered local discovery
             </span>
-            <h1 className="mx-auto mt-5 max-w-4xl font-display text-5xl font-bold leading-[1.05] text-white md:text-[88px]">
+            <h1 className="mx-auto mt-5 max-w-4xl font-display text-4xl font-bold leading-[1.05] text-white sm:text-5xl md:text-[88px]">
               Find your next <span className="text-primary">night out.</span>
             </h1>
             <p className="mx-auto mt-5 max-w-xl text-base text-white/60 md:text-lg">
@@ -187,7 +187,7 @@ export function Landing() {
 
         {/* single CTA */}
         <div className="mt-12 text-center">
-          <h2 className="font-display text-4xl font-bold text-ink">
+          <h2 className="font-display text-3xl font-bold text-ink sm:text-4xl">
             Your city is happening. Don’t miss it.
           </h2>
           <Link

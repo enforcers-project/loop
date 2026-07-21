@@ -607,9 +607,11 @@ export function UserProfile() {
             {/* Sits below the banner edge on desktop: the row's -mt-10 lifts
                 content 40px into the banner, so pt-12 pushes the info's top
                 just past that edge. */}
-            <div className="sm:pt-12">
+            <div className="min-w-0 sm:pt-12">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="font-display text-3xl font-bold text-ink">{displayName}</h1>
+                <h1 className="min-w-0 break-words font-display text-2xl font-bold text-ink sm:text-3xl">
+                  {displayName}
+                </h1>
                 <RoleBadge role={roleLabel} />
               </div>
               <p className="mt-1 text-sm font-medium text-text-secondary">
@@ -657,13 +659,13 @@ export function UserProfile() {
         </div>
 
         {/* tabs */}
-        <div className="mt-8 flex gap-7 border-b border-border-light">
+        <div className="scrollbar-hide -mx-4 mt-8 flex gap-6 overflow-x-auto border-b border-border-light px-4 sm:mx-0 sm:gap-7 sm:px-0">
           {tabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={cn(
-                '-mb-px border-b-2 pb-3 text-sm font-semibold transition-colors',
+                '-mb-px whitespace-nowrap border-b-2 pb-3 text-sm font-semibold transition-colors',
                 tab === t
                   ? 'border-primary text-primary'
                   : 'border-transparent text-text-secondary hover:text-ink',

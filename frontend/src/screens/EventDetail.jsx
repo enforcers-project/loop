@@ -152,7 +152,7 @@ export function EventDetail() {
             <img
               src={event.poster}
               alt={event.title}
-              className="h-80 w-full rounded-card bg-black/20 object-contain shadow-hero md:h-[520px]"
+              className="h-64 w-full rounded-card bg-black/20 object-contain shadow-hero sm:h-80 md:h-[520px]"
             />
 
             {/* info */}
@@ -168,7 +168,7 @@ export function EventDetail() {
                 />
                 {event.category}
               </span>
-              <h1 className="mt-4 font-display text-3xl font-bold leading-tight md:text-5xl">
+              <h1 className="mt-4 font-display text-2xl font-bold leading-tight sm:text-3xl md:text-5xl">
                 {event.title}
               </h1>
 
@@ -215,7 +215,7 @@ export function EventDetail() {
               {/* Social-proof + scarcity card — GoingStack on the left carries
                   the "who's going" signal, right side pairs spots-left with the
                   price so the two most decision-critical numbers sit together. */}
-              <div className="mt-6 flex items-center justify-between rounded-card bg-white/10 p-4 backdrop-blur-sm">
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-card bg-white/10 p-4 backdrop-blur-sm">
                 <GoingStack count={goingCount} avatars={event.goingAvatars} size="md" />
                 <div className="flex flex-col items-end">
                   <span className="text-xl font-bold">{event.isFree ? 'Free' : event.price}</span>

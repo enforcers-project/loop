@@ -110,7 +110,7 @@ export function EventsMap({
   viewLng,
   searchLocation,
   onLocationChange,
-  height = 560,
+  height,
 }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
@@ -259,8 +259,11 @@ export function EventsMap({
 
   return (
     <div
-      className="relative overflow-hidden rounded-card border border-border-light shadow-card"
-      style={{ height }}
+      className={cn(
+        'relative overflow-hidden rounded-card border border-border-light shadow-card',
+        height ? '' : 'h-[420px] md:h-[560px]',
+      )}
+      style={height ? { height } : undefined}
     >
       {loadError ? (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-surface text-text-muted">

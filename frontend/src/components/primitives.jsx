@@ -137,7 +137,7 @@ export function FollowBtn({ following = false, onToggle, sm = false }) {
       aria-pressed={following}
       className={cn(
         'inline-flex items-center justify-center rounded-button font-semibold transition-colors',
-        sm ? 'h-9 min-w-[84px] px-4 text-sm' : 'h-11 min-w-[100px] px-5 text-sm',
+        sm ? 'h-10 min-w-[84px] px-4 text-sm' : 'h-11 min-w-[100px] px-5 text-sm',
         following
           ? 'border border-border-light bg-white text-text-secondary hover:border-text-muted'
           : 'bg-primary text-white hover:opacity-90',

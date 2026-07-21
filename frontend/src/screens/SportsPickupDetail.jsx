@@ -184,7 +184,7 @@ export function SportsPickupDetail() {
                 {busy
                   ? 'Working…'
                   : joined
-                    ? 'You’re in ✓ — leave run'
+                    ? 'Leave run'
                     : selectedPosition
                       ? `Join as ${selectedPosition.label}`
                       : 'Pick a position'}

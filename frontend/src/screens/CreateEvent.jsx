@@ -335,7 +335,7 @@ export function CreateEvent() {
                     <img
                       src={aiPreview}
                       alt="AI generated flyer"
-                      className="mx-auto h-64 w-auto rounded-card object-cover"
+                      className="mx-auto max-h-64 w-full rounded-card object-contain"
                     />
                     <div className="mt-3 flex gap-2">
                       <button
@@ -463,7 +463,7 @@ export function CreateEvent() {
             </FormField>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-3 gap-4">
             <FormField label="Price ($)">
               <input
                 value={price}

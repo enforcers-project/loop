@@ -145,11 +145,14 @@ export function EventDetail() {
           </button>
 
           <div className="grid grid-cols-1 gap-8 md:grid-cols-[440px_1fr]">
-            {/* poster */}
+            {/* Poster — object-contain so the full flyer is always visible.
+                object-cover crops to fill, which chops the title off tall
+                portrait AI flyers. The blurred hero backdrop already colors
+                any letterbox gaps, so contain looks native. */}
             <img
               src={event.poster}
               alt={event.title}
-              className="h-80 w-full rounded-card object-cover shadow-hero md:h-[520px]"
+              className="h-80 w-full rounded-card bg-black/20 object-contain shadow-hero md:h-[520px]"
             />
 
             {/* info */}

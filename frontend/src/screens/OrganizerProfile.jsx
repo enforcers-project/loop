@@ -88,8 +88,9 @@ export function OrganizerProfile() {
 
   return (
     <div className="pb-24 md:pb-10">
-      {/* cover */}
-      <div className="relative h-52 md:h-64">
+      {/* Cover banner. Avatar is positioned separately below so it can never
+          be clipped by this container's height or edge. */}
+      <div className="relative h-56 md:h-72">
         <img src={org.cover} alt="" className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-black/20" />
         <button
@@ -101,15 +102,18 @@ export function OrganizerProfile() {
       </div>
 
       <div className="mx-auto max-w-[1140px] px-5">
-        {/* avatar overlapping cover */}
-        <div className="-mt-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex items-end gap-4">
+        {/* Avatar row. Uses translate-y (not negative margin) to overlap into
+            the banner: the wrapper still occupies its natural space so nothing
+            below shifts, and no ancestor overflow can clip the top. Name is
+            centered next to the avatar on desktop, stacked below on mobile. */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-center gap-5">
             <img
               src={org.avatar}
               alt=""
-              className="h-24 w-24 rounded-full border-4 border-white object-cover shadow-card"
+              className="-translate-y-12 h-32 w-32 rounded-full border-4 border-white bg-white object-cover shadow-card md:h-36 md:w-36"
             />
-            <div className="pb-1">
+            <div className="pt-4">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="min-w-0 break-words font-display text-3xl font-bold text-ink">
                   {org.name}
@@ -129,7 +133,9 @@ export function OrganizerProfile() {
               </div>
             </div>
           </div>
-          <FollowBtn following={following} onToggle={onToggle} />
+          <div className="pt-4 sm:pt-6">
+            <FollowBtn following={following} onToggle={onToggle} />
+          </div>
         </div>
 
         {/* bio */}

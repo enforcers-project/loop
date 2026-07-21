@@ -90,7 +90,10 @@ export function toEventCardShape(e) {
           // Prefix the handle with '@' so the hosted-by card and hero organizer
           // chip render the same social-media convention as mock organizers.
           handle: e.organizer.handle ? `@${e.organizer.handle}` : null,
-          avatar: e.organizer.avatar_url,
+          // Fall back to the shared default avatar for legacy organizer rows
+          // whose avatar_url is null (accounts created before DEFAULT_AVATAR_URL
+          // was set). Otherwise the hosted-by chip renders a broken image icon.
+          avatar: e.organizer.avatar_url || DEFAULT_AVATAR,
           verified: e.organizer.is_verified,
           // Trust signals — the hosted-by card renders followers when present,
           // and formatCount() collapses large numbers ("8.4k"). Nullable so
@@ -100,7 +103,7 @@ export function toEventCardShape(e) {
           bio: e.organizer.bio ?? null,
         }
       : e.external_organizer_name
-        ? { id: null, name: e.external_organizer_name, avatar: '', verified: false }
+        ? { id: null, name: e.external_organizer_name, avatar: DEFAULT_AVATAR, verified: false }
         : null,
     rsvpCount: e.rsvp_count ?? 0,
     goingCount: e.rsvp_count ?? 0,
@@ -111,11 +114,41 @@ export function toEventCardShape(e) {
     almostFull:
       e.capacity != null && e.rsvp_count != null ? e.rsvp_count >= 0.9 * e.capacity : false,
     isSports: e.is_sports ?? false,
-    playersNeeded: e.players_needed ?? undefined,
-    playersSignedUp: e.players_signed_up ?? undefined,
+    playersNeeded: e.players_needed ?? e.sports_details?.players_needed ?? undefined,
+    playersSignedUp: e.players_signed_up ?? e.sports_details?.players_signed_up ?? undefined,
+    // Sports-run detail fields. The event detail endpoint nests these under
+    // `sports_details`; hoist them onto the flat shape so SportsPickupDetail
+    // can render the header chip, skill row, and position picker grid without
+    // reaching into a nested object. Card responses omit sports_details, so
+    // these stay undefined there — the card doesn't render them anyway.
+    ...(e.sports_details
+      ? {
+          sport: e.sports_details.sport ?? '',
+          skillLevel: prettySkill(e.sports_details.skill_level),
+          indoor: e.sports_details.venue_setting === 'indoor',
+          positions: (e.sports_details.positions ?? []).map((p) => ({
+            id: p.id,
+            label: p.label,
+            capacity: p.capacity,
+            filled: p.capacity - (p.open_slots ?? p.capacity),
+          })),
+        }
+      : {}),
     tags: [],
     rationale: rationaleText(e.rationale),
   }
+}
+
+// Backend stores skill level as 'all_levels'/'beginner'/'intermediate'/'advanced'
+// (snake_case, lowercase). SportsPickupDetail renders this verbatim in the
+// "Skill: X" row and passes it to SkillBadge (which keys on Title Case), so
+// map it back to the display convention.
+function prettySkill(s) {
+  if (!s) return ''
+  return s
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
 }
 
 async function get(path, fallback) {
@@ -423,6 +456,16 @@ async function toCreateEventBody(draft) {
     city: draft.city,
     venue_name: draft.location || null,
     description: draft.description || null,
+    // Send the flyer through as flyer_url when it's persistable. AI-generated
+    // flyers are base64 data URLs (roundtrip fine). Locally uploaded files
+    // come in as blob: URLs that only exist in the current tab, so we drop
+    // those rather than persist a dead reference — a proper file upload path
+    // (S3 presigned PUT) is a separate task.
+    flyer_url:
+      typeof draft.flyer === 'string' &&
+      (draft.flyer.startsWith('data:') || draft.flyer.startsWith('http'))
+        ? draft.flyer
+        : null,
     price_min: priceMin,
     price_max: priceMin,
     is_free: priceMin === 0,
@@ -687,6 +730,24 @@ export const api = {
   rsvp: (id) => request(`/events/${id}/rsvp`, { method: 'PUT', body: { status: 'going' } }),
   rsvpCancel: (id) => request(`/events/${id}/rsvp`, { method: 'DELETE' }),
 
+  // Sports roster (planning §7.4). Sports runs use the roster, not RSVPs — the
+  // backend explicitly rejects an RSVP on an is_sports event. positions() is
+  // public; roster()/joinRun()/leaveRun() require auth. joinRun accepts an
+  // optional positionId (the picker sends the position the user tapped) and an
+  // optional slotNumber (host-managed runs may pin a slot). All three throw on
+  // failure so SportsPickupDetail can roll back its optimistic Join state.
+  positions: (id) => get(`/events/${id}/positions`, () => null),
+  roster: (id) => request(`/events/${id}/roster`),
+  joinRun: (id, { positionId, slotNumber } = {}) =>
+    request(`/events/${id}/roster`, {
+      method: 'POST',
+      body: {
+        ...(positionId ? { sports_position_id: positionId } : {}),
+        ...(slotNumber != null ? { slot_number: slotNumber } : {}),
+      },
+    }),
+  leaveRun: (id) => request(`/events/${id}/roster`, { method: 'DELETE' }),
+
   // Save / unsave for an event. Same shape as rsvp above — no mock fallback,
   // throws on failure so an optimistic UI can roll back. Every mutation writes
   // an interaction_events row on the backend, which triggers a rebuild of the
@@ -734,6 +795,19 @@ export const api = {
         .map((row) => row.event)
         .filter(Boolean)
         .map(toEventCardShape)
+    } catch {
+      return []
+    }
+  },
+
+  // Events an organizer has published (GET /api/users/:id/events), for the
+  // organizer-only "Events" tab on UserProfile. Same endpoint OrganizerProfile
+  // uses, so upcoming/past ordering matches. [] on failure so the tab degrades
+  // to its empty state rather than crashing.
+  myEventCards: async (id, status = 'upcoming') => {
+    try {
+      const res = await request(`/users/${id}/events?status=${status}`)
+      return (res ?? []).map(toEventCardShape)
     } catch {
       return []
     }
@@ -918,6 +992,25 @@ export const api = {
     // id to navigate to and the live status.
     return { ...created, status: published?.status ?? created.status }
   },
+
+  // Organizer AI description writer (POST /api/ai/description). Groq-backed,
+  // rewrites the organizer's rough notes into a short polished paragraph. No
+  // mock fallback — a 503 surfaces to the UI as an inline error so the user
+  // knows the AI writer isn't configured.
+  generateDescription: ({ title, category, tone, notes }) =>
+    request('/ai/description', {
+      method: 'POST',
+      body: { title, category, tone, notes },
+    }),
+
+  // Organizer AI flyer generation (POST /api/ai/flyer). No mock fallback: the
+  // whole point is to hit OpenAI. Caller shows a spinner during the ~5-10s call
+  // and drops the returned data URL straight into the CreateEvent flyer state.
+  generateFlyer: ({ prompt, style, title, category }) =>
+    request('/ai/flyer', {
+      method: 'POST',
+      body: { prompt, style, title, category },
+    }),
 
   aiSearch: (q) =>
     post('/ai/search', { q }, () => {

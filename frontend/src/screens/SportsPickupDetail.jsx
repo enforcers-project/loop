@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Calendar, MapPin, Users } from 'lucide-react'
 import { api } from '../lib/api'
+import { useApp } from '../context/AppContext'
+import { useToast } from '../context/ToastContext'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
 import { PageLoader, VerifiedBadge } from '../components/primitives'
 
@@ -13,6 +15,7 @@ const SKILL_STYLE = {
 
 function SkillBadge({ skill }) {
   const s = SKILL_STYLE[skill]
+  if (!s) return null
   return (
     <span
       className="rounded-pill px-2 py-0.5 text-xs font-semibold"
@@ -23,12 +26,20 @@ function SkillBadge({ skill }) {
   )
 }
 
+// Real backend positions have a UUID id; mock seed positions don't. Key on the
+// id when it's there so a Join can send it to the backend, fall back to label
+// for the mock path.
+const positionKey = (p) => p?.id ?? p?.label
+
 export function SportsPickupDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { requireAuth } = useApp()
+  const toast = useToast()
   const [event, setEvent] = useState(null)
   const [position, setPosition] = useState(null)
   const [joined, setJoined] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (id) api.event(id).then(setEvent)
@@ -42,6 +53,28 @@ export function SportsPickupDetail() {
   const roster = event.roster ?? []
   const claimed = roster.filter((p) => p.status === 'claimed')
   const waitlist = roster.filter((p) => p.status === 'waitlist')
+
+  const selectedPosition = (event.positions ?? []).find((p) => positionKey(p) === position)
+
+  async function handleJoinToggle() {
+    if (!requireAuth()) return
+    if (busy) return
+    setBusy(true)
+    try {
+      if (joined) {
+        await api.leaveRun(id)
+        setJoined(false)
+        setPosition(null)
+      } else {
+        await api.joinRun(id, { positionId: selectedPosition?.id })
+        setJoined(true)
+      }
+    } catch (err) {
+      toast.error(err.message || 'Could not update your spot. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div className="pb-24 md:pb-10">
@@ -108,13 +141,14 @@ export function SportsPickupDetail() {
               <p className="mb-2 mt-5 text-sm font-semibold text-ink">Pick your position</p>
               <div className="grid grid-cols-2 gap-2">
                 {(event.positions ?? []).map((p) => {
+                  const key = positionKey(p)
                   const full = p.filled >= p.capacity
-                  const active = position === p.label
+                  const active = position === key
                   return (
                     <button
-                      key={p.label}
+                      key={key}
                       disabled={full && !active}
-                      onClick={() => setPosition(p.label)}
+                      onClick={() => setPosition(key)}
                       className={cn(
                         'rounded-button border px-3 py-2.5 text-left text-sm transition-colors',
                         active
@@ -135,8 +169,8 @@ export function SportsPickupDetail() {
 
               {/* join CTA */}
               <button
-                disabled={!position && !joined}
-                onClick={() => setJoined((v) => !v)}
+                disabled={busy || (!position && !joined)}
+                onClick={handleJoinToggle}
                 className={cn(
                   'mt-4 w-full rounded-button py-3 text-sm font-semibold transition-transform active:scale-95',
                   joined
@@ -144,13 +178,16 @@ export function SportsPickupDetail() {
                     : position
                       ? 'bg-accent text-white'
                       : 'cursor-not-allowed bg-surface text-text-muted',
+                  busy && 'opacity-70',
                 )}
               >
-                {joined
-                  ? 'You’re in ✓ — leave run'
-                  : position
-                    ? `Join as ${position}`
-                    : 'Pick a position'}
+                {busy
+                  ? 'Working…'
+                  : joined
+                    ? 'You’re in ✓ — leave run'
+                    : selectedPosition
+                      ? `Join as ${selectedPosition.label}`
+                      : 'Pick a position'}
               </button>
             </div>
           </div>

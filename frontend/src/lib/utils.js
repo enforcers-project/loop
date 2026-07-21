@@ -84,3 +84,15 @@ export function recommendationLabel(rationale, category) {
   }
   return rationale.length <= 28 ? rationale : 'Recommended for you'
 }
+
+/**
+ * "Joined <Month YYYY>" from an ISO timestamp — used on the profile header to
+ * show when the account was created. Returns '' for missing/invalid input so
+ * the caller can conditionally render.
+ */
+export function formatJoinDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  return 'Joined ' + d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}

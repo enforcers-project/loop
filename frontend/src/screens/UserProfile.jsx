@@ -324,9 +324,7 @@ function InterestsModal({ allInterests, selectedIds, onClose, onSave }) {
         <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
           <div>
             <h2 className="text-base font-bold text-ink">Edit interests</h2>
-            <p className="mt-0.5 text-xs text-text-secondary">
-              Pick at least 3 to tune your feed.
-            </p>
+            <p className="mt-0.5 text-xs text-text-secondary">Pick at least 3 to tune your feed.</p>
           </div>
           <button
             type="button"

@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bookmark, CalendarHeart, CalendarPlus, Sparkles, Camera, MapPin, X } from 'lucide-react'
+import {
+  Bookmark,
+  CalendarHeart,
+  CalendarPlus,
+  Sparkles,
+  Camera,
+  MapPin,
+  Pencil,
+  X,
+} from 'lucide-react'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
@@ -266,6 +275,125 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
   )
 }
 
+/* Edit-interests modal — chip grid mirroring onboarding step 1. Prefills from
+   the current interests, requires the same "pick at least 3" minimum so the
+   recommender never runs on a starved signal, and PUTs via updateInterests.
+   Kept in-place (a modal, not a route to /onboarding) so a returning user
+   never gets bounced through the whole onboarding flow just to tweak a pick. */
+function InterestsModal({ allInterests, selectedIds, onClose, onSave }) {
+  const [picked, setPicked] = useState(() => new Set(selectedIds))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const toggle = (id) =>
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const canSave = picked.size >= 3 && !busy
+
+  const submit = async () => {
+    if (!canSave) return
+    setBusy(true)
+    setError('')
+    try {
+      await onSave([...picked])
+      onClose?.()
+    } catch {
+      setError('Could not save interests. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={() => !busy && onClose?.()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit interests"
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-h-[85vh] sm:max-w-lg sm:rounded-card"
+      >
+        <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
+          <div>
+            <h2 className="text-base font-bold text-ink">Edit interests</h2>
+            <p className="mt-0.5 text-xs text-text-secondary">Pick at least 3 to tune your feed.</p>
+          </div>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => !busy && onClose?.()}
+            className="grid h-8 w-8 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="mb-3 flex items-center gap-3 text-xs">
+            <span
+              className={cn(
+                'rounded-pill px-2.5 py-1 font-semibold',
+                picked.size >= 3 ? 'bg-success/15 text-success' : 'bg-surface text-text-muted',
+              )}
+            >
+              {picked.size} selected
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(allInterests ?? []).map((i) => {
+              const on = picked.has(i.id)
+              return (
+                <button
+                  key={i.id}
+                  type="button"
+                  onClick={() => toggle(i.id)}
+                  className={cn(
+                    'rounded-pill border px-4 py-2 text-sm font-medium transition-colors',
+                    on
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
+                  )}
+                >
+                  {i.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-t border-border-light px-5 py-3.5">
+          {error ? <p className="text-xs text-accent">{error}</p> : <span />}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => !busy && onClose?.()}
+              className="rounded-button px-4 py-2 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!canSave}
+              className="rounded-button bg-primary px-5 py-2 text-sm font-semibold text-white transition-opacity active:scale-95 disabled:opacity-40"
+            >
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* Designed empty state — icon, heading, description and a routed CTA. Sized to
    fill the tab area so an empty profile never looks broken. */
 function EmptyState({ Icon, title, description, cta, onCta }) {
@@ -288,13 +416,35 @@ function EmptyState({ Icon, title, description, cta, onCta }) {
 
 export function UserProfile() {
   const navigate = useNavigate()
-  const { user, role, isHost, interests, savedIds, goingIds, updateAvatar, updateProfile } =
-    useApp()
+  const {
+    user,
+    role,
+    isHost,
+    interests,
+    savedIds,
+    goingIds,
+    updateAvatar,
+    updateProfile,
+    updateInterests,
+  } = useApp()
   const toast = useToast()
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [interestsOpen, setInterestsOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const avatarSrc = user?.avatar || DEFAULT_AVATAR
+
+  // Persist an interest-list edit. Rethrows so the modal can keep itself open
+  // and surface an inline error; success closes the modal and toasts.
+  const onSaveInterests = async (ids) => {
+    try {
+      await updateInterests(ids)
+      toast.success('Interests updated.')
+    } catch (err) {
+      toast.error(err.message || 'Could not save interests. Please try again.')
+      throw err
+    }
+  }
 
   // Persist a profile edit. Rethrows so the modal can keep itself open and pin a
   // 409 (handle taken) on the field; other failures surface as a toast here.
@@ -457,9 +607,11 @@ export function UserProfile() {
             {/* Sits below the banner edge on desktop: the row's -mt-10 lifts
                 content 40px into the banner, so pt-12 pushes the info's top
                 just past that edge. */}
-            <div className="sm:pt-12">
+            <div className="min-w-0 sm:pt-12">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="font-display text-3xl font-bold text-ink">{displayName}</h1>
+                <h1 className="min-w-0 break-words font-display text-2xl font-bold text-ink sm:text-3xl">
+                  {displayName}
+                </h1>
                 <RoleBadge role={roleLabel} />
               </div>
               <p className="mt-1 text-sm font-medium text-text-secondary">
@@ -507,13 +659,13 @@ export function UserProfile() {
         </div>
 
         {/* tabs */}
-        <div className="mt-8 flex gap-7 border-b border-border-light">
+        <div className="scrollbar-hide -mx-4 mt-8 flex gap-6 overflow-x-auto border-b border-border-light px-4 sm:mx-0 sm:gap-7 sm:px-0">
           {tabs.map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={cn(
-                '-mb-px border-b-2 pb-3 text-sm font-semibold transition-colors',
+                '-mb-px whitespace-nowrap border-b-2 pb-3 text-sm font-semibold transition-colors',
                 tab === t
                   ? 'border-primary text-primary'
                   : 'border-transparent text-text-secondary hover:text-ink',
@@ -571,15 +723,30 @@ export function UserProfile() {
             )
           ) : tab === 'Interests' ? (
             myInterests.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {myInterests.map((i) => (
-                  <span
-                    key={i.id}
-                    className="rounded-pill border border-primary bg-primary px-4 py-2 text-sm font-medium text-white"
+              <div>
+                <div className="mb-4 flex items-center justify-between">
+                  <p className="text-sm text-text-secondary">
+                    Tuning your feed with {myInterests.length}{' '}
+                    {pluralize(myInterests.length, 'interest')}.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setInterestsOpen(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-button border border-border-light bg-white px-3.5 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted hover:text-ink"
                   >
-                    {i.label}
-                  </span>
-                ))}
+                    <Pencil size={14} /> Edit
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {myInterests.map((i) => (
+                    <span
+                      key={i.id}
+                      className="rounded-pill border border-primary bg-primary px-4 py-2 text-sm font-medium text-white"
+                    >
+                      {i.label}
+                    </span>
+                  ))}
+                </div>
               </div>
             ) : (
               <EmptyState
@@ -587,7 +754,7 @@ export function UserProfile() {
                 title="No interests selected yet"
                 description="Choose a few interests so Loop can recommend better events."
                 cta="Add interests"
-                onCta={() => navigate('/onboarding')}
+                onCta={() => setInterestsOpen(true)}
               />
             )
           ) : tab === 'Saved' ? (
@@ -633,6 +800,15 @@ export function UserProfile() {
           uploading={uploading}
           onSave={onSaveProfile}
           onClose={() => setEditOpen(false)}
+        />
+      )}
+
+      {interestsOpen && (
+        <InterestsModal
+          allInterests={allInterests ?? []}
+          selectedIds={interests}
+          onSave={onSaveInterests}
+          onClose={() => setInterestsOpen(false)}
         />
       )}
     </div>

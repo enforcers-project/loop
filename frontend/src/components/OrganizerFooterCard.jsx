@@ -17,11 +17,11 @@ export function OrganizerFooterCard({ organizer, eventCount }) {
   return (
     <section className="rounded-card border border-border-light bg-white p-6 shadow-card md:p-8">
       <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">Hosted by</p>
-      <div className="mt-4 flex items-start gap-5">
+      <div className="mt-4 flex flex-col items-start gap-4 sm:flex-row sm:gap-5">
         <img
           src={organizer.avatar}
           alt=""
-          className="h-20 w-20 flex-shrink-0 rounded-full border border-border-light object-cover"
+          className="h-16 w-16 flex-shrink-0 rounded-full border border-border-light object-cover sm:h-20 sm:w-20"
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -55,7 +55,7 @@ export function OrganizerFooterCard({ organizer, eventCount }) {
             </p>
           )}
         </div>
-        <div className="flex-shrink-0">
+        <div className="w-full flex-shrink-0 sm:w-auto">
           <FollowBtn following={following} onToggle={() => toggleFollow(organizer.id)} sm />
         </div>
       </div>

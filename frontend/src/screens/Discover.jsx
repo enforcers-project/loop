@@ -239,8 +239,8 @@ export function Discover() {
       ) : filtersActive ? (
         <>
           {/* section heading + list/map toggle */}
-          <div className="mb-5 mt-6 flex items-center justify-between gap-3">
-            <h1 className="font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
+          <div className="mb-5 mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="font-display text-xl font-bold leading-tight text-ink sm:text-[28px] md:text-3xl">
               {heading}
             </h1>
             <ViewToggle value={view} onChange={setView} />

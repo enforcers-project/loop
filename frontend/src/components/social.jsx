@@ -508,7 +508,8 @@ export function PostCard({ post }) {
   const [commentsOpen, setCommentsOpen] = useState(false)
   const org = post.organizer
 
-  const iconBtn = 'grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-surface'
+  const iconBtn =
+    'grid h-11 w-11 place-items-center rounded-full transition-colors hover:bg-surface'
   const when = timeAgo(post.timeAgo) || post.timeAgo
 
   // Reply adapter for CommentReplies — bound to this post's endpoints. Delete is

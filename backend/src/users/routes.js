@@ -47,6 +47,32 @@ async function resolveIsFollowing(viewerId, targetId) {
   return !!row
 }
 
+// --- GET /api/users/:id/interests -------------------------------------------
+// Owner-only. Returns the user's committed interest picks so the client can
+// hydrate the interests context on login/refresh (without it, onboarding picks
+// vanish from the profile the moment the user reloads or logs back in). Each
+// row is a slim { id, slug, label } — same fields the onboarding chip grid uses,
+// keyed by slug so the client can match against GET /api/interests which
+// exposes slug ids too.
+router.get('/:id/interests', requireAuth, async (req, res) => {
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only view your own interests')
+  }
+  try {
+    const rows = await prisma.userInterest.findMany({
+      where: { userId: req.user.id, source: 'onboarding' },
+      include: { interest: { select: { id: true, slug: true, label: true, isActive: true } } },
+    })
+    const data = rows
+      .filter((r) => r.interest?.isActive)
+      .map((r) => ({ id: r.interest.id, slug: r.interest.slug, label: r.interest.label }))
+    return res.json({ data })
+  } catch (err) {
+    console.error('GET /api/users/:id/interests error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not load interests')
+  }
+})
+
 // --- PUT /api/users/:id/interests -------------------------------------------
 // Body: { interest_ids: string[] } — each id may be an Interest UUID or its
 // slug (the seed lookup at GET /api/interests exposes slug ids to the client).

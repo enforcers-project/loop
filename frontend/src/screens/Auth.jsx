@@ -225,7 +225,7 @@ export function Auth() {
                       key={r.id}
                       onClick={() => setRole(r.id)}
                       className={cn(
-                        'rounded-button border px-3 py-2.5 text-left transition-colors',
+                        'rounded-button border px-3 py-3 text-left transition-colors',
                         role === r.id
                           ? 'border-primary bg-primary text-white'
                           : 'border-border-light bg-white text-text-secondary hover:border-text-muted',

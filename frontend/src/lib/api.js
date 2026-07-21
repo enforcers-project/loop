@@ -540,6 +540,20 @@ export const api = {
     },
   },
 
+  // The caller's own onboarding interest picks (GET /users/:id/interests) —
+  // used to hydrate the interests context on login/refresh so the profile
+  // "Interests" tab survives a reload. Returns the id array (UUIDs matching
+  // the ids in GET /api/interests). [] on any failure so a hydration hiccup
+  // never blocks the app.
+  userInterests: async (id) => {
+    try {
+      const res = await request(`/users/${id}/interests`)
+      return (res ?? []).map((row) => row.id).filter(Boolean)
+    } catch {
+      return []
+    }
+  },
+
   // Commit the user's onboarding interest picks (PUT /users/:id/interests).
   // The endpoint requires auth; when onboarding runs before login (no userId)
   // or the network is down, we fall back to echoing the picks with

@@ -53,7 +53,7 @@ function FeaturedCard({ event }) {
   }
 
   return (
-    <div className="relative h-[300px] overflow-hidden rounded-card shadow-hero md:h-[330px]">
+    <div className="relative h-[240px] overflow-hidden rounded-card shadow-hero sm:h-[300px] md:h-[330px]">
       <button
         type="button"
         onClick={go}
@@ -87,7 +87,7 @@ function FeaturedCard({ event }) {
       <div className="pointer-events-none absolute inset-x-4 bottom-4 text-white sm:inset-x-6 sm:bottom-6">
         <h2
           onClick={go}
-          className="pointer-events-auto cursor-pointer font-display text-[26px] font-bold leading-tight md:text-[30px]"
+          className="pointer-events-auto cursor-pointer font-display text-xl font-bold leading-tight sm:text-[26px] md:text-[30px]"
         >
           {event.title}
         </h2>

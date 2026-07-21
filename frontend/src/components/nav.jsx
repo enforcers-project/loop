@@ -5,7 +5,6 @@ import {
   Home,
   PlusCircle,
   Users,
-  Search,
   User,
   LogIn,
   LogOut,
@@ -48,7 +47,7 @@ export function TopNav() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-border-light bg-white/95 backdrop-blur-md">
-      <div className="loop-container flex h-20 items-center justify-between gap-4">
+      <div className="loop-container flex h-16 items-center justify-between gap-4 md:h-20">
         <Link to={isLoggedIn ? '/feed' : '/'} className="flex-shrink-0">
           {LOGO}
         </Link>
@@ -257,9 +256,7 @@ export function BottomBar() {
             <PlusCircle size={26} />
           </span>
         </Link>
-      ) : (
-        tab('/social', Search, 'Search')
-      )}
+      ) : null}
       {tab('/social', Users, 'Social')}
       {isLoggedIn ? tab('/profile', User, 'Profile') : tab('/auth?mode=login', LogIn, 'Log in')}
     </nav>

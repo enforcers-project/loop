@@ -107,15 +107,15 @@ export function OrganizerProfile() {
             below shifts, and no ancestor overflow can clip the top. Name is
             centered next to the avatar on desktop, stacked below on mobile. */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-center gap-5">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-5">
             <img
               src={org.avatar}
               alt=""
-              className="-translate-y-12 h-32 w-32 rounded-full border-4 border-white bg-white object-cover shadow-card md:h-36 md:w-36"
+              className="-translate-y-10 h-24 w-24 rounded-full border-4 border-white bg-white object-cover shadow-card sm:-translate-y-12 sm:h-32 sm:w-32 md:h-36 md:w-36"
             />
-            <div className="pt-4">
+            <div className="min-w-0 sm:pt-4">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="min-w-0 break-words font-display text-3xl font-bold text-ink">
+                <h1 className="min-w-0 break-words font-display text-2xl font-bold text-ink sm:text-3xl">
                   {org.name}
                 </h1>
                 {org.verified && <VerifiedBadge size={20} />}

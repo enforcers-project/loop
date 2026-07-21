@@ -61,9 +61,12 @@ export function toEventCardShape(e) {
     category: e.category?.name ?? '',
     poster: e.flyer_url ?? '',
     isFree: e.is_free,
-    // Fall back to 'TBA' for paid events with no price_min so the EventCard
-    // price pill never renders as an empty white chip (looks like a bug).
-    price: e.is_free ? 'Free' : priceMin != null ? `$${priceMin}` : 'TBA',
+    // Free = either the isFree flag OR a $0 price_min (organizers who set the
+    // price to 0 instead of flipping the free toggle shouldn't see a "$0"
+    // pill). Fall back to 'TBA' for paid events with no price_min so the
+    // EventCard price pill never renders as an empty white chip (looks like a
+    // bug).
+    price: e.is_free || priceMin === 0 ? 'Free' : priceMin != null ? `$${priceMin}` : 'TBA',
     date: e.starts_at
       ? new Date(e.starts_at).toLocaleDateString('en-US', {
           weekday: 'short',
@@ -264,6 +267,8 @@ export function toClientUser(u) {
     homeCity: u.home_city ?? null,
     homeLat: u.home_lat ?? null,
     homeLng: u.home_lng ?? null,
+    cover: u.cover_image_url ?? null,
+    joinedAt: u.created_at ?? null,
   }
 }
 

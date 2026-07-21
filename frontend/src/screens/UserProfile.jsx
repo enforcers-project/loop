@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bookmark, CalendarHeart, Sparkles, Camera, X } from 'lucide-react'
+import { Bookmark, CalendarHeart, Sparkles, Camera, MapPin, X } from 'lucide-react'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { cn, formatCount, pluralize } from '../lib/utils'
+import { cn, formatCount, formatJoinDate, pluralize } from '../lib/utils'
 import { inputClass, RoleBadge, Spinner } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
@@ -390,7 +390,10 @@ export function UserProfile() {
       {/* cover banner — controlled height, doesn't overpower the content */}
       <div className="relative h-[200px] md:h-[240px]">
         <EventImage
-          src="https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1600&q=80"
+          src={
+            user?.cover ||
+            'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=1600&q=80'
+          }
           alt=""
           showLabel={false}
         />
@@ -418,7 +421,6 @@ export function UserProfile() {
                   <Camera size={22} />
                 </span>
               </button>
-              <span className="absolute bottom-1.5 right-1.5 h-4 w-4 rounded-full border-2 border-white bg-success" />
             </div>
             <div className="pb-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -442,6 +444,17 @@ export function UserProfile() {
                   {pluralize(user?.followers ?? 0, 'follower')}
                 </span>
               </div>
+              {(user?.homeCity || user?.joinedAt) && (
+                <div className="mt-2 flex flex-col gap-1 text-sm text-text-secondary">
+                  {user?.homeCity && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <MapPin size={14} />
+                      {user.homeCity}
+                    </span>
+                  )}
+                  {user?.joinedAt && <span>{formatJoinDate(user.joinedAt)}</span>}
+                </div>
+              )}
               {user?.bio && (
                 <p className="mt-3 max-w-lg text-sm leading-relaxed text-text-primary">
                   {user.bio}

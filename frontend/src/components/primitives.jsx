@@ -209,10 +209,7 @@ export function Spinner({ size = 'md', className, label = 'Loading' }) {
       style={{ width: px, height: px }}
     >
       {Array.from({ length: 10 }, (_, i) => (
-        <span
-          key={i}
-          style={{ '--rotation': (i + 1) * 36, '--delay': (i + 1) / 10 }}
-        />
+        <span key={i} style={{ '--rotation': (i + 1) * 36, '--delay': (i + 1) / 10 }} />
       ))}
     </span>
   )

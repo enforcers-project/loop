@@ -402,8 +402,8 @@ export function UserProfile() {
 
       <div className="loop-container relative z-10 max-w-[1100px]">
         {/* profile header */}
-        <div className="-mt-12 flex flex-col gap-5 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-end">
+        <div className="-mt-8 flex flex-col gap-5 sm:-mt-10 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col items-start gap-4 sm:flex-row">
             <div className="relative flex-shrink-0">
               <button
                 type="button"
@@ -422,7 +422,10 @@ export function UserProfile() {
                 </span>
               </button>
             </div>
-            <div className="pb-1">
+            {/* Sits below the banner edge on desktop: the row's -mt-10 lifts
+                content 40px into the banner, so pt-12 pushes the info's top
+                just past that edge. */}
+            <div className="sm:pt-12">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="font-display text-3xl font-bold text-ink">{displayName}</h1>
                 <RoleBadge role={roleLabel} />

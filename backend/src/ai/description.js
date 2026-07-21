@@ -56,7 +56,9 @@ function buildUserPrompt({ title, category, tone, notes }) {
     parts.push(`Organizer's notes / rough draft:\n${notes}`)
     parts.push('Rewrite these into the final description, keeping every concrete detail intact.')
   } else {
-    parts.push('The organizer has not written anything yet — invent a plausible description from the title and category alone. Keep it generic enough not to fabricate specifics (no invented lineups, prices, or venues).')
+    parts.push(
+      'The organizer has not written anything yet — invent a plausible description from the title and category alone. Keep it generic enough not to fabricate specifics (no invented lineups, prices, or venues).',
+    )
   }
   return parts.join('\n\n')
 }

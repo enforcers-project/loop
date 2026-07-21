@@ -121,7 +121,10 @@ router.post('/flyer', requireRole('organizer'), async (req, res) => {
     const body = await r.json()
     const b64 = body?.data?.[0]?.b64_json
     if (!b64) {
-      console.error('[ai/flyer] OpenAI returned no image bytes:', JSON.stringify(body).slice(0, 400))
+      console.error(
+        '[ai/flyer] OpenAI returned no image bytes:',
+        JSON.stringify(body).slice(0, 400),
+      )
       return fail(res, 502, 'UPSTREAM_ERROR', 'AI service returned no image.')
     }
 

@@ -104,14 +104,7 @@ const MAP_STYLES = [
   },
 ]
 
-export function EventsMap({
-  events,
-  viewLat,
-  viewLng,
-  searchLocation,
-  onLocationChange,
-  height,
-}) {
+export function EventsMap({ events, viewLat, viewLng, searchLocation, onLocationChange, height }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef([])

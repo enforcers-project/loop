@@ -68,6 +68,63 @@ const ORGANIZER = {
   homeCity: 'San Francisco',
 }
 
+// Demo attendee accounts. Fixed UUIDs so the social graph (post comments,
+// future follows, etc.) stays stable across reseeds. They exist to hydrate the
+// SocialFeed comment threads with plausible-looking non-organizer voices —
+// posts are still authored exclusively by ORGANIZER above.
+const ATTENDEES = [
+  {
+    id: '00000000-0000-4000-8000-000000000031',
+    email: 'mayac@loop.demo',
+    role: 'attendee',
+    isHost: false,
+    displayName: 'Maya Chen',
+    handle: 'mayac',
+    avatarUrl: 'https://i.pravatar.cc/150?img=47',
+    homeCity: 'San Francisco',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000032',
+    email: 'dev_e@loop.demo',
+    role: 'attendee',
+    isHost: false,
+    displayName: 'Devon Ellis',
+    handle: 'dev_e',
+    avatarUrl: 'https://i.pravatar.cc/150?img=52',
+    homeCity: 'San Francisco',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000033',
+    email: 'amaraosei@loop.demo',
+    role: 'attendee',
+    isHost: false,
+    displayName: 'Amara Osei',
+    handle: 'amaraosei',
+    avatarUrl: 'https://i.pravatar.cc/150?img=48',
+    homeCity: 'San Francisco',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000034',
+    email: 'kainaka@loop.demo',
+    role: 'attendee',
+    isHost: false,
+    displayName: 'Kai Nakamura',
+    handle: 'kainaka',
+    avatarUrl: 'https://i.pravatar.cc/150?img=15',
+    homeCity: 'San Francisco',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000035',
+    email: 'sofiareyes@loop.demo',
+    role: 'attendee',
+    isHost: false,
+    displayName: 'Sofia Reyes',
+    handle: 'sofiareyes',
+    avatarUrl: 'https://i.pravatar.cc/150?img=44',
+    homeCity: 'San Francisco',
+  },
+]
+
 const CATEGORIES = [
   { slug: 'music', name: 'Music', colorHex: '#6D5EFC', icon: 'music-note', sortOrder: 0 },
   { slug: 'nightlife', name: 'Nightlife', colorHex: '#FF2E74', icon: 'moon', sortOrder: 1 },
@@ -1355,6 +1412,46 @@ const POSTS = [
     imageUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=1000&q=80',
     caption: 'Golden hour hit different last week ☀️ Rooftop is back this Saturday. Smart casual.',
   },
+  {
+    id: '00000000-0000-4000-8000-000000000104',
+    eventSlug: 'latin-club-night',
+    kind: 'flyer',
+    imageUrl: 'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=1000&q=80',
+    caption:
+      'Fuego Fridays 🔥 Reggaeton, dembow, and Latin trap all night. $5 tequila shots before midnight.',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000105',
+    eventSlug: 'day-party-oakland-marina',
+    kind: 'update',
+    imageUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=1000&q=80',
+    caption:
+      'Marina day party lineup dropping tomorrow ⛵️ Food trucks locked in, DJs going deep til sundown.',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000106',
+    eventSlug: 'pool-party-oakland',
+    kind: 'flyer',
+    imageUrl: 'https://images.unsplash.com/photo-1530549387789-4c1017266635?w=1000&q=80',
+    caption:
+      'All-white pool party 🤍 Bottle service poolside, taco bar, live DJs. Bring swimwear + shades.',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000107',
+    eventSlug: 'silent-disco-park',
+    kind: 'recap',
+    imageUrl: 'https://images.unsplash.com/photo-1504680177321-2e6a879aac86?w=1000&q=80',
+    caption:
+      'Dolores Park silent disco was unreal 🎧 Three channels, one park, zero noise complaints.',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000108',
+    eventSlug: 'speakeasy-cocktail-night',
+    kind: 'update',
+    imageUrl: 'https://images.unsplash.com/photo-1572116469696-31de0f17cc34?w=1000&q=80',
+    caption:
+      'Speakeasy is capped at 40 tonight 🍸 Password drops to reservation holders at 6pm sharp.',
+  },
 ]
 
 // Ephemeral stories (StoriesRow). expires_at is set in main() so they stay live
@@ -1371,6 +1468,111 @@ const STORIES = [
     eventSlug: 'afro-glow-club-night',
     mediaUrl: 'https://images.unsplash.com/photo-1545128485-c400e7702796?w=800&q=80',
     caption: 'Neon room is ready 💜',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000203',
+    eventSlug: 'rooftop-sunset-party',
+    mediaUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&q=80',
+    caption: 'Rooftop view check — golden hour incoming ☀️',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000204',
+    eventSlug: 'pool-party-oakland',
+    mediaUrl: 'https://images.unsplash.com/photo-1530549387789-4c1017266635?w=800&q=80',
+    caption: 'Pool sparkling 💦 all-white fits only',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000205',
+    eventSlug: 'latin-club-night',
+    mediaUrl: 'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=800&q=80',
+    caption: 'Fuego floor lit 🔥🔥',
+  },
+]
+
+// Comments on the seeded posts. Each row is (post → attendee → body), and by
+// invariant the attendee is NEVER the post's author (posts are all authored by
+// ORGANIZER, comments always come from an ATTENDEES row). Fixed ids keep the
+// social feed stable across reseeds so screenshots don't churn.
+const POST_COMMENTS = [
+  // afrobeats-warehouse-night (post 101)
+  {
+    id: '00000000-0000-4000-8000-000000000301',
+    postId: '00000000-0000-4000-8000-000000000101',
+    authorId: '00000000-0000-4000-8000-000000000031',
+    body: 'been waiting for this all summer 🔥',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000302',
+    postId: '00000000-0000-4000-8000-000000000101',
+    authorId: '00000000-0000-4000-8000-000000000033',
+    body: 'grabbing tix rn, who else pulling up?',
+  },
+  // afro-glow-club-night (post 102)
+  {
+    id: '00000000-0000-4000-8000-000000000303',
+    postId: '00000000-0000-4000-8000-000000000102',
+    authorId: '00000000-0000-4000-8000-000000000035',
+    body: 'neon paint bar sold me. see y’all Saturday 💜',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000304',
+    postId: '00000000-0000-4000-8000-000000000102',
+    authorId: '00000000-0000-4000-8000-000000000032',
+    body: 'last release is stressing me out lol',
+  },
+  // rooftop-sunset-party (post 103)
+  {
+    id: '00000000-0000-4000-8000-000000000305',
+    postId: '00000000-0000-4000-8000-000000000103',
+    authorId: '00000000-0000-4000-8000-000000000034',
+    body: 'last one was elite, view was crazy',
+  },
+  // latin-club-night (post 104)
+  {
+    id: '00000000-0000-4000-8000-000000000306',
+    postId: '00000000-0000-4000-8000-000000000104',
+    authorId: '00000000-0000-4000-8000-000000000035',
+    body: 'dembow all night, count me in 💃',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000307',
+    postId: '00000000-0000-4000-8000-000000000104',
+    authorId: '00000000-0000-4000-8000-000000000031',
+    body: 'those tequila shots though 🥲',
+  },
+  // day-party-oakland-marina (post 105)
+  {
+    id: '00000000-0000-4000-8000-000000000308',
+    postId: '00000000-0000-4000-8000-000000000105',
+    authorId: '00000000-0000-4000-8000-000000000032',
+    body: 'which food trucks?? asking for a friend 🌮',
+  },
+  // pool-party-oakland (post 106)
+  {
+    id: '00000000-0000-4000-8000-000000000309',
+    postId: '00000000-0000-4000-8000-000000000106',
+    authorId: '00000000-0000-4000-8000-000000000033',
+    body: 'all-white fit already picked out 🤍',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000310',
+    postId: '00000000-0000-4000-8000-000000000106',
+    authorId: '00000000-0000-4000-8000-000000000034',
+    body: 'taco bar sealed it. see you poolside',
+  },
+  // silent-disco-park (post 107)
+  {
+    id: '00000000-0000-4000-8000-000000000311',
+    postId: '00000000-0000-4000-8000-000000000107',
+    authorId: '00000000-0000-4000-8000-000000000031',
+    body: 'the throwbacks channel was unmatched 🎧',
+  },
+  // speakeasy-cocktail-night (post 108)
+  {
+    id: '00000000-0000-4000-8000-000000000312',
+    postId: '00000000-0000-4000-8000-000000000108',
+    authorId: '00000000-0000-4000-8000-000000000035',
+    body: 'reservation locked. what’s the password gonna be 👀',
   },
 ]
 
@@ -1395,6 +1597,15 @@ async function main() {
   })
   // Categories this organizer "owns" — its events show on the profile tabs.
   const ORGANIZER_CATEGORIES = new Set(['music', 'nightlife'])
+
+  console.log('Seeding demo attendee users...')
+  for (const attendee of ATTENDEES) {
+    await prisma.user.upsert({
+      where: { id: attendee.id },
+      update: attendee,
+      create: attendee,
+    })
+  }
 
   console.log('Seeding interests...')
   for (const { category, ...data } of INTERESTS) {
@@ -1511,6 +1722,14 @@ async function main() {
     ).map((e) => [e.externalId, e.id]),
   )
 
+  // Denormalized comment counts per post — mirror the seeded POST_COMMENTS onto
+  // Post.commentCount so the SocialFeed header + PostCard render the correct
+  // count without a JOIN. (The live /comments endpoint keeps this in sync.)
+  const commentCountByPostId = POST_COMMENTS.reduce((acc, c) => {
+    acc[c.postId] = (acc[c.postId] ?? 0) + 1
+    return acc
+  }, {})
+
   for (const p of POSTS) {
     const data = {
       authorId: ORGANIZER.id,
@@ -1518,8 +1737,23 @@ async function main() {
       kind: p.kind,
       imageUrl: p.imageUrl,
       caption: p.caption,
+      commentCount: commentCountByPostId[p.id] ?? 0,
     }
     await prisma.post.upsert({ where: { id: p.id }, update: data, create: { id: p.id, ...data } })
+  }
+
+  // Comments on those posts. Authored by attendees (never by the post's author).
+  for (const c of POST_COMMENTS) {
+    const data = {
+      authorId: c.authorId,
+      postId: c.postId,
+      body: c.body,
+    }
+    await prisma.comment.upsert({
+      where: { id: c.id },
+      update: data,
+      create: { id: c.id, ...data },
+    })
   }
 
   const storyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
@@ -1539,7 +1773,7 @@ async function main() {
   }
 
   console.log(
-    `Done — ${CATEGORIES.length} categories, ${INTERESTS.length} interests, ${eventCount} events, ${POSTS.length} posts, ${STORIES.length} stories.`,
+    `Done — ${CATEGORIES.length} categories, ${INTERESTS.length} interests, ${eventCount} events, ${ATTENDEES.length} attendees, ${POSTS.length} posts, ${POST_COMMENTS.length} comments, ${STORIES.length} stories.`,
   )
 }
 

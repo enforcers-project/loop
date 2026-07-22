@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { m } from 'motion/react'
 import { ArrowLeft, Calendar, MapPin, ShieldCheck, Share2 } from 'lucide-react'
+import { spring } from '../lib/motion'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
@@ -139,12 +141,18 @@ export function EventDetail() {
 
   return (
     <main id="main" className="pb-24 md:pb-24">
-      {/* dark immersive header */}
+      {/* dark immersive header. The backdrop fades up and the poster settles in
+          from a slight scale on mount, so arriving from a Landing/feed preview
+          card reads as a continuous "handoff" into the event rather than a hard
+          cut. (Lightweight continuity — no cross-route layout morph.) */}
       <div className="relative overflow-hidden bg-ink">
-        <img
+        <m.img
           src={event.poster}
           alt=""
-          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-20 blur-md"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.2 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-md"
         />
         <div className="relative mx-auto max-w-[1140px] px-5 py-8">
           <button
@@ -159,9 +167,12 @@ export function EventDetail() {
                 object-cover crops to fill, which chops the title off tall
                 portrait AI flyers. The blurred hero backdrop already colors
                 any letterbox gaps, so contain looks native. */}
-            <img
+            <m.img
               src={event.poster}
               alt={event.title}
+              initial={{ opacity: 0, scale: 1.06, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={spring}
               className="h-64 w-full rounded-card bg-black/20 object-contain shadow-hero sm:h-80 md:h-[520px]"
             />
 

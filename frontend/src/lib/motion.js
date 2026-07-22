@@ -43,3 +43,32 @@ export const dialog = {
   show: { opacity: 1, scale: 1, y: 0, transition: spring },
   exit: { opacity: 0, scale: 0.96, y: 8, transition: { duration: 0.15 } },
 }
+
+// --- Landing hero -----------------------------------------------------------
+// The hero cascades its rows (badge → headline → subtitle → CTAs → search →
+// cards) on first paint. Slightly slower stagger than the in-app grids so the
+// sequence reads as a deliberate "reveal" rather than a list populating.
+export const heroStagger = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.09, delayChildren: 0.08 } },
+}
+
+// A single hero row: rises a touch further than the standard card fadeUp and
+// settles on the same brand easing, so headline/CTA entrances feel weighty.
+export const heroRise = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } },
+}
+
+// Headline word reveal. The h1 splits into words, each its own child; the
+// container inherits its parent's `show` (it's nested in heroStagger), so words
+// clip up from behind their line one after another. Pair with an
+// overflow-hidden wrapper per word so they slide out from a clean mask.
+export const wordParent = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.055, delayChildren: 0.12 } },
+}
+export const wordChild = {
+  hidden: { y: '110%' },
+  show: { y: 0, transition: { type: 'spring', stiffness: 420, damping: 32 } },
+}

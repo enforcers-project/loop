@@ -206,6 +206,59 @@ a,
   background-size: 200% 100%;
 }
 
+/* ---------------------------------------------------------------------------
+   Landing hero aurora — two slow-drifting radial "blobs" in brand violet +
+   hot-pink that ease around behind the blurred poster, so the dark hero feels
+   alive without competing with the headline. Pure CSS (compositor-only
+   transforms), so it costs nothing on the main thread. Honors reduce-motion
+   below. The layer itself is positioned + sized by utility classes in the JSX.
+--------------------------------------------------------------------------- */
+@keyframes loop-aurora-a {
+  0%,
+  100% {
+    transform: translate3d(-8%, -6%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(10%, 8%, 0) scale(1.25);
+  }
+}
+@keyframes loop-aurora-b {
+  0%,
+  100% {
+    transform: translate3d(12%, 10%, 0) scale(1.15);
+  }
+  50% {
+    transform: translate3d(-10%, -4%, 0) scale(0.9);
+  }
+}
+.loop-aurora {
+  position: absolute;
+  inset: -25%;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 42% at 25% 30%, rgba(109, 94, 252, 0.55), transparent 70%),
+    radial-gradient(34% 40% at 78% 62%, rgba(255, 46, 116, 0.42), transparent 70%);
+  filter: blur(60px);
+  will-change: transform;
+  animation: loop-aurora-a 18s ease-in-out infinite;
+}
+/* Second, counter-drifting layer for parallax depth (opposite phase). */
+.loop-aurora::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(30% 34% at 65% 20%, rgba(45, 140, 255, 0.35), transparent 70%),
+    radial-gradient(32% 36% at 15% 78%, rgba(109, 94, 252, 0.4), transparent 70%);
+  animation: loop-aurora-b 22s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loop-aurora,
+  .loop-aurora::after {
+    animation: none;
+  }
+}
+
 /* Story viewer progress bar — the active frame fills left-to-right over its
    display duration (duration is set inline per frame). */
 @keyframes story-progress {

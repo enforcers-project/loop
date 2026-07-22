@@ -1,0 +1,47 @@
+# Render Blueprint — documents the deploy topology that keeps the auth cookie
+# first-party (see frontend/.env.production for the full "why").
+#
+# The static site proxies /api/* to the backend service on ITS OWN origin, so
+# the browser sees one site: the HttpOnly loop_token cookie is first-party and
+# survives a refresh on mobile (iOS Safari / mobile Chrome block third-party
+# cookies, which is what logged mobile users out when the app called the backend
+# on a separate *.onrender.com origin).
+#
+# ORDER MATTERS: the /api/* rewrite must come BEFORE the SPA catch-all, or the
+# catch-all swallows /api and serves index.html to API calls.
+#
+# NOTE: if this static site was created manually in the dashboard (not from this
+# Blueprint), adding this file does not retroactively apply the routes. Set the
+# same two rules under the static site's "Redirects / Rewrites" tab (see below).
+
+services:
+  # --- Backend API (Node/Express) ---
+  - type: web
+    name: loop-server
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_ID, S3/*, etc. are set in the
+      # dashboard (secrets) — not committed here.
+
+  # --- Frontend (Vite static site) ---
+  - type: web
+    name: loop-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      # 1) Proxy API calls to the backend so the cookie stays first-party.
+      - type: rewrite
+        source: /api/*
+        destination: https://loop-server-2r77.onrender.com/api/*
+      # 2) SPA fallback for client-side routes (must be LAST).
+      - type: rewrite
+        source: /*
+        destination: /index.html

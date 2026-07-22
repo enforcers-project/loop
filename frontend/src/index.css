@@ -271,39 +271,63 @@ a,
 }
 
 /* ---------------------------------------------------------------------------
-   Loop spinner — 10 brand-violet bars fanned around a center, each pulsing
-   outward on a staggered delay. Adapted from a Uiverse.io pattern (credit:
-   PriyanshuGupta28) and recolored to use `--color-primary`. Container size is
-   set inline (Spinner size prop); every child scales as a % of that box.
---------------------------------------------------------------------------- */
-.loop-spinner {
-  position: relative;
+   Loop infinity loader — the Loop ∞ mark drawn as one SVG stroke. A faint full
+   ∞ acts as the track; a short, bright gradient "comet" dash races around the
+   same path forever via animated stroke-dashoffset, so the light appears to
+   chase itself around the figure-8. Box width is set inline (Spinner size
+   prop); the SVG scales to fill it and keeps its 2:1 ratio.
+
+   The comet path carries pathLength="100" (set in the SVG), so regardless of
+   the ∞'s real geometry the path measures exactly 100 units. We draw a short
+   visible dash + long gap and slide the pattern by a full 100 each cycle — one
+   translation that reads as endless travel around the closed loop, no seam. */
+.loop-infinity {
   display: inline-block;
+  line-height: 0; /* kill descender gap so the box hugs the SVG */
 }
-.loop-spinner > span {
-  position: absolute;
-  width: 50%;
-  height: 150%;
-  background: var(--color-primary);
-  border-radius: 1px;
-  transform: rotate(calc(var(--rotation) * 1deg)) translate(0, 150%);
-  animation: loop-spinner-pulse 1s calc(var(--delay) * 1s) infinite ease;
+.loop-infinity > svg {
+  width: 100%;
+  height: auto;
+  overflow: visible; /* let the rounded stroke cap breathe past the viewBox */
+}
+.loop-infinity path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 7;
+  /* vector-effect keeps the stroke a consistent visual weight at every size,
+     instead of scaling thick on the big lg loader and hairline on sm. */
+  vector-effect: non-scaling-stroke;
+}
+.loop-infinity-track {
+  stroke: var(--color-primary);
+  opacity: 0.15;
+}
+.loop-infinity-comet {
+  /* Normalized to pathLength 100: 42 visible / 58 gap = one long bright arc.
+     Visible + gap must sum to 100 so the dash loops seamlessly (see offset). */
+  stroke-dasharray: 42 58;
+  animation: loop-infinity-run 1.8s linear infinite;
+}
+@keyframes loop-infinity-run {
+  to {
+    /* slide one full (normalized) path length → dash returns to start, seamless */
+    stroke-dashoffset: -100;
+  }
 }
 
-@keyframes loop-spinner-pulse {
-  0%,
-  10%,
-  20%,
-  30%,
-  50%,
-  60%,
-  70%,
-  80%,
-  90%,
-  100% {
-    transform: rotate(calc(var(--rotation) * 1deg)) translate(0, 150%);
+/* Reduced motion: no travelling comet. Show the full ∞ and let it breathe. */
+@media (prefers-reduced-motion: reduce) {
+  .loop-infinity-comet {
+    stroke-dasharray: none;
+    animation: loop-infinity-pulse 1.6s ease-in-out infinite;
   }
-  50% {
-    transform: rotate(calc(var(--rotation) * 1deg)) translate(0, 225%);
+  @keyframes loop-infinity-pulse {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
   }
 }

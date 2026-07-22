@@ -40,14 +40,17 @@ function FeaturedCard({ event }) {
   const go = () => navigate(event.isSports ? `/sports/${event.id}` : `/event/${event.id}`)
 
   // Sports runs fill via the roster, not RSVP (the backend 409s a sports RSVP),
-  // so route straight to the run screen. Non-sports: RSVP, bump the local count
-  // on a real state change, then open the detail page.
+  // so route straight to the run screen. Non-sports: bump the local count
+  // synchronously so the hero "N going" ticks in the same frame as the button
+  // flip, then roll back if the RSVP was login-gated or rejected.
   const onRsvp = async () => {
     if (event.isSports) return navigate(`/sports/${event.id}`)
     const wasGoing = goingIds.has(event.id)
+    const willGo = !wasGoing
+    setGoingCount((c) => Math.max(0, c + (willGo ? 1 : -1)))
     const result = await toggleGoing(event.id)
-    if (result !== null && result !== wasGoing) {
-      setGoingCount((c) => Math.max(0, c + (result ? 1 : -1)))
+    if (result === null || result === wasGoing) {
+      setGoingCount((c) => Math.max(0, c + (willGo ? -1 : 1)))
     }
     navigate(`/event/${event.id}`)
   }

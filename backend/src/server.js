@@ -18,8 +18,10 @@ import embeddingsRouter from './embeddings/routes.js'
 import aiConversationsRouter from './ai/routes.js'
 import aiFlyerRouter from './ai/flyer.js'
 import aiDescriptionRouter from './ai/description.js'
+import aiAutotagRouter from './ai/autotag.routes.js'
 import preferencesRouter from './preferences/routes.js'
 import socialRouter from './social/routes.js'
+import analyticsRouter from './analytics/routes.js'
 import { startScheduler } from './jobs/index.js'
 
 const app = express()
@@ -172,8 +174,17 @@ app.use('/api/ai', aiFlyerRouter)
 // POST /api/ai/description  — Groq llama-3.3-70b, returns plain text.
 app.use('/api/ai', aiDescriptionRouter)
 
+// --- AI auto-tag preview for organizers on Create Event ----------------------
+// POST /api/ai/autotag  — rule-based, zero-cost, returns suggested interests +
+// vibe + price_tier before the event is saved. See src/ai/autotag.js.
+app.use('/api/ai', aiAutotagRouter)
+
 // --- Preference vectors (§9.2C, issue #20) -----------------------------------
 app.use('/api', preferencesRouter)
+
+// --- Organizer analytics (§7.7): per-event + org-wide roll-up ---------------
+// Reads on the fly from InteractionEvent — no cron rollup yet. Owner-gated.
+app.use('/api', analyticsRouter)
 
 // --- Admin sync routes (§7.7) ------------------------------------------------
 app.use('/api/admin', adminSyncRouter)

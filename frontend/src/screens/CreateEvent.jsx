@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ImagePlus, Lock, MapPin, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
+import { ImagePlus, MapPin, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
 import { FormField, InlineAlert, inputClass } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
@@ -148,6 +148,45 @@ export function CreateEvent() {
     setDescription(descPrev)
     setDescPrev(null)
   }
+
+  // Auto-tag preview. Debounced 400ms after the last keystroke on title,
+  // description, or price. The endpoint is rule-based server-side (zero cost,
+  // sub-ms) but debouncing prevents flicker while the organizer is still
+  // typing. Empty/short input → no request, chips row hides.
+  //
+  // The clear-on-too-short case runs inside the debounced timeout (not the
+  // effect body) so we don't cascade-render on every keystroke — the effect
+  // itself doesn't setState synchronously.
+  const [autotags, setAutotags] = useState(null)
+  useEffect(() => {
+    const t = (title ?? '').trim()
+    const d = (description ?? '').trim()
+    const controller = new AbortController()
+    const handle = setTimeout(async () => {
+      // Need something substantive to tag; ~10 chars filters out "a" or "hey".
+      if (t.length + d.length < 10) {
+        setAutotags(null)
+        return
+      }
+      try {
+        const result = await api.autotag({
+          title: t,
+          description: d,
+          isFree: !price || price === '0',
+          priceMin: price ? Number(price) : null,
+          category,
+        })
+        if (!controller.signal.aborted) setAutotags(result)
+      } catch {
+        // Silent — the chip row is a hint, never a blocker.
+        if (!controller.signal.aborted) setAutotags(null)
+      }
+    }, 400)
+    return () => {
+      controller.abort()
+      clearTimeout(handle)
+    }
+  }, [title, description, price, category])
 
   const previewEvent = {
     id: 'preview',
@@ -555,18 +594,11 @@ export function CreateEvent() {
             )}
           </div>
 
-          {/* AI auto-tag panel — disabled placeholder; real tagging is #24 (Sprint 3). */}
-          <div className="rounded-card border border-dashed border-border-light bg-surface p-4">
-            <p className="flex items-center gap-1.5 text-xs font-semibold text-text-muted">
-              <Sparkles size={13} /> AI-suggested tags
-              <span className="ml-1 flex items-center gap-0.5 rounded-pill bg-white px-2 py-0.5 text-[10px] text-text-muted">
-                <Lock size={9} /> Coming soon
-              </span>
-            </p>
-            <p className="mt-1.5 text-xs text-text-muted">
-              We’ll auto-suggest tags from your description once AI tagging ships.
-            </p>
-          </div>
+          {/* AI auto-tag preview — driven by POST /api/ai/autotag. Rule-based
+              server-side, refreshes on debounced title/description/price
+              change. Live tags get written on publish; this row is just a
+              preview so the organizer sees what the recommender will match on. */}
+          <AutoTagPreview autotags={autotags} />
 
           {/* sports toggle — host capability only */}
           {isHost && (
@@ -663,6 +695,77 @@ export function CreateEvent() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Renders the auto-tag suggestion row. `autotags` is the response from
+// api.autotag(): { interests[], vibe, price_tier } or null while empty. The
+// component is deliberately non-interactive — the tags land on the event when
+// the organizer hits Publish, computed server-side over the same
+// title+description. Showing them here is a preview of what the recommender
+// will match on, so the organizer can rewrite copy that misses obvious hooks.
+function AutoTagPreview({ autotags }) {
+  const hasInterests = Array.isArray(autotags?.interests) && autotags.interests.length > 0
+  const hasFallback = !!autotags?.category_fallback
+  const hasVibe = !!autotags?.vibe
+  const hasPriceTier = !!autotags?.price_tier
+  const hasAny = hasInterests || hasFallback || hasVibe || hasPriceTier
+
+  return (
+    <div className="rounded-card border border-border-light bg-surface p-4">
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-text-muted">
+        <Sparkles size={13} className="text-primary" />
+        AI-suggested tags
+      </p>
+
+      {!hasAny && (
+        <p className="mt-1.5 text-xs text-text-muted">
+          Add a title and a few sentences of description — we&rsquo;ll suggest interest tags to
+          help the right people discover your event.
+        </p>
+      )}
+
+      {(hasInterests || hasFallback) && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {hasInterests &&
+            autotags.interests.map((i) => (
+              <span
+                key={i.slug}
+                title={`Matched: ${i.matched_keywords.join(', ')}`}
+                className="inline-flex items-center gap-1 rounded-pill bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
+              >
+                {i.label}
+              </span>
+            ))}
+          {hasFallback && (
+            <span
+              title="No specific interest matched — using your category so the recommender still has something to match on. Add more detail to your description for a stronger tag."
+              className="inline-flex items-center gap-1 rounded-pill bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary/80 ring-1 ring-inset ring-primary/20"
+            >
+              {autotags.category_fallback.label}
+            </span>
+          )}
+        </div>
+      )}
+
+      {(hasVibe || hasPriceTier) && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {hasVibe && (
+            <span
+              title={`Matched: ${autotags.vibe.matched_keywords.join(', ')}`}
+              className="inline-flex items-center gap-1 rounded-pill bg-white px-2.5 py-1 text-xs font-medium text-text-secondary ring-1 ring-inset ring-border-light"
+            >
+              Vibe: {autotags.vibe.slug}
+            </span>
+          )}
+          {hasPriceTier && (
+            <span className="inline-flex items-center gap-1 rounded-pill bg-white px-2.5 py-1 text-xs font-medium text-text-secondary ring-1 ring-inset ring-border-light">
+              Price: {autotags.price_tier}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

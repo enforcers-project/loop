@@ -55,6 +55,9 @@ export function EventDetail() {
       setGoingCount(e?.rsvpCount ?? 0)
     })
     api.related(id).then(setRelated)
+    // Log the page view for organizer analytics + the ranker. Fire-and-forget;
+    // uses the event id directly so we don't wait on the fetch above.
+    api.interactions([{ interaction_type: 'view', surface: 'event_detail', event_id: id }])
   }, [id])
 
   // Reveal the sticky pill only after the hero CTA scrolls out of view. Skips
@@ -78,6 +81,12 @@ export function EventDetail() {
   const onShare = useCallback(async () => {
     if (!event) return
     const url = typeof window !== 'undefined' ? window.location.href : ''
+    // Log a share signal so the organizer's analytics reflect it. Fire-and-
+    // forget — the recommender weights this at 0.45 and it drives the Shares
+    // KPI on the event analytics page.
+    api.interactions([
+      { interaction_type: 'share', surface: 'event_detail', event_id: event.id },
+    ])
     const payload = {
       title: event.title,
       text: `Come with me to ${event.title}${event.date ? ` — ${event.date}` : ''}`,
@@ -116,15 +125,17 @@ export function EventDetail() {
   const dateHasTime = event.date && /\d{1,2}(:\d{2})?\s*[AP]M/i.test(event.date)
   const dateLine = timeStr && !dateHasTime ? `${event.date} · ${timeStr}` : event.date
 
-  // RSVP, then keep the local count in step with the action we just took. The
-  // backend moves rsvp_count only on going-transitions, so mirror that here.
-  // toggleGoing returns the resulting state (null if login-gated, or the prior
-  // state on failure/rollback) — only adjust when the state actually changed.
+  // Bump the count synchronously so the header + GoingStack tick in the same
+  // frame as the button flip, then roll back if the RSVP was login-gated
+  // (result === null) or the backend rejected (result === wasGoing).
   const onRsvp = async () => {
     const wasGoing = goingIds.has(event.id)
+    const willGo = !wasGoing
+    setGoingCount((c) => Math.max(0, c + (willGo ? 1 : -1)))
     const result = await toggleGoing(event.id)
-    if (result === null || result === wasGoing) return
-    setGoingCount((c) => Math.max(0, c + (result ? 1 : -1)))
+    if (result === null || result === wasGoing) {
+      setGoingCount((c) => Math.max(0, c + (willGo ? -1 : 1)))
+    }
   }
 
   return (

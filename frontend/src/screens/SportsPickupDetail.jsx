@@ -47,7 +47,10 @@ export function SportsPickupDetail() {
 
   if (!event || !event.isSports) return <PageLoader label="Loading run" />
 
-  const signed = (event.playersSignedUp ?? 0) + (joined ? 1 : 0)
+  // playersSignedUp is refetched after each join/leave, so trust it directly
+  // rather than adding an optimistic +1 that would double-count once the
+  // response comes back with the new total.
+  const signed = event.playersSignedUp ?? 0
   const needed = event.playersNeeded ?? 0
   const pct = needed ? Math.min(100, Math.round((signed / needed) * 100)) : 0
   const roster = event.roster ?? []
@@ -69,6 +72,11 @@ export function SportsPickupDetail() {
         await api.joinRun(id, { positionId: selectedPosition?.id })
         setJoined(true)
       }
+      // Refetch so the picker's per-position "open" count, the players_signed_up
+      // counter, and the roster table all reflect the mutation. Without this the
+      // grid keeps its stale filled/open counts until a full page reload.
+      const fresh = await api.event(id)
+      if (fresh) setEvent(fresh)
     } catch (err) {
       toast.error(err.message || 'Could not update your spot. Please try again.')
     } finally {
@@ -212,11 +220,16 @@ export function SportsPickupDetail() {
               </thead>
               <tbody className="divide-y divide-border-light">
                 {claimed.map((p, i) => (
-                  <tr key={i} className="bg-white">
+                  <tr key={p.id ?? i} className="bg-white">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <img src={p.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
-                        <span className="font-medium text-ink">{p.name}</span>
+                        <div className="flex flex-col leading-tight">
+                          <span className="font-medium text-ink">{p.name}</span>
+                          {p.handle && (
+                            <span className="text-xs text-text-muted">@{p.handle}</span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-text-secondary">{p.position}</td>
@@ -253,12 +266,15 @@ export function SportsPickupDetail() {
             <div className="space-y-2">
               {waitlist.map((p, i) => (
                 <div
-                  key={i}
+                  key={p.id ?? i}
                   className="flex items-center gap-2.5 rounded-button border border-border-light bg-white px-4 py-2.5"
                 >
                   <span className="w-5 text-xs font-semibold text-text-muted">#{i + 1}</span>
                   <img src={p.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
-                  <span className="flex-1 text-sm font-medium text-ink">{p.name}</span>
+                  <div className="flex flex-1 flex-col leading-tight">
+                    <span className="text-sm font-medium text-ink">{p.name}</span>
+                    {p.handle && <span className="text-xs text-text-muted">@{p.handle}</span>}
+                  </div>
                   <SkillBadge skill={p.skill} />
                 </div>
               ))}

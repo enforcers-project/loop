@@ -25,6 +25,17 @@ const router = Router()
 const MAX_MESSAGE_LEN = 500
 const MESSAGE_PAGE_SIZE = 50
 
+// Same shape as chat.js's isEventIntent — kept here so we can skip the whole
+// retrieval round-trip on turns that are clearly about the app itself
+// ("how do I RSVP", "what's a pickup event"). Duplication is cheap; coupling
+// retrieval to the exact regex in chat.js would tangle two layers.
+const EVENT_QUERY_PATTERNS = [
+  /\b(find|show|any|got|are there|what'?s|whats|recommend|suggest|near|tonight|tomorrow|weekend|this week|next week)\b/i,
+  /\b(event|events|party|concert|show|game|pickup|meetup|gig|match|festival|brunch|dinner|mixer)\b/i,
+  /\b(free|cheap|under \$|\$\d+)\b/i,
+]
+const isLikelyEventQuery = (q) => EVENT_QUERY_PATTERNS.some((re) => re.test(q))
+
 function serializeMessage(m) {
   return {
     id: m.id,
@@ -105,17 +116,30 @@ router.post('/conversations/:id/messages', requireAuth, async (req, res) => {
     if (!conv) return fail(res, 404, 'NOT_FOUND', 'Conversation not found')
     if (conv.userId !== req.user.id) return fail(res, 403, 'FORBIDDEN', 'Not your conversation')
 
+    // Pull the recent history BEFORE persisting the new turn so the LLM sees
+    // the conversation up to (but not including) the current query as its
+    // context window.
+    const priorMessages = await prisma.aiMessage.findMany({
+      where: { conversationId: conv.id },
+      orderBy: { createdAt: 'asc' },
+      take: MESSAGE_PAGE_SIZE,
+    })
+    const history = priorMessages.map((m) => ({ role: m.role, content: m.content }))
+
     // Persist the user turn immediately so a downstream retrieval failure still
     // leaves the thread coherent.
     await prisma.aiMessage.create({
       data: { conversationId: conv.id, role: 'user', content },
     })
 
-    // Retrieve grounding events + draft a reply.
+    // Retrieve grounding events + draft a reply. Retrieval is skipped for
+    // non-event queries so app-help chats don't return unrelated event cards.
     const startedAt = Date.now()
-    const retrieval = await retrieveEvents(content)
+    const retrieval = isLikelyEventQuery(content)
+      ? await retrieveEvents(content)
+      : { events: [], filters: {}, queryVector: null, retrieval: 'skipped' }
     const eventRefs = retrieval.events.map((e) => e.id)
-    const reply = await generateReply(content, retrieval.events)
+    const reply = await generateReply(content, retrieval.events, history)
 
     const assistant = await prisma.aiMessage.create({
       data: {

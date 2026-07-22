@@ -1,4 +1,5 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
+import { MotionConfig } from 'motion/react'
 import { AppProvider, useApp } from './context/AppContext'
 import { ToastProvider } from './context/ToastContext'
 import { ModalProvider } from './context/ModalContext'
@@ -95,14 +96,18 @@ export default function App() {
   // ToastProvider + ModalProvider wrap AppProvider so any screen can raise
   // toasts and dialogs. QueryClientProvider lives at the root in main.jsx.
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <ModalProvider>
-          <AppProvider>
-            <Shell />
-          </AppProvider>
-        </ModalProvider>
-      </ToastProvider>
-    </ThemeProvider>
+    // reducedMotion="user" makes every Motion animation honor the OS
+    // "reduce motion" setting automatically — no per-component guard needed.
+    <MotionConfig reducedMotion="user">
+      <ThemeProvider>
+        <ToastProvider>
+          <ModalProvider>
+            <AppProvider>
+              <Shell />
+            </AppProvider>
+          </ModalProvider>
+        </ToastProvider>
+      </ThemeProvider>
+    </MotionConfig>
   )
 }

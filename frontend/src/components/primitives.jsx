@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Sparkles, Bookmark, Eye, EyeOff, Check, AlertCircle, Share2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'motion/react'
 import { cn, formatCount, ROLE_STYLE } from '../lib/utils'
+import { springSnappy } from '../lib/motion'
 
 /* --------------------------------------------------------------------------
    FormField — label (13px Inter 500 #6B6B76) above child
@@ -88,10 +90,12 @@ export function RoleBadge({ role }) {
 -------------------------------------------------------------------------- */
 export function RSVPBtn({ variant = 'filled', sm = false, children = 'RSVP', onClick }) {
   return (
-    <button
+    <motion.button
       onClick={onClick}
+      whileTap={{ scale: 0.94 }}
+      transition={springSnappy}
       className={cn(
-        'inline-flex items-center justify-center rounded-button font-semibold transition-transform active:scale-95',
+        'inline-flex items-center justify-center rounded-button font-semibold',
         // consistent control height: 44px standard, 40px compact (card footers)
         sm ? 'h-10 px-4 text-sm' : 'h-11 px-6 text-sm',
         variant === 'filled'
@@ -100,7 +104,7 @@ export function RSVPBtn({ variant = 'filled', sm = false, children = 'RSVP', onC
       )}
     >
       {children}
-    </button>
+    </motion.button>
   )
 }
 
@@ -109,10 +113,12 @@ export function RSVPBtn({ variant = 'filled', sm = false, children = 'RSVP', onC
 -------------------------------------------------------------------------- */
 export function SaveBtn({ saved, onToggle, sm = false }) {
   return (
-    <button
+    <motion.button
       onClick={onToggle}
       aria-label={saved ? 'Remove bookmark' : 'Bookmark event'}
       aria-pressed={saved}
+      whileTap={{ scale: 0.9 }}
+      transition={springSnappy}
       className={cn(
         'grid flex-shrink-0 place-items-center rounded-button border transition-colors',
         // square control that matches RSVP height: 40px compact / 44px standard
@@ -122,8 +128,12 @@ export function SaveBtn({ saved, onToggle, sm = false }) {
           : 'border-border-light bg-white text-text-secondary hover:border-primary hover:text-primary',
       )}
     >
-      <Bookmark size={18} className={saved ? 'fill-primary' : ''} />
-    </button>
+      {/* Icon "pops" when the event becomes saved: a quick overshoot keyed on
+          `saved` so toggling on feels rewarding. */}
+      <motion.span animate={{ scale: saved ? [1, 1.3, 1] : 1 }} transition={springSnappy}>
+        <Bookmark size={18} className={saved ? 'fill-primary' : ''} />
+      </motion.span>
+    </motion.button>
   )
 }
 
@@ -132,19 +142,32 @@ export function SaveBtn({ saved, onToggle, sm = false }) {
 -------------------------------------------------------------------------- */
 export function FollowBtn({ following = false, onToggle, sm = false }) {
   return (
-    <button
+    <motion.button
       onClick={onToggle}
       aria-pressed={following}
+      whileTap={{ scale: 0.95 }}
+      transition={springSnappy}
       className={cn(
-        'inline-flex items-center justify-center rounded-button font-semibold transition-colors',
+        'inline-flex items-center justify-center overflow-hidden rounded-button font-semibold transition-colors',
         sm ? 'h-10 min-w-[84px] px-4 text-sm' : 'h-11 min-w-[100px] px-5 text-sm',
         following
           ? 'border border-border-light bg-white text-text-secondary hover:border-text-muted'
           : 'bg-primary text-white hover:opacity-90',
       )}
     >
-      {following ? 'Following' : 'Follow'}
-    </button>
+      {/* Label crossfades on toggle so Follow→Following doesn't snap. */}
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={following ? 'following' : 'follow'}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.15 }}
+        >
+          {following ? 'Following' : 'Follow'}
+        </motion.span>
+      </AnimatePresence>
+    </motion.button>
   )
 }
 

@@ -12,7 +12,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
+import { motion, AnimatePresence } from 'motion/react'
 import { cn, formatCount, pluralize, timeAgo } from '../lib/utils'
+import { backdrop, sheet } from '../lib/motion'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
@@ -102,11 +104,16 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
   }
 
   return (
-    <div
+    <motion.div
+      variants={backdrop}
+      initial="hidden"
+      animate="show"
+      exit="exit"
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={() => !busy && onClose?.()}
     >
-      <div
+      <motion.div
+        variants={sheet}
         role="dialog"
         aria-modal="true"
         aria-label={isStory ? 'Add to your story' : 'Create a post'}
@@ -258,8 +265,8 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
             {busy ? 'Posting…' : isStory ? 'Share story' : 'Post'}
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -649,19 +656,21 @@ export function PostCard({ post }) {
         </button>
       </div>
 
-      {commentsOpen && (
-        <CommentsModal
-          onClose={() => setCommentsOpen(false)}
-          comments={comments}
-          draft={draft}
-          setDraft={setDraft}
-          posting={posting}
-          submitComment={submitComment}
-          replyApi={replyApi}
-          canDeleteComment={canDeleteComment}
-          removeComment={removeComment}
-        />
-      )}
+      <AnimatePresence>
+        {commentsOpen && (
+          <CommentsModal
+            onClose={() => setCommentsOpen(false)}
+            comments={comments}
+            draft={draft}
+            setDraft={setDraft}
+            posting={posting}
+            submitComment={submitComment}
+            replyApi={replyApi}
+            canDeleteComment={canDeleteComment}
+            removeComment={removeComment}
+          />
+        )}
+      </AnimatePresence>
     </article>
   )
 }
@@ -692,11 +701,16 @@ function CommentsModal({
   }, [onClose])
 
   return (
-    <div
+    <motion.div
+      variants={backdrop}
+      initial="hidden"
+      animate="show"
+      exit="exit"
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
       onClick={onClose}
     >
-      <div
+      <motion.div
+        variants={sheet}
         role="dialog"
         aria-modal="true"
         aria-label="Comments"
@@ -769,7 +783,7 @@ function CommentsModal({
             Post
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

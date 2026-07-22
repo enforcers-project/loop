@@ -309,6 +309,7 @@ export function toClientUser(u) {
     // and the /events?radiusKm query the ForYou/Discover screens send. Defaults
     // to 40 (matches the backend Prisma default).
     locationRadiusKm: u.location_radius_km ?? 40,
+    birthDate: u.birth_date ?? null,
     cover: u.cover_image_url ?? null,
     joinedAt: u.created_at ?? null,
   }
@@ -416,6 +417,12 @@ function mockPostToBackend(p) {
 // falls back to city ILIKE. Carries the user's stored radius so a saved
 // preference of "10 mi" narrows the /events?radiusKm query the same way the
 // recommender's pre-filter uses it. Returns null when nothing is set.
+//
+// When both lat/lng and homeCity are known, we send BOTH: the backend uses
+// the radius for events with real coordinates and falls back to a city match
+// for events whose organizer skipped Places autocomplete (lat/lng null).
+// Without this, a freshly-created event with no pinned coordinates would be
+// invisible to every user who set a home location during onboarding.
 export function nearForUser(user) {
   if (!user) return null
   if (user.homeLat != null && user.homeLng != null) {
@@ -423,6 +430,7 @@ export function nearForUser(user) {
       lat: user.homeLat,
       lng: user.homeLng,
       radiusKm: user.locationRadiusKm ?? 40,
+      city: user.homeCity ?? null,
     }
   }
   if (user.homeCity) return { city: user.homeCity }
@@ -586,6 +594,19 @@ export const api = {
   // (handle taken) or validation message.
   updateProfile: (userId, fields) => request(`/users/${userId}`, { method: 'PATCH', body: fields }),
 
+  // Commit the user's date of birth (PUT /users/:id/birthdate). Feeds the
+  // age gate — events with an age_min filter compare against the caller's age
+  // derived from birth_date. When onboarding runs before login (no userId) or
+  // the network is down, echo the input with `pending: true` so the flow
+  // completes and the caller can toast.
+  saveBirthDate: (userId, birthDate) =>
+    userId
+      ? put(`/users/${userId}/birthdate`, { birth_date: birthDate }, () => ({
+          birth_date: birthDate,
+          pending: true,
+        }))
+      : Promise.resolve({ birth_date: birthDate, pending: true }),
+
   // Commit the user's home location (PUT /users/:id/location). Feeds the
   // recommender's geo pre-filter — with lat/lng it does a real radius search
   // (earth_distance in engine.js), else falls back to city name matching.
@@ -635,6 +656,11 @@ export const api = {
           qs.set('nearLat', String(near.lat))
           qs.set('nearLng', String(near.lng))
           qs.set('radiusKm', String(near.radiusKm ?? 40))
+          // Also send city so the backend can include events created without
+          // pinned coordinates (organizer skipped Places autocomplete); the
+          // backend ORs it with the radius filter instead of hard-excluding
+          // null-coord rows.
+          if (near.city) qs.set('city', near.city)
         } else if (near?.city) {
           qs.set('city', near.city)
         }

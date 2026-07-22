@@ -256,6 +256,7 @@ model User {
   homeLng               Float?         @map("home_lng")
   homePlaceId           String?        @map("home_place_id")
   locationRadiusKm      Int            @default(40) @map("location_radius_km")
+  birthDate             DateTime?      @map("birth_date") @db.Date
   onboardingCompletedAt DateTime?      @map("onboarding_completed_at") @db.Timestamptz(6)
   notificationPrefs     Json?          @map("notification_prefs")
   followerCount         Int            @default(0) @map("follower_count")

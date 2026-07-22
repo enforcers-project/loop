@@ -25,11 +25,50 @@ const FALLBACK_CITIES = [
   'Atlanta, GA',
 ]
 
+// The DOB slide asks month/day/year separately (three focused inputs). Loop's
+// minimum age is 13 (COPPA) — mirrors the backend validator in
+// PUT /users/:id/birthdate.
+const MIN_AGE = 13
+const MAX_AGE = 120
+
+// Compute age (in full years) from a { m, d, y } triple. Returns NaN when any
+// piece is missing or the date doesn't exist (e.g. Feb 30). Used to gate the
+// Continue button and drive the inline age-preview chip.
+function ageFromParts({ m, d, y }) {
+  if (!m || !d || !y) return NaN
+  const month = Number(m)
+  const day = Number(d)
+  const year = Number(y)
+  if (!Number.isInteger(month) || month < 1 || month > 12) return NaN
+  if (!Number.isInteger(day) || day < 1 || day > 31) return NaN
+  if (!Number.isInteger(year) || year < 1900) return NaN
+  // Reject impossible dates by round-tripping through Date — Feb 30 becomes
+  // Mar 2 (getUTCMonth === 2, not 1), which we treat as invalid.
+  const dob = new Date(Date.UTC(year, month - 1, day))
+  if (
+    dob.getUTCFullYear() !== year ||
+    dob.getUTCMonth() !== month - 1 ||
+    dob.getUTCDate() !== day
+  ) {
+    return NaN
+  }
+  const today = new Date()
+  let age = today.getUTCFullYear() - year
+  const monthDelta = today.getUTCMonth() - (month - 1)
+  if (monthDelta < 0 || (monthDelta === 0 && today.getUTCDate() < day)) age -= 1
+  return age
+}
+
+function pad2(v) {
+  return String(v).padStart(2, '0')
+}
+
 export function Onboarding() {
   const navigate = useNavigate()
-  const { user, setInterests, saveLocation } = useApp()
+  const { user, setInterests, saveBirthDate, saveLocation } = useApp()
   const toast = useToast()
   const [step, setStep] = useState(1)
+  const [dob, setDob] = useState({ m: '', d: '', y: '' })
   const [interests, setInterestList] = useState([])
   const [picked, setPicked] = useState(new Set())
   const [citySearch, setCitySearch] = useState('')
@@ -174,14 +213,16 @@ export function Onboarding() {
     if (!location) return
     setError('')
     const ids = [...picked]
+    const birthIso = `${dob.y}-${pad2(dob.m)}-${pad2(dob.d)}`
     setSaving(true)
     setInterests(ids)
     try {
-      const [interestsRes, locationRes] = await Promise.all([
+      const [birthRes, interestsRes, locationRes] = await Promise.all([
+        saveBirthDate(birthIso),
         api.saveInterests(user?.id, ids),
         saveLocation(location),
       ])
-      if (interestsRes?.pending || locationRes?.pending) {
+      if (birthRes?.pending || interestsRes?.pending || locationRes?.pending) {
         toast.info('Saved locally — will sync when you sign in.')
       }
       navigate('/feed')
@@ -200,7 +241,7 @@ export function Onboarding() {
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-5 py-10">
       {/* progress */}
       <div className="mb-8 flex items-center gap-2">
-        {[1, 2].map((s) => (
+        {[1, 2, 3].map((s) => (
           <span
             key={s}
             className={cn(
@@ -212,6 +253,20 @@ export function Onboarding() {
       </div>
 
       {step === 1 ? (
+        <AgeStep
+          dob={dob}
+          setDob={setDob}
+          error={error}
+          onContinue={() => {
+            const age = ageFromParts(dob)
+            if (isNaN(age)) return setError('Enter a valid date of birth.')
+            if (age < MIN_AGE) return setError(`You must be at least ${MIN_AGE} to use Loop.`)
+            if (age > MAX_AGE) return setError('Please enter a valid date of birth.')
+            setError('')
+            setStep(2)
+          }}
+        />
+      ) : step === 2 ? (
         <div className="flex flex-1 flex-col">
           <h1 className="font-display text-4xl font-bold text-ink">What are you into?</h1>
           <div className="mt-2 flex items-center gap-3">
@@ -250,7 +305,7 @@ export function Onboarding() {
           <div className="mt-auto pt-10">
             <button
               disabled={!canContinue}
-              onClick={() => setStep(2)}
+              onClick={() => setStep(3)}
               className={cn(
                 'w-full rounded-button py-3.5 text-sm font-semibold transition-colors',
                 canContinue
@@ -354,6 +409,121 @@ export function Onboarding() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * AgeStep — three numeric fields (MM / DD / YYYY) with an inline age preview.
+ * Kept as a local subcomponent because the picker state and validation are only
+ * used by this screen; a shared date picker would be premature.
+ *
+ * We ask for date of birth rather than a raw age so a birthday doesn't quietly
+ * make the stored value drift (a 17-year-old today is 18 next year — a static
+ * age would still say 17). The backend applies the same validation.
+ */
+function AgeStep({ dob, setDob, error, onContinue }) {
+  const monthRef = useRef(null)
+  const dayRef = useRef(null)
+  const yearRef = useRef(null)
+
+  const age = ageFromParts(dob)
+  const complete = dob.m && dob.d && dob.y
+  const validAge = Number.isFinite(age) && age >= MIN_AGE && age <= MAX_AGE
+  const canContinue = complete && validAge
+
+  // Auto-advance once a field is full — small polish that matches Apple's
+  // birthday picker feel without stealing focus mid-typing. Ref lookup happens
+  // inside the handler (not during render), so this satisfies react-hooks/refs.
+  const handleChange = (key, maxLen, nextKey) => (e) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, maxLen)
+    setDob((prev) => ({ ...prev, [key]: digits }))
+    if (digits.length === maxLen && nextKey) {
+      const nextRef = nextKey === 'd' ? dayRef : nextKey === 'y' ? yearRef : monthRef
+      nextRef.current?.focus()
+    }
+  }
+
+  const fieldClass =
+    'w-full rounded-input border border-border-light bg-white px-3 py-3 text-center text-lg font-semibold text-text-primary outline-none placeholder:text-placeholder focus:border-primary'
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <h1 className="font-display text-4xl font-bold text-ink">When’s your birthday?</h1>
+      <p className="mt-2 text-sm text-text-secondary">
+        We use this to keep age-restricted events off your feed. You must be at least {MIN_AGE} to
+        use Loop.
+      </p>
+
+      <div className="mt-8 grid grid-cols-[1fr_1fr_1.4fr] gap-3">
+        <label className="block">
+          <span className="mb-1.5 block text-center text-[13px] font-medium text-text-secondary">
+            Month
+          </span>
+          <input
+            ref={monthRef}
+            value={dob.m}
+            onChange={handleChange('m', 2, 'd')}
+            inputMode="numeric"
+            placeholder="MM"
+            aria-label="Birth month"
+            className={fieldClass}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-center text-[13px] font-medium text-text-secondary">
+            Day
+          </span>
+          <input
+            ref={dayRef}
+            value={dob.d}
+            onChange={handleChange('d', 2, 'y')}
+            inputMode="numeric"
+            placeholder="DD"
+            aria-label="Birth day"
+            className={fieldClass}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-center text-[13px] font-medium text-text-secondary">
+            Year
+          </span>
+          <input
+            ref={yearRef}
+            value={dob.y}
+            onChange={handleChange('y', 4, null)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && canContinue) onContinue()
+            }}
+            inputMode="numeric"
+            placeholder="YYYY"
+            aria-label="Birth year"
+            className={fieldClass}
+          />
+        </label>
+      </div>
+
+      {complete && Number.isFinite(age) && (
+        <p className="mt-4 text-center text-sm text-text-secondary">
+          You’re <span className="font-semibold text-ink">{age}</span>.
+        </p>
+      )}
+
+      <div className="mt-auto pt-10">
+        <InlineAlert message={error} className="mb-3" />
+        <button
+          disabled={!canContinue}
+          onClick={onContinue}
+          className={cn(
+            'w-full rounded-button py-3.5 text-sm font-semibold transition-colors',
+            canContinue
+              ? 'bg-accent text-white active:scale-95'
+              : 'cursor-not-allowed bg-surface text-text-muted',
+          )}
+        >
+          Continue
+        </button>
+      </div>
     </div>
   )
 }

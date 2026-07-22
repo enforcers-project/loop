@@ -216,6 +216,50 @@ router.put('/:id/location', requireAuth, async (req, res) => {
   }
 })
 
+// --- PUT /api/users/:id/birthdate -------------------------------------------
+// Body: { birth_date: 'YYYY-MM-DD' }. Persists the caller's date of birth so
+// the recommender/detail can honor age-gated events (events.age_min). We store
+// the DOB (not age) because a birthday shifts age over time — a static number
+// would go stale. Enforces a minimum age of 13 (COPPA) and a sane upper bound.
+router.put('/:id/birthdate', requireAuth, async (req, res) => {
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only edit your own profile')
+  }
+
+  const raw = req.body?.birth_date
+  if (typeof raw !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'birth_date must be YYYY-MM-DD')
+  }
+  // Parse as UTC noon to sidestep DST edge cases — we only care about the day.
+  const dob = new Date(`${raw}T12:00:00Z`)
+  if (isNaN(dob.getTime())) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'birth_date is not a real date')
+  }
+  const today = new Date()
+  let age = today.getUTCFullYear() - dob.getUTCFullYear()
+  const monthDelta = today.getUTCMonth() - dob.getUTCMonth()
+  if (monthDelta < 0 || (monthDelta === 0 && today.getUTCDate() < dob.getUTCDate())) {
+    age -= 1
+  }
+  if (age < 13) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'You must be at least 13 to use Loop')
+  }
+  if (age > 120) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'Please enter a valid date of birth')
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { birthDate: dob },
+    })
+    return res.json({ data: toSelfUser(updated) })
+  } catch (err) {
+    console.error('PUT /api/users/:id/birthdate error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not save birth date')
+  }
+})
+
 // --- POST /api/users/:id/avatar-upload-url ----------------------------------
 // Owner-only. Body: { content_type: 'image/png' | 'image/jpeg' | ... }.
 // Returns a short-lived presigned PUT URL the browser uploads the image to

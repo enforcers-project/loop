@@ -96,11 +96,14 @@ export function parseFiltersRegex(rawQuery) {
 const PARSE_SYSTEM_PROMPT = `You extract structured search filters from a short natural-language events query.
 Return ONLY a JSON object with these keys (omit a key when it does not apply):
 - "isFree": true  — only if the user asks for free / no-cost events
-- "category": one of ["music","nightlife","sports","networking","food","campus"] — the single best fit, or omit
+- "category": one of ["music","nightlife","sports","networking","food","campus"] — ONLY when the user is asking for a TYPE of event (e.g. "any concerts", "networking events", "pickup soccer"). OMIT for named events, brands, company names, artist/performer names, or any query that looks like a specific title search.
 - "date": one of ["tonight","tomorrow","weekend"] — only if the user names that timeframe, or omit
-Extract ONLY what the user actually said. Never guess a city, price, or date that isn't asked for.
+Extract ONLY what the user actually said. Never guess a city, price, category, or date that isn't clearly asked for. When in doubt, OMIT.
 Example: "something cheap to do saturday night" -> {"isFree":true,"date":"weekend"}
-Example: "afrobeats party" -> {"category":"nightlife"}`
+Example: "afrobeats party" -> {"category":"nightlife"}
+Example: "futureforce" -> {}
+Example: "taylor swift" -> {}
+Example: "yacht party" -> {}`
 
 /** Coerce arbitrary parsed JSON down to the controlled vocabulary. Anything
  *  outside the allowed enums is dropped — the safety boundary in code form. */

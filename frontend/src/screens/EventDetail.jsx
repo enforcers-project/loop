@@ -226,9 +226,16 @@ export function EventDetail() {
                   the "who's going" signal, right side pairs spots-left with the
                   price so the two most decision-critical numbers sit together. */}
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-card bg-white/10 p-4 backdrop-blur-sm">
-                <GoingStack count={goingCount} avatars={event.goingAvatars} size="md" />
+                <GoingStack
+                  count={goingCount}
+                  avatars={event.goingAvatars}
+                  size="md"
+                  labelClassName="text-2xl font-bold text-white sm:text-3xl"
+                />
                 <div className="flex flex-col items-end">
-                  <span className="text-xl font-bold">{event.isFree ? 'Free' : event.price}</span>
+                  <span className="text-2xl font-bold sm:text-3xl">
+                    {event.isFree ? 'Free' : event.price}
+                  </span>
                   {event.capacity != null && (
                     <span className="text-xs text-white/70">
                       {Math.max(0, event.capacity - goingCount)}{' '}

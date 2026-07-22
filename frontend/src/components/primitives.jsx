@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { Sparkles, Bookmark, Eye, EyeOff, Check, AlertCircle, Share2 } from 'lucide-react'
 import { m, AnimatePresence } from 'motion/react'
 import { cn, formatCount, ROLE_STYLE } from '../lib/utils'
@@ -228,21 +228,17 @@ export function GoingStack({ count, avatars = [], size = 'sm', labelClassName })
 /* --------------------------------------------------------------------------
    Spinner — the app's canonical loading indicator: the Loop infinity (∞) mark,
    drawn as a single SVG stroke, with a bright "comet" segment racing around the
-   figure-8 forever (a faint full ∞ sits underneath as the track). The comet
-   stroke carries a pink→violet gradient so the color shifts as it travels.
+   figure-8 forever (a faint full ∞ sits underneath as the track). Both strokes
+   use the Loop brand pink (--color-loop).
 
    The ∞ geometry + the running animation live in `.loop-infinity` (index.css);
-   here we just size the box and wire per-instance gradient/path IDs so two
-   loaders on one screen never collide. Reduced-motion swaps the race for a
-   gentle breathing pulse (also in CSS). Sized in px via the `size` prop so it
-   drops into buttons (sm), section placeholders (md), or full-screen (lg).
+   here we just size the box. Reduced-motion swaps the race for a gentle
+   breathing pulse (also in CSS). Sized in px via the `size` prop so it drops
+   into buttons (sm), section placeholders (md), or full-screen (lg).
 -------------------------------------------------------------------------- */
 export function Spinner({ size = 'md', className, label = 'Loading' }) {
   // Rendered box width in px; the ∞ keeps a 2:1 aspect (viewBox 100×50).
   const w = size === 'sm' ? 34 : size === 'lg' ? 88 : 58
-  // Unique gradient id per instance — useId() is stable across SSR/hydration
-  // and guarantees no two <linearGradient>s share an id on the same page.
-  const gid = `loop-inf-${useId().replace(/:/g, '')}`
   // Lemniscate-style figure-8 path (cubic béziers) centered in a 100×50 box.
   const d =
     'M 22 25 C 22 10, 45 10, 50 25 C 55 40, 78 40, 78 25 C 78 10, 55 10, 50 25 C 45 40, 22 40, 22 25 Z'
@@ -254,19 +250,13 @@ export function Spinner({ size = 'md', className, label = 'Loading' }) {
       style={{ width: w }}
     >
       <svg viewBox="0 0 100 50" fill="none" aria-hidden="true">
-        <defs>
-          <linearGradient id={gid} x1="0" y1="0" x2="100" y2="0" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="var(--color-accent)" />
-            <stop offset="100%" stopColor="var(--color-primary)" />
-          </linearGradient>
-        </defs>
         {/* faint full ∞ track */}
         <path className="loop-infinity-track" d={d} />
         {/* Bright comet segment racing around the same path. pathLength="100"
             normalizes the path to 100 units so the dash math below is exact and
             browser-independent (actual geometry ≈158 units, and it varies per
             engine) — the comet then loops with no seam at the ∞ crossover. */}
-        <path className="loop-infinity-comet" d={d} pathLength="100" stroke={`url(#${gid})`} />
+        <path className="loop-infinity-comet" d={d} pathLength="100" />
       </svg>
     </span>
   )

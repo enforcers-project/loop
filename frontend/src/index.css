@@ -18,6 +18,8 @@
   --color-primary: #6d5efc;
   --color-primary-light: #f0effe;
   --color-accent: #ff2e74;
+  /* Loop brand pink — the raspberry of the ∞ logo mark; used by the loader. */
+  --color-loop: #c51e63;
   --color-success: #16c784;
   --color-networking: #2d8cff;
   --color-food: #ffb020;
@@ -299,10 +301,11 @@ a,
   vector-effect: non-scaling-stroke;
 }
 .loop-infinity-track {
-  stroke: var(--color-primary);
+  stroke: var(--color-loop);
   opacity: 0.15;
 }
 .loop-infinity-comet {
+  stroke: var(--color-loop);
   /* Normalized to pathLength 100: 42 visible / 58 gap = one long bright arc.
      Visible + gap must sum to 100 so the dash loops seamlessly (see offset). */
   stroke-dasharray: 42 58;

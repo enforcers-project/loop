@@ -462,7 +462,9 @@ export function Landing() {
               <p className="font-display text-3xl font-bold text-primary sm:text-4xl">
                 <StatCounter value={goingTotal} suffix="+" />
               </p>
-              <p className="mt-1 text-xs font-medium text-text-secondary sm:text-sm">People going</p>
+              <p className="mt-1 text-xs font-medium text-text-secondary sm:text-sm">
+                People going
+              </p>
             </div>
             <div>
               <p className="font-display text-3xl font-bold text-primary sm:text-4xl">

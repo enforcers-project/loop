@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Sparkles, Bookmark, Eye, EyeOff, Check, AlertCircle, Share2 } from 'lucide-react'
-import { motion, AnimatePresence } from 'motion/react'
+import { m, AnimatePresence } from 'motion/react'
 import { cn, formatCount, ROLE_STYLE } from '../lib/utils'
 import { springSnappy } from '../lib/motion'
 
@@ -90,7 +90,7 @@ export function RoleBadge({ role }) {
 -------------------------------------------------------------------------- */
 export function RSVPBtn({ variant = 'filled', sm = false, children = 'RSVP', onClick }) {
   return (
-    <motion.button
+    <m.button
       onClick={onClick}
       whileTap={{ scale: 0.94 }}
       transition={springSnappy}
@@ -104,7 +104,7 @@ export function RSVPBtn({ variant = 'filled', sm = false, children = 'RSVP', onC
       )}
     >
       {children}
-    </motion.button>
+    </m.button>
   )
 }
 
@@ -113,7 +113,7 @@ export function RSVPBtn({ variant = 'filled', sm = false, children = 'RSVP', onC
 -------------------------------------------------------------------------- */
 export function SaveBtn({ saved, onToggle, sm = false }) {
   return (
-    <motion.button
+    <m.button
       onClick={onToggle}
       aria-label={saved ? 'Remove bookmark' : 'Bookmark event'}
       aria-pressed={saved}
@@ -130,10 +130,10 @@ export function SaveBtn({ saved, onToggle, sm = false }) {
     >
       {/* Icon "pops" when the event becomes saved: a quick overshoot keyed on
           `saved` so toggling on feels rewarding. */}
-      <motion.span animate={{ scale: saved ? [1, 1.3, 1] : 1 }} transition={springSnappy}>
+      <m.span animate={{ scale: saved ? [1, 1.3, 1] : 1 }} transition={springSnappy}>
         <Bookmark size={18} className={saved ? 'fill-primary' : ''} />
-      </motion.span>
-    </motion.button>
+      </m.span>
+    </m.button>
   )
 }
 
@@ -142,7 +142,7 @@ export function SaveBtn({ saved, onToggle, sm = false }) {
 -------------------------------------------------------------------------- */
 export function FollowBtn({ following = false, onToggle, sm = false }) {
   return (
-    <motion.button
+    <m.button
       onClick={onToggle}
       aria-pressed={following}
       whileTap={{ scale: 0.95 }}
@@ -157,7 +157,7 @@ export function FollowBtn({ following = false, onToggle, sm = false }) {
     >
       {/* Label crossfades on toggle so Follow→Following doesn't snap. */}
       <AnimatePresence mode="popLayout" initial={false}>
-        <motion.span
+        <m.span
           key={following ? 'following' : 'follow'}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -165,9 +165,9 @@ export function FollowBtn({ following = false, onToggle, sm = false }) {
           transition={{ duration: 0.15 }}
         >
           {following ? 'Following' : 'Follow'}
-        </motion.span>
+        </m.span>
       </AnimatePresence>
-    </motion.button>
+    </m.button>
   )
 }
 

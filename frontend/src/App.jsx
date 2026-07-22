@@ -1,5 +1,5 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
-import { MotionConfig } from 'motion/react'
+import { MotionConfig, LazyMotion, domAnimation } from 'motion/react'
 import { AppProvider, useApp } from './context/AppContext'
 import { ToastProvider } from './context/ToastContext'
 import { ModalProvider } from './context/ModalContext'
@@ -96,18 +96,23 @@ export default function App() {
   // ToastProvider + ModalProvider wrap AppProvider so any screen can raise
   // toasts and dialogs. QueryClientProvider lives at the root in main.jsx.
   return (
-    // reducedMotion="user" makes every Motion animation honor the OS
-    // "reduce motion" setting automatically — no per-component guard needed.
-    <MotionConfig reducedMotion="user">
-      <ThemeProvider>
-        <ToastProvider>
-          <ModalProvider>
-            <AppProvider>
-              <Shell />
-            </AppProvider>
-          </ModalProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </MotionConfig>
+    // LazyMotion + domAnimation loads only the ~15kb DOM feature set (vs the
+    // full ~43kb engine) — enough for our animations, variants, whileTap and
+    // AnimatePresence exits (excludes drag/layout, which we don't use). Every
+    // animated element uses the lightweight `m.*` from './lib/motion'.
+    // reducedMotion="user" makes animations honor the OS reduce-motion setting.
+    <LazyMotion features={domAnimation} strict>
+      <MotionConfig reducedMotion="user">
+        <ThemeProvider>
+          <ToastProvider>
+            <ModalProvider>
+              <AppProvider>
+                <Shell />
+              </AppProvider>
+            </ModalProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </MotionConfig>
+    </LazyMotion>
   )
 }

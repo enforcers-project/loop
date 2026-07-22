@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Calendar, MapPin } from 'lucide-react'
-import { motion } from 'motion/react'
+import { m } from 'motion/react'
 import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
 import { fadeUp, staggerParent } from '../lib/motion'
 import { useApp } from '../context/AppContext'
@@ -156,7 +156,7 @@ export function EventGrid({ events, showRationale }) {
     // Cards fade-up in a gentle stagger on mount. `key` on the container resets
     // the reveal when the list identity changes (tab/filter swap) so a new set
     // animates in rather than snapping. viewport once → animate a single time.
-    <motion.div
+    <m.div
       key={events.map((e) => e.id).join(',')}
       variants={staggerParent}
       initial="hidden"
@@ -164,14 +164,14 @@ export function EventGrid({ events, showRationale }) {
       className="flex flex-wrap justify-center gap-4 xl:justify-start"
     >
       {events.map((e) => (
-        <motion.div
+        <m.div
           key={e.id}
           variants={fadeUp}
           className="w-full sm:w-[calc(50%-8px)] lg:w-[calc(33.333%-11px)] xl:w-[calc(25%-12px)]"
         >
           <EventCard event={e} showRationale={showRationale} />
-        </motion.div>
+        </m.div>
       ))}
-    </motion.div>
+    </m.div>
   )
 }

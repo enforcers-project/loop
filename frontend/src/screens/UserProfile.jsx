@@ -10,7 +10,7 @@ import {
   Pencil,
   X,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'motion/react'
+import { m, AnimatePresence } from 'motion/react'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
@@ -36,7 +36,7 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
   const fileRef = useRef(null)
 
   return (
-    <motion.div
+    <m.div
       variants={backdrop}
       initial="hidden"
       animate="show"
@@ -53,7 +53,7 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
         <X size={22} />
       </button>
 
-      <motion.img
+      <m.img
         variants={dialog}
         src={src}
         alt="Profile"
@@ -84,7 +84,7 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
           {uploading ? 'Uploading…' : 'Change picture'}
         </button>
       </div>
-    </motion.div>
+    </m.div>
   )
 }
 
@@ -129,7 +129,7 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
   }
 
   return (
-    <motion.div
+    <m.div
       variants={backdrop}
       initial="hidden"
       animate="show"
@@ -137,7 +137,7 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={() => !busy && !uploading && onClose?.()}
     >
-      <motion.div
+      <m.div
         variants={sheet}
         role="dialog"
         aria-modal="true"
@@ -282,8 +282,8 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
             {busy ? 'Saving…' : 'Save'}
           </button>
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   )
 }
 
@@ -322,7 +322,7 @@ function InterestsModal({ allInterests, selectedIds, onClose, onSave }) {
   }
 
   return (
-    <motion.div
+    <m.div
       variants={backdrop}
       initial="hidden"
       animate="show"
@@ -330,7 +330,7 @@ function InterestsModal({ allInterests, selectedIds, onClose, onSave }) {
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={() => !busy && onClose?.()}
     >
-      <motion.div
+      <m.div
         variants={sheet}
         role="dialog"
         aria-modal="true"
@@ -406,8 +406,8 @@ function InterestsModal({ allInterests, selectedIds, onClose, onSave }) {
             </button>
           </div>
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   )
 }
 

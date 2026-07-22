@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'motion/react'
+import { m, AnimatePresence } from 'motion/react'
 import { cn, formatCount, pluralize, timeAgo } from '../lib/utils'
 import { backdrop, sheet } from '../lib/motion'
 import { api } from '../lib/api'
@@ -104,7 +104,7 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
   }
 
   return (
-    <motion.div
+    <m.div
       variants={backdrop}
       initial="hidden"
       animate="show"
@@ -112,7 +112,7 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={() => !busy && onClose?.()}
     >
-      <motion.div
+      <m.div
         variants={sheet}
         role="dialog"
         aria-modal="true"
@@ -265,8 +265,8 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
             {busy ? 'Posting…' : isStory ? 'Share story' : 'Post'}
           </button>
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   )
 }
 
@@ -701,7 +701,7 @@ function CommentsModal({
   }, [onClose])
 
   return (
-    <motion.div
+    <m.div
       variants={backdrop}
       initial="hidden"
       animate="show"
@@ -709,7 +709,7 @@ function CommentsModal({
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
       onClick={onClose}
     >
-      <motion.div
+      <m.div
         variants={sheet}
         role="dialog"
         aria-modal="true"
@@ -783,7 +783,7 @@ function CommentsModal({
             Post
           </button>
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   )
 }

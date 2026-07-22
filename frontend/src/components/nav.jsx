@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
+  BarChart3,
   Compass,
   Home,
   PlusCircle,
@@ -71,7 +72,7 @@ export function TopNav() {
           {isLoggedIn ? (
             <>
               <NotificationBell />
-              <ProfileMenu user={user} onLogout={onLogout} />
+              <ProfileMenu user={user} role={role} onLogout={onLogout} />
             </>
           ) : (
             <>
@@ -100,11 +101,12 @@ export function TopNav() {
    Settings, a light/dark toggle, and Log out. Closes on outside click,
    Escape, or route navigation.
 -------------------------------------------------------------------------- */
-function ProfileMenu({ user, onLogout }) {
+function ProfileMenu({ user, role, onLogout }) {
   const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const rootRef = useRef(null)
+  const isOrganizer = role === 'organizer'
 
   useEffect(() => {
     if (!open) return
@@ -162,6 +164,16 @@ function ProfileMenu({ user, onLogout }) {
             <User size={16} className="text-text-secondary" />
             View profile
           </button>
+          {isOrganizer && (
+            <button
+              role="menuitem"
+              onClick={() => go('/organizer/analytics')}
+              className={itemClass}
+            >
+              <BarChart3 size={16} className="text-text-secondary" />
+              Analytics
+            </button>
+          )}
           <button role="menuitem" onClick={() => go('/settings')} className={itemClass}>
             <Settings size={16} className="text-text-secondary" />
             Settings

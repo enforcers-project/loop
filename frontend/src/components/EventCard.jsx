@@ -44,14 +44,18 @@ export function EventCard({ event, showRationale = false, onClick }) {
 
   // Sports runs fill via the roster (claim a spot), not the RSVP flow — the
   // backend 409s a sports RSVP — so "Join" routes to the run's detail screen.
-  // Non-sports: RSVP, then keep the local count in step with the resulting
-  // state. Skips the login-gated (null) and failure/rollback (unchanged) cases.
+  // Non-sports: bump the count synchronously so the "N going" ticks up in the
+  // same frame as the button flip, then roll back if the RSVP was login-gated
+  // (result === null) or the backend rejected (result === wasGoing).
   const onRsvp = async () => {
     if (event.isSports) return navigate(`/sports/${event.id}`)
     const wasGoing = goingIds.has(event.id)
+    const willGo = !wasGoing
+    setGoingCount((c) => Math.max(0, c + (willGo ? 1 : -1)))
     const result = await toggleGoing(event.id)
-    if (result === null || result === wasGoing) return
-    setGoingCount((c) => Math.max(0, c + (result ? 1 : -1)))
+    if (result === null || result === wasGoing) {
+      setGoingCount((c) => Math.max(0, c + (willGo ? -1 : 1)))
+    }
   }
 
   return (

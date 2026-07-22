@@ -212,6 +212,52 @@ const ATTENDEES = [
   },
 ]
 
+// Roster-only demo users. Kept separate from ATTENDEES so the SocialFeed's
+// "commenters are attendees" invariant stays intact — these accounts exist
+// purely to fill sports-run rosters so the picker's per-slot open/full state
+// matches the "N signed up" counter for the larger runs (up to 30 players).
+// Fixed UUIDs so reseeds land the same names on the same slots.
+const ROSTER_PLAYERS = [
+  ['00000000-0000-4000-8000-000000000041', 'jordan_b', 'Jordan Baker', 1],
+  ['00000000-0000-4000-8000-000000000042', 'nyla_p', 'Nyla Patel', 2],
+  ['00000000-0000-4000-8000-000000000043', 'liam_ok', "Liam O'Kelly", 3],
+  ['00000000-0000-4000-8000-000000000044', 'zoe_kim', 'Zoe Kim', 4],
+  ['00000000-0000-4000-8000-000000000045', 'marcus_w', 'Marcus Wallace', 5],
+  ['00000000-0000-4000-8000-000000000046', 'priya_r', 'Priya Rao', 6],
+  ['00000000-0000-4000-8000-000000000047', 'ben_song', 'Ben Song', 7],
+  ['00000000-0000-4000-8000-000000000048', 'aisha_m', 'Aisha Mensah', 8],
+  ['00000000-0000-4000-8000-000000000049', 'ethan_l', 'Ethan Larsen', 9],
+  ['00000000-0000-4000-8000-000000000050', 'ruby_d', 'Ruby Diallo', 10],
+  ['00000000-0000-4000-8000-000000000051', 'noah_ch', 'Noah Chan', 11],
+  ['00000000-0000-4000-8000-000000000052', 'iris_g', 'Iris Garza', 12],
+  ['00000000-0000-4000-8000-000000000053', 'theo_ah', 'Theo Ahmed', 13],
+  ['00000000-0000-4000-8000-000000000054', 'lena_pf', 'Lena Pfeifer', 14],
+  ['00000000-0000-4000-8000-000000000055', 'ollie_h', 'Ollie Hart', 16],
+  ['00000000-0000-4000-8000-000000000056', 'zara_t', 'Zara Thompson', 17],
+  ['00000000-0000-4000-8000-000000000057', 'reyansh_j', 'Reyansh Joshi', 18],
+  ['00000000-0000-4000-8000-000000000058', 'harper_e', 'Harper Ellis', 19],
+  ['00000000-0000-4000-8000-000000000059', 'caleb_ny', 'Caleb Nyong', 20],
+  ['00000000-0000-4000-8000-000000000060', 'maya_z', 'Maya Zhao', 21],
+  ['00000000-0000-4000-8000-000000000061', 'diego_v', 'Diego Vega', 22],
+  ['00000000-0000-4000-8000-000000000062', 'freya_l', 'Freya Lund', 23],
+  ['00000000-0000-4000-8000-000000000063', 'omar_h', 'Omar Haddad', 25],
+  ['00000000-0000-4000-8000-000000000064', 'ada_o', 'Ada Okonkwo', 26],
+  ['00000000-0000-4000-8000-000000000065', 'sami_ka', 'Sami Karimi', 27],
+].map(([id, handle, displayName, imgId]) => ({
+  id,
+  email: `${handle}@loop.demo`,
+  role: 'attendee',
+  isHost: false,
+  displayName,
+  handle,
+  avatarUrl: `https://i.pravatar.cc/150?img=${imgId}`,
+  homeCity: 'San Francisco',
+}))
+
+// Every demo user the seed knows about — attendees fill both social comments
+// and sports rosters, roster-players fill only rosters.
+const ROSTER_POOL = [...ATTENDEES, ...ROSTER_PLAYERS]
+
 const CATEGORIES = [
   { slug: 'music', name: 'Music', colorHex: '#6D5EFC', icon: 'music-note', sortOrder: 0 },
   { slug: 'nightlife', name: 'Nightlife', colorHex: '#FF2E74', icon: 'moon', sortOrder: 1 },
@@ -1686,7 +1732,7 @@ async function main() {
   }
 
   console.log('Seeding demo attendee users...')
-  for (const attendee of ATTENDEES) {
+  for (const attendee of ROSTER_POOL) {
     await prisma.user.upsert({
       where: { id: attendee.id },
       update: attendee,
@@ -1791,6 +1837,64 @@ async function main() {
             capacity: pos.capacity,
             sortOrder: pos.sortOrder,
           },
+        })
+      }
+
+      // Materialize the "N signed up" number as real RosterEntry rows so the
+      // position picker's per-slot open/full state matches the counter. Without
+      // this, the meter shows "8/12" while the grid renders 12 open slots
+      // because the roster table is empty. We fill positions in sort order,
+      // spreading claimants (round-robin per slot index) so a 4-position roster
+      // reads as evenly filled rather than "first position full, rest empty".
+      const dbPositions = await prisma.sportsPosition.findMany({
+        where: { sportsDetailId: created.id },
+        orderBy: { sortOrder: 'asc' },
+      })
+      await prisma.rosterEntry.deleteMany({ where: { eventId: created.id } })
+      // Deterministic attendee rotation seeded off the event slug so the same
+      // slug always yields the same roster — helps demos stay stable and lets
+      // us assign multiple runs without one attendee monopolizing every slot.
+      const slugHash = evt.slug.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+      // Emit (position, slotNumber) pairs interleaved by slot index so we hit
+      // slot 1 of every position before slot 2, etc. — that keeps the picker
+      // showing a couple open slots per position for realistic runs.
+      const slotPlan = []
+      const maxCap = dbPositions.reduce((m, p) => Math.max(m, p.capacity), 0)
+      for (let slotIdx = 1; slotIdx <= maxCap; slotIdx++) {
+        for (const p of dbPositions) {
+          if (slotIdx <= p.capacity) slotPlan.push({ position: p, slotNumber: slotIdx })
+        }
+      }
+      const rosterRows = []
+      for (let i = 0; i < playersSignedUp && i < slotPlan.length; i++) {
+        const player = ROSTER_POOL[(slugHash + i) % ROSTER_POOL.length]
+        rosterRows.push({
+          eventId: created.id,
+          sportsDetailId: created.id,
+          sportsPositionId: slotPlan[i].position.id,
+          userId: player.id,
+          slotNumber: slotPlan[i].slotNumber,
+          status: 'claimed',
+        })
+      }
+      // A user can't hold two live spots on the same run (partial unique index).
+      // ROSTER_POOL is sized comfortably above the largest run (30), so this
+      // rarely trips — but de-dupe by userId so a seed collision quietly lands
+      // fewer roster rows than playersSignedUp and we sync the counter to match
+      // rather than the meter claiming more players than actual roster rows.
+      const seenUsers = new Set()
+      const uniqueRows = rosterRows.filter((r) => {
+        if (seenUsers.has(r.userId)) return false
+        seenUsers.add(r.userId)
+        return true
+      })
+      if (uniqueRows.length) {
+        await prisma.rosterEntry.createMany({ data: uniqueRows, skipDuplicates: true })
+      }
+      if (uniqueRows.length !== playersSignedUp) {
+        await prisma.sportsDetail.update({
+          where: { eventId: created.id },
+          data: { playersSignedUp: uniqueRows.length },
         })
       }
     }

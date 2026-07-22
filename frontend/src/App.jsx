@@ -18,6 +18,8 @@ import { SportsPickupDetail } from './screens/SportsPickupDetail'
 import { OrganizerProfile } from './screens/OrganizerProfile'
 import { UserProfile } from './screens/UserProfile'
 import { Settings } from './screens/Settings'
+import { OrganizerAnalytics } from './screens/OrganizerAnalytics'
+import { EventAnalytics } from './screens/EventAnalytics'
 
 /* Routes that render standalone (no app chrome / bars / assistant). */
 const BARE_ROUTES = ['/', '/auth', '/onboarding']
@@ -76,6 +78,22 @@ function Shell() {
             element={
               <ProtectedRoute>
                 <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organizer/analytics"
+            element={
+              <ProtectedRoute>
+                <OrganizerAnalytics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organizer/events/:id/analytics"
+            element={
+              <ProtectedRoute>
+                <EventAnalytics />
               </ProtectedRoute>
             }
           />

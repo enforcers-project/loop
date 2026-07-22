@@ -134,6 +134,10 @@ export function toEventCardShape(e) {
           })),
         }
       : {}),
+    // Roster (sports events only). The detail endpoint embeds this so the
+    // roster table renders on the initial fetch; card responses omit it, so
+    // it stays undefined there.
+    ...(Array.isArray(e.roster) ? { roster: e.roster } : {}),
     tags: [],
     rationale: rationaleText(e.rationale),
   }
@@ -1112,6 +1116,59 @@ export const api = {
       method: 'POST',
       body: { prompt, style, title, category },
     }),
+
+  // Auto-tag preview (POST /api/ai/autotag). Rule-based, deterministic, free —
+  // returns the interests + vibe + price tier we WOULD write if the organizer
+  // hit Publish now. Called on a debounce as they type in the Create Event
+  // form. Never throws in a way that blocks the UI; on failure the form just
+  // hides the chips row.
+  //
+  // Returns:
+  //   { interests: [{ slug, label, confidence, matched_keywords[] }],
+  //     vibe: { slug, confidence, matched_keywords[] } | null,
+  //     price_tier: 'free'|'$'|'$$'|'$$$' | null,
+  //     category_fallback: { slug, label } | null }
+  autotag: ({ title, description, isFree, priceMin, category }) =>
+    request('/ai/autotag', {
+      method: 'POST',
+      body: {
+        title: title ?? '',
+        description: description ?? '',
+        is_free: isFree ?? false,
+        price_min: priceMin ?? null,
+        category: category ?? null,
+      },
+    }),
+
+  // Fire-and-forget behavior-signal beacon (POST /api/interactions). Best-
+  // effort — every caller is optimistic UI, and a failed signal must never
+  // block the user action that produced it. Feeds the recommender + organizer
+  // analytics (surface breakdowns, share counts).
+  interactions: (events) =>
+    fetch(apiUrl('/interactions'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ events }),
+    }).catch(() => null),
+
+  // Organizer analytics (§7.7). Both owner-gated on the backend; return the
+  // full analytics envelope. Any failure surfaces as a thrown Error so the
+  // page can render an inline error state.
+  eventAnalytics: (id, { from, to } = {}) => {
+    const qs = new URLSearchParams()
+    if (from) qs.set('from', from)
+    if (to) qs.set('to', to)
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return request(`/events/${id}/analytics${suffix}`)
+  },
+  organizerAnalytics: (id, { from, to } = {}) => {
+    const qs = new URLSearchParams()
+    if (from) qs.set('from', from)
+    if (to) qs.set('to', to)
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return request(`/organizers/${id}/analytics${suffix}`)
+  },
 
   aiSearch: (q) =>
     post('/ai/search', { q }, () => {

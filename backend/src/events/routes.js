@@ -4,6 +4,7 @@ import { toEventCard, toEventDetail, EVENT_DETAIL_INCLUDE } from './serialize.js
 import { requireAuth, fail } from '../auth/middleware.js'
 import { runJob } from '../jobs/index.js'
 import { notifyFollowersOfNewEvent } from '../notifications/publish.js'
+import { tagAndPersist } from '../ai/autotag.persist.js'
 
 const router = Router()
 
@@ -201,11 +202,82 @@ router.get('/:id', async (req, res) => {
       include: {
         category: true,
         organizer: true,
-        sportsDetail: true,
+        sportsDetail: { include: { positions: true } },
       },
     })
 
-    res.json({ data: toEventCard(event) })
+    const card = toEventCard(event)
+
+    // Sports runs need positions on the detail response — the picker on
+    // SportsPickupDetail keys off sports_details.positions[]. Also tally live
+    // claimed counts per position so the grid can grey out full slots. We
+    // additionally embed the full roster (claimed + waitlist) so the roster
+    // table below the header renders on the same fetch instead of showing
+    // rows of "Open slot" until a separate /roster call.
+    if (event.isSports && event.sportsDetail) {
+      const positions = event.sportsDetail.positions ?? []
+      const rosterEntries = await prisma.rosterEntry.findMany({
+        where: { eventId: event.id, status: { in: ['claimed', 'waitlisted'] } },
+        include: {
+          user: { select: { id: true, displayName: true, handle: true, avatarUrl: true } },
+          sportsPosition: { select: { label: true } },
+        },
+      })
+      const claimedByPosition = new Map()
+      for (const r of rosterEntries) {
+        if (r.status !== 'claimed') continue
+        claimedByPosition.set(
+          r.sportsPositionId,
+          (claimedByPosition.get(r.sportsPositionId) ?? 0) + 1,
+        )
+      }
+      card.sports_details = {
+        sport: event.sportsDetail.sport,
+        skill_level: event.sportsDetail.skillLevel,
+        venue_setting: event.sportsDetail.venueSetting,
+        players_needed: event.sportsDetail.playersNeeded,
+        players_signed_up: event.sportsDetail.playersSignedUp,
+        positions: positions
+          .slice()
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((p) => ({
+            id: p.id,
+            label: p.label,
+            capacity: p.capacity,
+            open_slots: p.capacity - (claimedByPosition.get(p.id) ?? 0),
+          })),
+      }
+      // Roster rows in the shape SportsPickupDetail already reads: name /
+      // position label / avatar. Waitlist rows are sorted by their FIFO
+      // position, claimed rows in creation order.
+      card.roster = [
+        ...rosterEntries
+          .filter((e) => e.status === 'claimed')
+          .map((e) => ({
+            id: e.id,
+            userId: e.userId,
+            name: e.user?.displayName ?? 'Player',
+            handle: e.user?.handle ?? null,
+            avatar: e.user?.avatarUrl ?? null,
+            position: e.sportsPosition?.label ?? null,
+            status: 'claimed',
+          })),
+        ...rosterEntries
+          .filter((e) => e.status === 'waitlisted')
+          .sort((a, b) => (a.waitlistPosition ?? 0) - (b.waitlistPosition ?? 0))
+          .map((e) => ({
+            id: e.id,
+            userId: e.userId,
+            name: e.user?.displayName ?? 'Player',
+            handle: e.user?.handle ?? null,
+            avatar: e.user?.avatarUrl ?? null,
+            position: e.sportsPosition?.label ?? null,
+            status: 'waitlist',
+          })),
+      ]
+    }
+
+    res.json({ data: card })
   } catch (err) {
     // P2025 = record to update not found → treat as 404.
     if (err.code === 'P2025') {
@@ -397,6 +469,35 @@ router.post('/', requireAuth, async (req, res) => {
         })
       }
 
+      // Auto-tag the event from its title + description. Passing categoryId
+      // lets the tagger fall back to a category-level tag when no specific
+      // keyword matches, so novel events still get one interest signal
+      // instead of only a price tier.
+      //
+      // Wrapped in try/catch: tag write failures are best-effort. The event
+      // itself is the primary resource — an untagged event is degraded
+      // (won't surface for cold-start interest matches) but still valid and
+      // navigable. Failing the whole create because a tag row couldn't be
+      // written would surface as a confusing 500 with a real-looking event
+      // draft the user thought they'd created. The `embed-pending-events`
+      // job also composes over the current tag state, so a later successful
+      // re-tag (via PATCH) heals the record.
+      try {
+        await tagAndPersist({
+          eventId: event.id,
+          event: {
+            title: event.title,
+            description: event.description,
+            isFree: event.isFree,
+            priceMin: event.priceMin != null ? Number(event.priceMin) : null,
+            categoryId: event.categoryId,
+          },
+          tx,
+        })
+      } catch (err) {
+        console.error('[autotag] tagAndPersist failed on create — event stored untagged:', err)
+      }
+
       return event.id
     })
 
@@ -491,10 +592,43 @@ router.patch('/:id', requireAuth, async (req, res) => {
       }
     }
 
+    // Re-tag when any field the tagger actually reads has changed. Skipping
+    // this on unrelated edits (venue rename, capacity bump) is a real
+    // speedup — the tagger itself is fast, but the DELETE+INSERT is a needless
+    // write when nothing about the event's text or price shifted.
+    const needsRetag =
+      b.title !== undefined ||
+      b.description !== undefined ||
+      b.is_free !== undefined ||
+      b.price_min !== undefined ||
+      b.category_id !== undefined
+
     await prisma.$transaction(async (tx) => {
       await tx.event.update({ where: { id: existing.id }, data })
       if (sportsUpdate) {
         await tx.sportsDetail.update({ where: { eventId: existing.id }, data: sportsUpdate })
+      }
+      if (needsRetag) {
+        try {
+          await tagAndPersist({
+            eventId: existing.id,
+            event: {
+              title: data.title ?? existing.title,
+              description: data.description ?? existing.description,
+              isFree: data.isFree ?? existing.isFree,
+              priceMin:
+                data.priceMin != null
+                  ? Number(data.priceMin)
+                  : existing.priceMin != null
+                    ? Number(existing.priceMin)
+                    : null,
+              categoryId: data.categoryId ?? existing.categoryId,
+            },
+            tx,
+          })
+        } catch (err) {
+          console.error('[autotag] tagAndPersist failed on patch — retaining prior tags:', err)
+        }
       }
     })
 

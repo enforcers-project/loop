@@ -8,6 +8,8 @@ const SUGGESTIONS = [
   'Free events this weekend',
   'Afrobeats party near me',
   'Pickup soccer on Sunday',
+  'How do I RSVP?',
+  'What is Loop?',
 ]
 
 // Persist the thread id across drawer open/close and page refresh so a user's
@@ -16,7 +18,8 @@ const STORAGE_KEY = 'loop.assistantConversationId'
 
 const WELCOME_MESSAGE = {
   role: 'assistant',
-  content: "Hey! I'm Loop AI. Tell me what you're in the mood for and I'll find events near you.",
+  content:
+    "Hey! I'm Loop AI. Ask me anything — find events near you, get recommendations, or figure out how the app works.",
 }
 
 /* Mini event result card rendered inline in the drawer. */

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Bookmark,
   CalendarHeart,
@@ -698,7 +698,7 @@ export function UserProfile() {
           {tab === 'Events' && (
             /* upcoming/past sub-toggle sits above the grid so the split reads
                as a filter over the same list, not a peer of the top-level tabs. */
-            <div className="mb-5 flex gap-6 border-b border-border-light">
+            <div className="mb-5 flex items-center gap-6 border-b border-border-light">
               {['upcoming', 'past'].map((s) => (
                 <button
                   key={s}
@@ -713,6 +713,12 @@ export function UserProfile() {
                   {s}
                 </button>
               ))}
+              <Link
+                to="/organizer/analytics"
+                className="ml-auto -mb-px pb-2.5 text-sm font-medium text-primary hover:underline"
+              >
+                View analytics →
+              </Link>
             </div>
           )}
 

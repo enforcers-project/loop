@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { filterDuplicates } from './dedup.js'
+import { mockSocialCounts } from './mock-counts.js'
 
 const prisma = new PrismaClient()
 
@@ -76,10 +77,19 @@ export async function upsertSyncedEvents(events, source) {
       publishedAt: new Date(),
     }
 
+    // Seed a plausible RSVP+save count on FIRST insert so synced cards don't
+    // read as "0 going" in the feed. Update path skips this so accumulated
+    // real RSVPs on top of the seed aren't clobbered by a later refresh.
+    const mockCounts = mockSocialCounts({
+      source: evt.source,
+      externalId: evt.externalId,
+      isFree: evt.isFree,
+    })
+
     await prisma.event.upsert({
       where: { source_externalId: { source: evt.source, externalId: evt.externalId } },
       update: { ...data, lastSyncedAt: new Date() },
-      create: data,
+      create: { ...data, rsvpCount: mockCounts.rsvpCount, saveCount: mockCounts.saveCount },
     })
 
     if (existing) {

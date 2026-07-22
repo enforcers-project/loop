@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { AnimatePresence } from 'motion/react'
 import { PenSquare } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
@@ -343,9 +344,11 @@ export function SocialFeed() {
         </aside>
       </div>
 
-      {composer && (
-        <Composer mode={composer} onClose={() => setComposer(null)} onCreated={onCreated} />
-      )}
+      <AnimatePresence>
+        {composer && (
+          <Composer mode={composer} onClose={() => setComposer(null)} onCreated={onCreated} />
+        )}
+      </AnimatePresence>
 
       {viewerIndex !== null && viewerGroups[viewerIndex] && (
         <StoryViewer

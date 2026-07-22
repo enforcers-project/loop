@@ -10,10 +10,12 @@ import {
   Pencil,
   X,
 } from 'lucide-react'
+import { m, AnimatePresence } from 'motion/react'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { cn, formatCount, formatJoinDate, pluralize } from '../lib/utils'
+import { backdrop, sheet, dialog } from '../lib/motion'
 import { inputClass, RoleBadge, Spinner } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
@@ -34,7 +36,11 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
   const fileRef = useRef(null)
 
   return (
-    <div
+    <m.div
+      variants={backdrop}
+      initial="hidden"
+      animate="show"
+      exit="exit"
       className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 p-6 backdrop-blur-sm"
       onClick={onClose}
     >
@@ -47,7 +53,8 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
         <X size={22} />
       </button>
 
-      <img
+      <m.img
+        variants={dialog}
         src={src}
         alt="Profile"
         onClick={(e) => e.stopPropagation()}
@@ -77,7 +84,7 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
           {uploading ? 'Uploading…' : 'Change picture'}
         </button>
       </div>
-    </div>
+    </m.div>
   )
 }
 
@@ -122,11 +129,16 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
   }
 
   return (
-    <div
+    <m.div
+      variants={backdrop}
+      initial="hidden"
+      animate="show"
+      exit="exit"
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={() => !busy && !uploading && onClose?.()}
     >
-      <div
+      <m.div
+        variants={sheet}
         role="dialog"
         aria-modal="true"
         aria-label="Edit profile"
@@ -270,8 +282,8 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
             {busy ? 'Saving…' : 'Save'}
           </button>
         </div>
-      </div>
-    </div>
+      </m.div>
+    </m.div>
   )
 }
 
@@ -310,11 +322,16 @@ function InterestsModal({ allInterests, selectedIds, onClose, onSave }) {
   }
 
   return (
-    <div
+    <m.div
+      variants={backdrop}
+      initial="hidden"
+      animate="show"
+      exit="exit"
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={() => !busy && onClose?.()}
     >
-      <div
+      <m.div
+        variants={sheet}
         role="dialog"
         aria-modal="true"
         aria-label="Edit interests"
@@ -389,8 +406,8 @@ function InterestsModal({ allInterests, selectedIds, onClose, onSave }) {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </m.div>
+    </m.div>
   )
 }
 
@@ -783,34 +800,36 @@ export function UserProfile() {
         </div>
       </div>
 
-      {avatarOpen && (
-        <AvatarModal
-          src={avatarSrc}
-          uploading={uploading}
-          onUpload={onUpload}
-          onClose={() => !uploading && setAvatarOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {avatarOpen && (
+          <AvatarModal
+            src={avatarSrc}
+            uploading={uploading}
+            onUpload={onUpload}
+            onClose={() => !uploading && setAvatarOpen(false)}
+          />
+        )}
 
-      {editOpen && (
-        <EditProfileModal
-          user={user}
-          avatarSrc={avatarSrc}
-          onUpload={onUpload}
-          uploading={uploading}
-          onSave={onSaveProfile}
-          onClose={() => setEditOpen(false)}
-        />
-      )}
+        {editOpen && (
+          <EditProfileModal
+            user={user}
+            avatarSrc={avatarSrc}
+            onUpload={onUpload}
+            uploading={uploading}
+            onSave={onSaveProfile}
+            onClose={() => setEditOpen(false)}
+          />
+        )}
 
-      {interestsOpen && (
-        <InterestsModal
-          allInterests={allInterests ?? []}
-          selectedIds={interests}
-          onSave={onSaveInterests}
-          onClose={() => setInterestsOpen(false)}
-        />
-      )}
+        {interestsOpen && (
+          <InterestsModal
+            allInterests={allInterests ?? []}
+            selectedIds={interests}
+            onSave={onSaveInterests}
+            onClose={() => setInterestsOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

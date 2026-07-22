@@ -200,7 +200,7 @@ export function AlmostFullBadge({ label = 'Almost full' }) {
    GoingStack — 3 overlapping avatars + "N going". Displays the true attendee
    count (no "+" prefix) so the number reads as social proof, not a delta.
 -------------------------------------------------------------------------- */
-export function GoingStack({ count, avatars = [], size = 'sm' }) {
+export function GoingStack({ count, avatars = [], size = 'sm', labelClassName }) {
   const px = size === 'sm' ? 24 : 32
   const shown = avatars.slice(0, 3)
   return (
@@ -218,7 +218,9 @@ export function GoingStack({ count, avatars = [], size = 'sm' }) {
           ))}
         </div>
       )}
-      <span className="text-xs font-medium text-text-secondary">{formatCount(count)} going</span>
+      <span className={cn('text-xs font-medium text-text-secondary', labelClassName)}>
+        {formatCount(count)} going
+      </span>
     </div>
   )
 }

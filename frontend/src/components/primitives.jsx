@@ -218,9 +218,7 @@ export function GoingStack({ count, avatars = [], size = 'sm', labelClassName })
           ))}
         </div>
       )}
-      <span
-        className={cn('text-xs font-medium text-text-secondary', labelClassName)}
-      >
+      <span className={cn('text-xs font-medium text-text-secondary', labelClassName)}>
         {formatCount(count)} going
       </span>
     </div>

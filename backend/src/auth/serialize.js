@@ -19,6 +19,9 @@ export function toSelfUser(u) {
     home_lng: u.homeLng,
     home_place_id: u.homePlaceId,
     location_radius_km: u.locationRadiusKm,
+    // ISO YYYY-MM-DD (stored as DATE, no TZ) so the client can compute age
+    // client-side without a timezone shift flipping the day.
+    birth_date: u.birthDate ? u.birthDate.toISOString().slice(0, 10) : null,
     onboarding_completed_at: u.onboardingCompletedAt,
     notification_prefs: u.notificationPrefs,
     follower_count: u.followerCount,

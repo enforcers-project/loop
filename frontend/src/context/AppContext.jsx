@@ -260,6 +260,18 @@ export function AppProvider({ children }) {
     [user?.id, adopt],
   )
 
+  // Persist the user's date of birth and mirror it onto the local user so any
+  // screen reading `user.birthDate` (age-gate copy, profile) sees the fresh
+  // value without a /me round-trip. `birthDate` is an ISO YYYY-MM-DD string.
+  const saveBirthDate = useCallback(
+    async (birthDate) => {
+      const res = await api.saveBirthDate(user?.id, birthDate)
+      setUser((prev) => (prev ? { ...prev, birthDate } : prev))
+      return res
+    },
+    [user?.id],
+  )
+
   // Persist the user's home city + coords + optional radius and mirror them
   // onto the local user so any screen reading `user.homeCity/homeLat/homeLng/
   // locationRadiusKm` sees the fresh value without waiting for a /me refresh.
@@ -443,6 +455,7 @@ export function AppProvider({ children }) {
         updateInterests,
         updateAvatar,
         updateProfile,
+        saveBirthDate,
         saveLocation,
         toggleSaved,
         toggleGoing,

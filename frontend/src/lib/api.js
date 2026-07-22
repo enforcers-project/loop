@@ -838,6 +838,37 @@ export const api = {
     }
   },
 
+  // Organizer dashboard (#32) — the event owner's view of who RSVP'd, plus
+  // check-in. Both are owner-gated server-side (403 for non-organizers).
+  //   eventRsvps: GET /api/events/:id/rsvps → { data:[{ id, user, status,
+  //     guests_count, attended, checked_in_at, created_at }], nextCursor,
+  //     counts:{ going, interested, waitlisted } }. Returns the raw envelope so
+  //     the screen can read counts + page. Degrades to an empty envelope.
+  //   checkInAttendee: PATCH /api/events/:id/rsvps/:userId { attended:true } —
+  //     fires the ranker's top-weight `attend` signal. Throws on 403/404 so the
+  //     dashboard can surface it.
+  eventRsvps: async (eventId, { status, cursor, limit } = {}) => {
+    const qs = new URLSearchParams()
+    if (status) qs.set('status', status)
+    if (cursor) qs.set('cursor', cursor)
+    if (limit) qs.set('limit', String(limit))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    try {
+      const res = await fetch(apiUrl(`/events/${eventId}/rsvps${suffix}`), {
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      return await res.json() // { data, nextCursor, counts }
+    } catch {
+      return { data: [], nextCursor: null, counts: { going: 0, interested: 0, waitlisted: 0 } }
+    }
+  },
+  checkInAttendee: (eventId, userId) =>
+    request(`/events/${eventId}/rsvps/${userId}`, {
+      method: 'PATCH',
+      body: { attended: true },
+    }),
+
   // Events an organizer has published (GET /api/users/:id/events), for the
   // organizer-only "Events" tab on UserProfile. Same endpoint OrganizerProfile
   // uses, so upcoming/past ordering matches. [] on failure so the tab degrades

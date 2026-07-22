@@ -111,6 +111,8 @@ export function toEventCardShape(e) {
     saveCount: e.save_count ?? 0,
     capacity: e.capacity ?? null,
     ageRestriction: e.age_label ?? null,
+    // Whether age_min is a hard RSVP gate (true) vs a recommended age (false).
+    ageRestricted: e.age_restricted ?? false,
     almostFull:
       e.capacity != null && e.rsvp_count != null ? e.rsvp_count >= 0.9 * e.capacity : false,
     isSports: e.is_sports ?? false,
@@ -232,6 +234,9 @@ async function request(path, { method = 'GET', body } = {}) {
   if (!res.ok) {
     const err = new Error(json?.error?.message || `Request failed (${res.status})`)
     err.status = res.status
+    // Machine-readable code from the { error: { code, message } } envelope, so
+    // callers can branch (e.g. age gate: BIRTHDATE_REQUIRED vs AGE_RESTRICTED).
+    err.code = json?.error?.code ?? null
     throw err
   }
   return json?.data
@@ -504,6 +509,9 @@ async function toCreateEventBody(draft) {
     // Display label the EventCard/detail render (age_min is the numeric gate;
     // age_label is what shows). "21+" convention matches the live preview.
     age_label: draft.ageRestriction ? `${draft.ageRestriction}+` : null,
+    // Hard age gate: when true the backend enforces age_min at RSVP; when false
+    // age_min is only a recommended age shown on the event.
+    age_restricted: Boolean(draft.ageRestricted),
     is_sports: Boolean(draft.isSports),
   }
 

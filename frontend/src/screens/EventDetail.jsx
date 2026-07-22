@@ -229,6 +229,9 @@ export function EventDetail() {
                 {event.ageRestriction && (
                   <div className="flex items-center gap-2.5">
                     <ShieldCheck size={18} className="text-white/60" /> {event.ageRestriction}
+                    <span className="text-xs text-white/60">
+                      {event.ageRestricted ? '· required' : '· recommended'}
+                    </span>
                   </div>
                 )}
               </div>

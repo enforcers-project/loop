@@ -35,16 +35,17 @@ const FLYER_STYLES = [
 // indecisive draft — the backend enforces the same limit per user/hour.
 const MAX_FLYER_GENERATIONS = 3
 
-// Small "Required" switch shown next to optional number fields. When on, publish
-// is blocked until the field holds a valid value; when off the field falls back
-// to a sensible default (Free / no cap / all ages).
-function RequiredToggle({ on, onToggle }) {
+// "Require" switch beside Min age. Off = the number is just a recommended age
+// shown on the event. On = a hard age requirement (events.age_restricted) that
+// the backend enforces at RSVP — a too-young or birthdate-less user is blocked.
+function RequireToggle({ on, onToggle }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={on}
       onClick={onToggle}
+      title={on ? 'Enforced at RSVP' : 'Just a recommended age'}
       className={cn(
         'inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[11px] font-medium transition-colors',
         on ? 'bg-primary/10 text-primary' : 'bg-surface text-text-muted hover:text-text-secondary',
@@ -56,7 +57,7 @@ function RequiredToggle({ on, onToggle }) {
           on ? 'border-primary bg-primary' : 'border-text-muted bg-white',
         )}
       />
-      Required
+      {on ? 'Required' : 'Recommended'}
     </button>
   )
 }
@@ -85,13 +86,14 @@ export function CreateEvent() {
   const [venueResolved, setVenueResolved] = useState(false)
   const [city, setCity] = useState('')
 
-  // Optional numeric fields + their per-field Required toggles.
+  // Optional numeric fields. Price + capacity are always optional (Free /
+  // unlimited when blank). Min age is special: the "Require" toggle turns it
+  // from a recommended age into a HARD requirement (events.age_restricted) that
+  // the backend enforces at RSVP.
   const [price, setPrice] = useState('')
-  const [priceRequired, setPriceRequired] = useState(false)
   const [capacity, setCapacity] = useState('')
-  const [capacityRequired, setCapacityRequired] = useState(false)
   const [age, setAge] = useState('')
-  const [ageRequired, setAgeRequired] = useState(false)
+  const [ageRestricted, setAgeRestricted] = useState(false)
 
   const [description, setDescription] = useState('')
 
@@ -328,24 +330,21 @@ export function CreateEvent() {
     indoor,
   }
 
-  // A number field is "satisfied" when it holds a non-negative number. Min age
-  // and capacity must be positive; price allows 0 (free).
-  const isValidNum = (v, { allowZero = false } = {}) => {
+  const isValidNum = (v) => {
     if (String(v).trim() === '') return false
     const n = Number(v)
-    return Number.isFinite(n) && (allowZero ? n >= 0 : n > 0)
+    return Number.isFinite(n) && n > 0
   }
 
-  // Minimum fields to publish. Sports runs also need a player count. Optional
-  // numeric fields only block when their Required toggle is on.
+  // Minimum fields to publish. Sports runs also need a player count. Price and
+  // capacity are always optional (Free / unlimited when blank). Min age must
+  // hold a real value only when the organizer marked it a hard requirement.
   const missing = []
   if (!title.trim()) missing.push('title')
   if (!date.trim()) missing.push('date')
   if (!location.trim()) missing.push('location')
   if (!city.trim()) missing.push('city')
-  if (priceRequired && !isValidNum(price, { allowZero: true })) missing.push('price')
-  if (capacityRequired && !isValidNum(capacity)) missing.push('capacity')
-  if (ageRequired && !isValidNum(age)) missing.push('minimum age')
+  if (ageRestricted && !isValidNum(age)) missing.push('minimum age')
   if (isSports && !Number(playersNeeded)) missing.push('players needed')
   const canPublish = missing.length === 0 && !flyerUploading
 
@@ -365,6 +364,7 @@ export function CreateEvent() {
         price: price ? Number(price) : 0,
         capacity: capacity ? Number(capacity) : null,
         ageRestriction: age ? Number(age) : null,
+        ageRestricted: ageRestricted && !!age,
         description: description.trim(),
         flyer,
         isSports,
@@ -628,18 +628,12 @@ export function CreateEvent() {
             <p className="-mt-2 text-xs text-text-muted">📍 {address}</p>
           )}
 
-          {/* Price / Capacity / Min age — real number inputs, each with a
-              per-field Required toggle. Left optional: no price → Free, no
-              capacity → unlimited, no age → all ages. */}
+          {/* Price / Capacity / Min age — real number inputs. Price + capacity
+              are always optional (blank → Free / unlimited). Min age carries a
+              Require toggle: off = a recommended age shown on the event, on =
+              a hard requirement enforced at RSVP. */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <FormField
-              label={
-                <span className="flex items-center justify-between gap-2">
-                  Price ($)
-                  <RequiredToggle on={priceRequired} onToggle={() => setPriceRequired((v) => !v)} />
-                </span>
-              }
-            >
+            <FormField label="Price ($)">
               <input
                 type="number"
                 inputMode="decimal"
@@ -651,17 +645,7 @@ export function CreateEvent() {
                 className={inputClass}
               />
             </FormField>
-            <FormField
-              label={
-                <span className="flex items-center justify-between gap-2">
-                  Capacity
-                  <RequiredToggle
-                    on={capacityRequired}
-                    onToggle={() => setCapacityRequired((v) => !v)}
-                  />
-                </span>
-              }
-            >
+            <FormField label="Capacity">
               <input
                 type="number"
                 inputMode="numeric"
@@ -677,7 +661,7 @@ export function CreateEvent() {
               label={
                 <span className="flex items-center justify-between gap-2">
                   Min age
-                  <RequiredToggle on={ageRequired} onToggle={() => setAgeRequired((v) => !v)} />
+                  <RequireToggle on={ageRestricted} onToggle={() => setAgeRestricted((v) => !v)} />
                 </span>
               }
             >
@@ -694,6 +678,13 @@ export function CreateEvent() {
               />
             </FormField>
           </div>
+          {ageRestricted && (
+            <p className="-mt-2 text-xs text-text-muted">
+              {age
+                ? `Attendees under ${age} will be blocked from RSVPing.`
+                : 'Set a minimum age — it will be enforced at RSVP.'}
+            </p>
+          )}
 
           {/* description + AI write */}
           <div>

@@ -436,6 +436,7 @@ router.post('/', requireAuth, async (req, res) => {
           capacity: b.capacity ?? null,
           ageMin: b.age_min ?? null,
           ageLabel: b.age_label ?? null,
+          ageRestricted: b.age_restricted ?? false,
           isSports: Boolean(b.is_sports),
         },
       })
@@ -546,6 +547,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
       capacity: 'capacity',
       age_min: 'ageMin',
       age_label: 'ageLabel',
+      age_restricted: 'ageRestricted',
       status: 'status',
     }
     for (const [key, col] of Object.entries(scalarMap)) {

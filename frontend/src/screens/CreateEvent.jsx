@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ImagePlus, MapPin, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
+import { ImagePlus, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
 import { FormField, InlineAlert, inputClass } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
+import { VenueAutocomplete } from '../components/VenueAutocomplete'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { api } from '../lib/api'
@@ -34,6 +35,32 @@ const FLYER_STYLES = [
 // indecisive draft — the backend enforces the same limit per user/hour.
 const MAX_FLYER_GENERATIONS = 3
 
+// Small "Required" switch shown next to optional number fields. When on, publish
+// is blocked until the field holds a valid value; when off the field falls back
+// to a sensible default (Free / no cap / all ages).
+function RequiredToggle({ on, onToggle }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onToggle}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[11px] font-medium transition-colors',
+        on ? 'bg-primary/10 text-primary' : 'bg-surface text-text-muted hover:text-text-secondary',
+      )}
+    >
+      <span
+        className={cn(
+          'inline-block h-3 w-3 rounded-full border transition-colors',
+          on ? 'border-primary bg-primary' : 'border-text-muted bg-white',
+        )}
+      />
+      Required
+    </button>
+  )
+}
+
 export function CreateEvent() {
   // Posting a pickup run requires the host sub-capability (organizer + is_host).
   // Non-hosts can create ordinary events but never see the Sports toggle.
@@ -46,13 +73,35 @@ export function CreateEvent() {
   const [category, setCategory] = useState('Nightlife')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
+
+  // Location — `location` is the venue name (typed or from Places). When a Places
+  // suggestion is picked we also capture address/lat/lng/placeId and set
+  // `venueResolved` so the event persists real coordinates.
   const [location, setLocation] = useState('')
+  const [address, setAddress] = useState('')
+  const [lat, setLat] = useState(null)
+  const [lng, setLng] = useState(null)
+  const [placeId, setPlaceId] = useState(null)
+  const [venueResolved, setVenueResolved] = useState(false)
   const [city, setCity] = useState('')
+
+  // Optional numeric fields + their per-field Required toggles.
   const [price, setPrice] = useState('')
+  const [priceRequired, setPriceRequired] = useState(false)
   const [capacity, setCapacity] = useState('')
+  const [capacityRequired, setCapacityRequired] = useState(false)
   const [age, setAge] = useState('')
+  const [ageRequired, setAgeRequired] = useState(false)
+
   const [description, setDescription] = useState('')
+
+  // Flyer — `flyer` holds the persisted URL (S3 public URL or AI data URL) that
+  // gets saved. `flyerPreview` is a local blob shown instantly while the real
+  // upload runs; `flyerUploading` gates the dropzone.
   const [flyer, setFlyer] = useState(null)
+  const [flyerPreview, setFlyerPreview] = useState(null)
+  const [flyerUploading, setFlyerUploading] = useState(false)
+  const [flyerError, setFlyerError] = useState('')
 
   // sports
   const [isSports, setIsSports] = useState(false)
@@ -72,6 +121,30 @@ export function CreateEvent() {
   const [aiError, setAiError] = useState('')
   const [aiPreview, setAiPreview] = useState(null)
   const [aiCount, setAiCount] = useState(0)
+
+  // Upload a picked flyer file to S3 and keep the returned public URL. Shows a
+  // local preview immediately; on 503 (S3 off) points the organizer at the AI
+  // generator / keeps the form usable rather than silently dropping the file.
+  const onPickFlyer = async (file) => {
+    if (!file) return
+    setFlyerError('')
+    setFlyerPreview(URL.createObjectURL(file))
+    setFlyerUploading(true)
+    try {
+      const url = await api.uploadFlyer(file)
+      setFlyer(url)
+    } catch (err) {
+      setFlyer(null)
+      setFlyerPreview(null)
+      setFlyerError(
+        err?.status === 503
+          ? "Image uploads aren't set up — try “Generate with AI” instead."
+          : 'Upload failed — please try another image.',
+      )
+    } finally {
+      setFlyerUploading(false)
+    }
+  }
 
   const generateFlyer = useMutation({
     mutationFn: () =>
@@ -103,6 +176,8 @@ export function CreateEvent() {
   const applyGeneratedFlyer = () => {
     if (!aiPreview) return
     setFlyer(aiPreview)
+    setFlyerPreview(aiPreview)
+    setFlyerError('')
     setAiOpen(false)
     setAiPreview(null)
     toast.success('AI flyer applied.')
@@ -188,19 +263,43 @@ export function CreateEvent() {
     }
   }, [title, description, price, category])
 
+  // Lock in a real venue picked from Places autocomplete: capture coordinates +
+  // address, and auto-fill city when we resolved one.
+  const onPickVenue = (place) => {
+    setLocation(place.venueName || '')
+    setAddress(place.address || '')
+    setLat(place.lat ?? null)
+    setLng(place.lng ?? null)
+    setPlaceId(place.placeId ?? null)
+    setVenueResolved(true)
+    if (place.city) setCity(place.city)
+  }
+
+  // Editing the venue text after a pick drops the resolved coordinates — the
+  // saved venue should always match what's shown.
+  const clearVenue = () => {
+    setVenueResolved(false)
+    setAddress('')
+    setLat(null)
+    setLng(null)
+    setPlaceId(null)
+  }
+
+  const shownFlyer = flyerPreview || flyer
+
   const previewEvent = {
     id: 'preview',
     title: title || 'Your event title',
     category,
-    poster: flyer || 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=800&q=80',
-    price: price ? `$${price}` : 'Free',
-    isFree: !price || price === '0',
+    poster: shownFlyer || 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=800&q=80',
+    price: price && Number(price) > 0 ? `$${price}` : 'Free',
+    isFree: !price || Number(price) === 0,
     date: date || time ? `${date || 'Date'} · ${time || 'Time'}` : 'Date · Time',
     isoDate: '',
     venueName: location || 'Venue',
     city: city || 'Oakland',
-    lat: 37.8,
-    lng: -122.27,
+    lat: lat ?? 37.8,
+    lng: lng ?? -122.27,
     organizerId: 'org-preview',
     organizer: {
       id: 'org-preview',
@@ -229,14 +328,26 @@ export function CreateEvent() {
     indoor,
   }
 
-  // Minimum fields to publish. Sports runs also need a player count.
+  // A number field is "satisfied" when it holds a non-negative number. Min age
+  // and capacity must be positive; price allows 0 (free).
+  const isValidNum = (v, { allowZero = false } = {}) => {
+    if (String(v).trim() === '') return false
+    const n = Number(v)
+    return Number.isFinite(n) && (allowZero ? n >= 0 : n > 0)
+  }
+
+  // Minimum fields to publish. Sports runs also need a player count. Optional
+  // numeric fields only block when their Required toggle is on.
   const missing = []
   if (!title.trim()) missing.push('title')
   if (!date.trim()) missing.push('date')
   if (!location.trim()) missing.push('location')
   if (!city.trim()) missing.push('city')
+  if (priceRequired && !isValidNum(price, { allowZero: true })) missing.push('price')
+  if (capacityRequired && !isValidNum(capacity)) missing.push('capacity')
+  if (ageRequired && !isValidNum(age)) missing.push('minimum age')
   if (isSports && !Number(playersNeeded)) missing.push('players needed')
-  const canPublish = missing.length === 0
+  const canPublish = missing.length === 0 && !flyerUploading
 
   const publish = useMutation({
     mutationFn: () =>
@@ -246,9 +357,13 @@ export function CreateEvent() {
         date: date.trim(),
         time: time.trim(),
         location: location.trim(),
+        address: address.trim() || null,
+        lat,
+        lng,
+        placeId,
         city: city.trim(),
         price: price ? Number(price) : 0,
-        capacity: Number(capacity) || null,
+        capacity: capacity ? Number(capacity) : null,
         ageRestriction: age ? Number(age) : null,
         description: description.trim(),
         flyer,
@@ -269,6 +384,10 @@ export function CreateEvent() {
 
   const onPublish = () => {
     setError('')
+    if (flyerUploading) {
+      setError('Hold on — your flyer is still uploading.')
+      return
+    }
     if (!canPublish) {
       setError(`Add a ${missing[0]} before publishing.`)
       return
@@ -306,25 +425,32 @@ export function CreateEvent() {
                 {aiOpen ? 'Hide AI generator' : 'Generate with AI'}
               </button>
             </div>
-            <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-card border-2 border-dashed border-border-light bg-surface text-text-muted transition-colors hover:border-primary">
-              {flyer ? (
-                <img src={flyer} alt="" className="h-full w-full rounded-card object-cover" />
+            <label className="relative flex h-40 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-card border-2 border-dashed border-border-light bg-surface text-text-muted transition-colors hover:border-primary">
+              {shownFlyer ? (
+                <img src={shownFlyer} alt="" className="h-full w-full rounded-card object-cover" />
               ) : (
                 <>
                   <ImagePlus size={28} />
                   <span className="text-sm">Upload a flyer</span>
                 </>
               )}
+              {flyerUploading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm font-medium text-text-secondary">
+                  Uploading…
+                </div>
+              )}
               <input
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  if (f) setFlyer(URL.createObjectURL(f))
-                }}
+                onChange={(e) => onPickFlyer(e.target.files?.[0])}
               />
             </label>
+            {flyerError && (
+              <div className="mt-2">
+                <InlineAlert message={flyerError} />
+              </div>
+            )}
 
             {aiOpen && (
               <div className="mt-3 space-y-3 rounded-card border border-border-light bg-white p-4">
@@ -477,20 +603,17 @@ export function CreateEvent() {
             </FormField>
           </div>
 
+          {/* Venue — Google Places autocomplete captures real coordinates; city
+              auto-fills from the pick but stays editable. */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField label="Venue">
-              <div className="relative">
-                <input
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Skyline Rooftop"
-                  className={cn(inputClass, 'pr-10')}
-                />
-                <MapPin
-                  size={16}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted"
-                />
-              </div>
+              <VenueAutocomplete
+                value={location}
+                onChange={setLocation}
+                onPick={onPickVenue}
+                onClear={clearVenue}
+                resolved={venueResolved}
+              />
             </FormField>
             <FormField label="City">
               <input
@@ -501,29 +624,72 @@ export function CreateEvent() {
               />
             </FormField>
           </div>
+          {venueResolved && address && (
+            <p className="-mt-2 text-xs text-text-muted">📍 {address}</p>
+          )}
 
-          <div className="grid grid-cols-3 gap-4">
-            <FormField label="Price ($)">
+          {/* Price / Capacity / Min age — real number inputs, each with a
+              per-field Required toggle. Left optional: no price → Free, no
+              capacity → unlimited, no age → all ages. */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <FormField
+              label={
+                <span className="flex items-center justify-between gap-2">
+                  Price ($)
+                  <RequiredToggle on={priceRequired} onToggle={() => setPriceRequired((v) => !v)} />
+                </span>
+              }
+            >
               <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="1"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                placeholder="0"
+                placeholder="0 (Free)"
                 className={inputClass}
               />
             </FormField>
-            <FormField label="Capacity">
+            <FormField
+              label={
+                <span className="flex items-center justify-between gap-2">
+                  Capacity
+                  <RequiredToggle
+                    on={capacityRequired}
+                    onToggle={() => setCapacityRequired((v) => !v)}
+                  />
+                </span>
+              }
+            >
               <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                step="1"
                 value={capacity}
                 onChange={(e) => setCapacity(e.target.value)}
-                placeholder="100"
+                placeholder="Unlimited"
                 className={inputClass}
               />
             </FormField>
-            <FormField label="Min age">
+            <FormField
+              label={
+                <span className="flex items-center justify-between gap-2">
+                  Min age
+                  <RequiredToggle on={ageRequired} onToggle={() => setAgeRequired((v) => !v)} />
+                </span>
+              }
+            >
               <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                max="99"
+                step="1"
                 value={age}
                 onChange={(e) => setAge(e.target.value)}
-                placeholder="18"
+                placeholder="All ages"
                 className={inputClass}
               />
             </FormField>
@@ -631,6 +797,10 @@ export function CreateEvent() {
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <FormField label="Players needed">
                       <input
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        step="1"
                         value={playersNeeded}
                         onChange={(e) => setPlayersNeeded(e.target.value)}
                         placeholder="14"
@@ -678,7 +848,7 @@ export function CreateEvent() {
           <button
             type="button"
             onClick={onPublish}
-            disabled={publish.isPending}
+            disabled={publish.isPending || flyerUploading}
             className="w-full rounded-button bg-accent py-3.5 text-sm font-semibold text-white transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {publish.isPending ? 'Publishing…' : 'Publish event'}

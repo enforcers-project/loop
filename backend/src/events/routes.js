@@ -199,23 +199,20 @@ router.get('/:id', async (req, res) => {
     const event = await prisma.event.update({
       where: { id: req.params.id },
       data: { viewCount: { increment: 1 } },
-      include: {
-        category: true,
-        organizer: true,
-        sportsDetail: { include: { positions: true } },
-      },
+      include: EVENT_DETAIL_INCLUDE,
     })
 
-    const card = toEventCard(event)
+    // Full detail shape — carries address / google_place_id / age fields / tags
+    // that the list-card shape (toEventCard) omits. The EventDetail screen and
+    // the map need these, and they were silently dropped before.
+    const detail = toEventDetail(event)
 
-    // Sports runs need positions on the detail response — the picker on
-    // SportsPickupDetail keys off sports_details.positions[]. Also tally live
-    // claimed counts per position so the grid can grey out full slots. We
-    // additionally embed the full roster (claimed + waitlist) so the roster
-    // table below the header renders on the same fetch instead of showing
-    // rows of "Open slot" until a separate /roster call.
+    // Sports runs need LIVE per-position claimed counts + the roster on the
+    // detail response — the picker on SportsPickupDetail keys off
+    // sports_details.positions[] and the roster table renders on this same
+    // fetch. toEventDetail already emits positions, but its open_slots can't
+    // know live claims, so we recompute them here and attach the roster.
     if (event.isSports && event.sportsDetail) {
-      const positions = event.sportsDetail.positions ?? []
       const rosterEntries = await prisma.rosterEntry.findMany({
         where: { eventId: event.id, status: { in: ['claimed', 'waitlisted'] } },
         include: {
@@ -231,26 +228,18 @@ router.get('/:id', async (req, res) => {
           (claimedByPosition.get(r.sportsPositionId) ?? 0) + 1,
         )
       }
-      card.sports_details = {
-        sport: event.sportsDetail.sport,
-        skill_level: event.sportsDetail.skillLevel,
-        venue_setting: event.sportsDetail.venueSetting,
-        players_needed: event.sportsDetail.playersNeeded,
-        players_signed_up: event.sportsDetail.playersSignedUp,
-        positions: positions
-          .slice()
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-          .map((p) => ({
-            id: p.id,
-            label: p.label,
-            capacity: p.capacity,
-            open_slots: p.capacity - (claimedByPosition.get(p.id) ?? 0),
-          })),
+      // Overwrite open_slots with the live claimed tally (toEventDetail defaults
+      // it to fully-open since nothing populates _claimedCount).
+      if (detail.sports_details?.positions) {
+        detail.sports_details.positions = detail.sports_details.positions.map((p) => ({
+          ...p,
+          open_slots: p.capacity - (claimedByPosition.get(p.id) ?? 0),
+        }))
       }
       // Roster rows in the shape SportsPickupDetail already reads: name /
-      // position label / avatar. Waitlist rows are sorted by their FIFO
-      // position, claimed rows in creation order.
-      card.roster = [
+      // position label / avatar. Waitlist rows sorted by FIFO position,
+      // claimed rows in creation order.
+      detail.roster = [
         ...rosterEntries
           .filter((e) => e.status === 'claimed')
           .map((e) => ({
@@ -277,7 +266,7 @@ router.get('/:id', async (req, res) => {
       ]
     }
 
-    res.json({ data: card })
+    res.json({ data: detail })
   } catch (err) {
     // P2025 = record to update not found → treat as 404.
     if (err.code === 'P2025') {

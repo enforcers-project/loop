@@ -842,6 +842,37 @@ export const api = {
     }
   },
 
+  // Organizer dashboard (#32) — the event owner's view of who RSVP'd, plus
+  // check-in. Both are owner-gated server-side (403 for non-organizers).
+  //   eventRsvps: GET /api/events/:id/rsvps → { data:[{ id, user, status,
+  //     guests_count, attended, checked_in_at, created_at }], nextCursor,
+  //     counts:{ going, interested, waitlisted } }. Returns the raw envelope so
+  //     the screen can read counts + page. Degrades to an empty envelope.
+  //   checkInAttendee: PATCH /api/events/:id/rsvps/:userId { attended:true } —
+  //     fires the ranker's top-weight `attend` signal. Throws on 403/404 so the
+  //     dashboard can surface it.
+  eventRsvps: async (eventId, { status, cursor, limit } = {}) => {
+    const qs = new URLSearchParams()
+    if (status) qs.set('status', status)
+    if (cursor) qs.set('cursor', cursor)
+    if (limit) qs.set('limit', String(limit))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    try {
+      const res = await fetch(apiUrl(`/events/${eventId}/rsvps${suffix}`), {
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      return await res.json() // { data, nextCursor, counts }
+    } catch {
+      return { data: [], nextCursor: null, counts: { going: 0, interested: 0, waitlisted: 0 } }
+    }
+  },
+  checkInAttendee: (eventId, userId) =>
+    request(`/events/${eventId}/rsvps/${userId}`, {
+      method: 'PATCH',
+      body: { attended: true },
+    }),
+
   // Events an organizer has published (GET /api/users/:id/events), for the
   // organizer-only "Events" tab on UserProfile. Same endpoint OrganizerProfile
   // uses, so upcoming/past ordering matches. [] on failure so the tab degrades
@@ -889,6 +920,38 @@ export const api = {
     },
     markRead: (id) => request(`/notifications/${id}/read`, { method: 'PATCH' }),
     markAllRead: () => request('/notifications/read-all', { method: 'POST' }),
+  },
+
+  // Pre-event reminders (planning §7.5, work-plan #28). No mock fallback — a
+  // reminder must genuinely persist, so the caller shows a real success/error.
+  reminders: {
+    // Schedule: server computes remind_at = starts_at − offset_minutes.
+    // Throws (with .status) on 409 duplicate / 422 bad-time so the picker can
+    // surface the message.
+    create: (eventId, offsetMinutes, channel = 'in_app') =>
+      request(`/events/${eventId}/reminders`, {
+        method: 'POST',
+        body: { offset_minutes: offsetMinutes, channel },
+      }),
+    // A user's reminders (owner only). Degrades to [] so the UI still renders.
+    list: async (userId, { status, cursor, limit } = {}) => {
+      const qs = new URLSearchParams()
+      if (status) qs.set('status', status)
+      if (cursor) qs.set('cursor', cursor)
+      if (limit) qs.set('limit', String(limit))
+      const suffix = qs.toString() ? `?${qs}` : ''
+      try {
+        const res = await fetch(apiUrl(`/users/${userId}/reminders${suffix}`), {
+          credentials: 'include',
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        const json = await res.json()
+        return json.data ?? []
+      } catch {
+        return []
+      }
+    },
+    cancel: (id) => request(`/reminders/${id}`, { method: 'DELETE' }),
   },
 
   // Instagram-style social feed (GET /api/feed/social; backend #29). Returns
@@ -1122,6 +1185,34 @@ export const api = {
         events,
       }
     }),
+
+  // Natural-language event search (POST /api/ai/search, work-plan #22). Parses
+  // the query into hard constraints (Groq LLM → regex fallback), pgvector
+  // re-ranks, and returns removable filter `pills` + the `label` that produced
+  // them. To remove a pill, pass the remaining `label` back so the parse is
+  // skipped (the LLM won't re-add the dropped filter). Returns EventCard-shaped
+  // events; degrades to the legacy keyword mock when the backend is offline.
+  nlSearch: async (q, label) => {
+    const res = await post(
+      '/ai/search',
+      { q, ...(label ? { label } : {}) },
+      // Offline fallback: no LLM/pills, just keyword-matched mock events.
+      () => {
+        const n = String(q ?? '').toLowerCase()
+        let matches = MOCK_EVENTS.map(withOrganizer)
+        if (n.includes('free')) matches = matches.filter((e) => e.isFree)
+        const cat = MOCK_CATEGORIES.find((c) => n.includes(c.name.toLowerCase()))
+        if (cat) matches = matches.filter((e) => e.category === cat.name)
+        return { reply: '', events: matches.slice(0, 12), pills: [], label: {} }
+      },
+    )
+    return {
+      reply: res.reply ?? '',
+      events: (res.events ?? []).map(toEventCardShape),
+      pills: res.pills ?? [],
+      label: res.label ?? {},
+    }
+  },
 
   // Conversational assistant drawer (planning §7.6, work-plan #31). Persists
   // threads server-side via ai_conversations + ai_messages, retrieval grounded

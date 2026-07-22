@@ -19,6 +19,7 @@ import { EventCard } from '../components/EventCard'
 import { EventComments } from '../components/EventComments'
 import { EventMap } from '../components/EventMap'
 import { OrganizerFooterCard } from '../components/OrganizerFooterCard'
+import { ReminderPicker } from '../components/ReminderPicker'
 
 // Format an ISO instant into "9:00 PM" so the hero can pair date + time on one
 // line ("Sun, Jul 19 · 9:00 PM"). Guards missing / unparseable values so the
@@ -249,6 +250,10 @@ export function EventDetail() {
                   <Share2 size={18} />
                 </IconButton>
               </div>
+
+              {/* Reminder picker — surfaces once the user has committed (RSVP or
+                  save), so we only offer a nudge for events they care about. */}
+              {(going || saved) && <ReminderPicker eventId={event.id} startsAt={event.isoDate} />}
             </div>
           </div>
         </div>

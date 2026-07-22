@@ -24,6 +24,7 @@ const router = Router()
 
 const MAX_MESSAGE_LEN = 500
 const MESSAGE_PAGE_SIZE = 50
+const MAX_QUERY_LEN = 300
 
 // Same shape as chat.js's isEventIntent — kept here so we can skip the whole
 // retrieval round-trip on turns that are clearly about the app itself
@@ -52,6 +53,43 @@ function titleFromQuery(q) {
     .slice(0, 60)
   return clean || 'New chat'
 }
+
+// POST /api/ai/search — one-shot natural-language search (work-plan #22).
+//
+// Public (no thread, no auth): parse the query into hard constraints (LLM →
+// regex), pre-filter + pgvector re-rank via retrieveEvents, and return the hit
+// EventCards plus the removable `pills` the UI renders. A client that removed a
+// pill posts the remaining `label` back so the parse is skipped (the LLM won't
+// re-add the dropped filter). Degrades gracefully — retrieveEvents never throws.
+router.post('/search', async (req, res) => {
+  try {
+    const q = typeof req.body?.q === 'string' ? req.body.q.trim().slice(0, MAX_QUERY_LEN) : ''
+    if (!q) return fail(res, 400, 'VALIDATION_ERROR', 'q is required')
+
+    const labelOverride =
+      req.body?.label && typeof req.body.label === 'object' ? req.body.label : null
+
+    const retrieval = await retrieveEvents(q, { labelOverride })
+    const events = serializeHits(retrieval.events)
+    const reply = events.length
+      ? `Found ${events.length} ${events.length === 1 ? 'event' : 'events'} that match.`
+      : "I couldn't find a match — try removing a filter or broadening the search."
+
+    res.json({
+      data: {
+        reply,
+        events,
+        pills: retrieval.pills,
+        label: retrieval.label,
+        retrieval: retrieval.retrieval,
+        parse: retrieval.parse,
+      },
+    })
+  } catch (err) {
+    console.error('POST /api/ai/search error:', err)
+    fail(res, 500, 'INTERNAL', 'Search failed')
+  }
+})
 
 // POST /api/ai/conversations  — start a thread
 router.post('/conversations', requireAuth, async (req, res) => {

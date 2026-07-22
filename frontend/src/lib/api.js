@@ -504,6 +504,9 @@ async function toCreateEventBody(draft) {
     // Display label the EventCard/detail render (age_min is the numeric gate;
     // age_label is what shows). "21+" convention matches the live preview.
     age_label: draft.ageRestriction ? `${draft.ageRestriction}+` : null,
+    // Hard age gate: when true the backend enforces age_min at RSVP; when false
+    // age_min is only a recommended age shown on the event.
+    age_restricted: Boolean(draft.ageRestricted),
     is_sports: Boolean(draft.isSports),
   }
 

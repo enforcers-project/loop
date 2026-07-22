@@ -887,6 +887,38 @@ export const api = {
     markAllRead: () => request('/notifications/read-all', { method: 'POST' }),
   },
 
+  // Pre-event reminders (planning §7.5, work-plan #28). No mock fallback — a
+  // reminder must genuinely persist, so the caller shows a real success/error.
+  reminders: {
+    // Schedule: server computes remind_at = starts_at − offset_minutes.
+    // Throws (with .status) on 409 duplicate / 422 bad-time so the picker can
+    // surface the message.
+    create: (eventId, offsetMinutes, channel = 'in_app') =>
+      request(`/events/${eventId}/reminders`, {
+        method: 'POST',
+        body: { offset_minutes: offsetMinutes, channel },
+      }),
+    // A user's reminders (owner only). Degrades to [] so the UI still renders.
+    list: async (userId, { status, cursor, limit } = {}) => {
+      const qs = new URLSearchParams()
+      if (status) qs.set('status', status)
+      if (cursor) qs.set('cursor', cursor)
+      if (limit) qs.set('limit', String(limit))
+      const suffix = qs.toString() ? `?${qs}` : ''
+      try {
+        const res = await fetch(apiUrl(`/users/${userId}/reminders${suffix}`), {
+          credentials: 'include',
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        const json = await res.json()
+        return json.data ?? []
+      } catch {
+        return []
+      }
+    },
+    cancel: (id) => request(`/reminders/${id}`, { method: 'DELETE' }),
+  },
+
   // Instagram-style social feed (GET /api/feed/social; backend #29). Returns
   // client-shaped posts (see toClientPost) with live like_count + liked_by_me.
   // Falls back to the mock catalog so the SocialFeed always renders when the

@@ -2,6 +2,7 @@ import { registerJob } from './scheduler.js'
 import prisma from '../lib/prisma.js'
 import { embedPendingEvents } from '../embeddings/pipeline.js'
 import { rebuildStaleVectors } from '../preferences/builder.js'
+import { dispatchDueReminders } from '../reminders/dispatch.js'
 
 // Each stub logs and returns a summary. Real implementations replace these in later sprints.
 
@@ -48,8 +49,13 @@ registerJob('embed-pending-events', {
 registerJob('dispatch-reminders', {
   schedule: '* * * * *', // every minute
   handler: async () => {
-    console.log('[job:dispatch-reminders] stub — would scan due reminders and emit notifications')
-    return { stub: true }
+    const result = await dispatchDueReminders()
+    if (result.scanned > 0) {
+      console.log(
+        `[job:dispatch-reminders] scanned ${result.scanned} — ${result.sent} sent, ${result.cancelled} cancelled, ${result.errors} errors`,
+      )
+    }
+    return result
   },
 })
 

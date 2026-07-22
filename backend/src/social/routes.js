@@ -101,12 +101,15 @@ function isAcceptableImageUrl(url) {
   return /^https:\/\//i.test(url)
 }
 
-// --- POST /api/uploads/social-image — presigned PUT for post/story media -----
+// --- POST /api/uploads/social-image — presigned PUT for image media ----------
 // Owner-scoped (keyed under the caller's id). Body: { content_type, kind } where
-// kind is 'post' | 'story' (chooses the S3 folder). Returns a short-lived
-// presigned PUT URL the browser uploads to directly (bytes never touch this
-// server) plus the stable public URL to send back in image_url / media_url.
-// 503s when S3 isn't configured so the client can fall back to a URL input.
+// kind is 'post' | 'story' | 'flyer' (chooses the S3 folder). Returns a
+// short-lived presigned PUT URL the browser uploads to directly (bytes never
+// touch this server) plus the stable public URL to send back in
+// image_url / media_url / flyer_url. 503s when S3 isn't configured so the
+// client can fall back to a URL input.
+const UPLOAD_FOLDERS = { post: 'posts', story: 'stories', flyer: 'flyers' }
+
 router.post('/uploads/social-image', requireAuth, async (req, res) => {
   if (!s3Configured()) {
     return fail(res, 503, 'NOT_CONFIGURED', 'Image uploads are not configured')
@@ -121,7 +124,7 @@ router.post('/uploads/social-image', requireAuth, async (req, res) => {
       'content_type must be a JPEG, PNG, WebP, or GIF image',
     )
   }
-  const folder = req.body?.kind === 'story' ? 'stories' : 'posts'
+  const folder = UPLOAD_FOLDERS[req.body?.kind] ?? 'posts'
 
   try {
     const { uploadUrl, publicUrl, key } = await presignPutUrl({

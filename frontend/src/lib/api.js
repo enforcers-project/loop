@@ -470,6 +470,13 @@ async function toCreateEventBody(draft) {
     timezone: draft.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     city: draft.city,
     venue_name: draft.location || null,
+    // Real location from Google Places (when the organizer picked a suggestion):
+    // coordinates + formatted address + place id. The backend already stores
+    // these; the form just never sent them before. All null for a free-typed venue.
+    address: draft.address || null,
+    lat: draft.lat ?? null,
+    lng: draft.lng ?? null,
+    google_place_id: draft.placeId ?? null,
     description: draft.description || null,
     // Send the flyer through as flyer_url when it's persistable. AI-generated
     // flyers are base64 data URLs (roundtrip fine). Locally uploaded files
@@ -486,6 +493,9 @@ async function toCreateEventBody(draft) {
     is_free: priceMin === 0,
     capacity: draft.capacity ?? null,
     age_min: draft.ageRestriction ?? null,
+    // Display label the EventCard/detail render (age_min is the numeric gate;
+    // age_label is what shows). "21+" convention matches the live preview.
+    age_label: draft.ageRestriction ? `${draft.ageRestriction}+` : null,
     is_sports: Boolean(draft.isSports),
   }
 
@@ -1008,6 +1018,26 @@ export const api = {
     const { upload_url, public_url } = await request('/uploads/social-image', {
       method: 'POST',
       body: { content_type: file.type, kind },
+    })
+    const put = await fetch(upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    })
+    if (!put.ok) throw new Error(`Upload failed (${put.status})`)
+    return public_url
+  },
+
+  // Upload a CreateEvent flyer to S3 and return its public URL (reuses the
+  // presign flow, 'flyer' folder). Previously the form used a blob: URL that
+  // only lived in the tab and was dropped on publish, so uploaded flyers never
+  // showed on the created event — this persists the bytes so flyer_url resolves
+  // everywhere. Throws (err.status===503 NOT_CONFIGURED) when S3 is off so the
+  // caller can fall back to the AI generator / URL.
+  uploadFlyer: async (file) => {
+    const { upload_url, public_url } = await request('/uploads/social-image', {
+      method: 'POST',
+      body: { content_type: file.type, kind: 'flyer' },
     })
     const put = await fetch(upload_url, {
       method: 'PUT',

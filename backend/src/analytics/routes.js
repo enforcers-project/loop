@@ -245,9 +245,21 @@ router.get('/organizers/:id/analytics', requireAuth, async (req, res) => {
         data: {
           organizerId: req.user.id,
           range: { from: dayKey(range.from), to: dayKey(range.to) },
-          totals: { views: 0, saves: 0, rsvps: 0, shares: 0, events: 0, followerCount: req.user.followerCount ?? 0 },
+          totals: {
+            views: 0,
+            saves: 0,
+            rsvps: 0,
+            shares: 0,
+            events: 0,
+            followerCount: req.user.followerCount ?? 0,
+          },
           series: eachDay(range.from, range.to).map((date) => ({
-            date, views: 0, saves: 0, rsvps: 0, shares: 0, followers: 0,
+            date,
+            views: 0,
+            saves: 0,
+            rsvps: 0,
+            shares: 0,
+            followers: 0,
           })),
           topEvents: [],
           categoryMix: [],
@@ -308,9 +320,13 @@ router.get('/organizers/:id/analytics', requireAuth, async (req, res) => {
       if (row) row[key]++
       if (ev) ev[key]++
       if (ev?.category?.slug) {
-        const acc =
-          catMix.get(ev.category.slug) ??
-          { slug: ev.category.slug, name: ev.category.name, colorHex: ev.category.colorHex, views: 0, rsvps: 0 }
+        const acc = catMix.get(ev.category.slug) ?? {
+          slug: ev.category.slug,
+          name: ev.category.name,
+          colorHex: ev.category.colorHex,
+          views: 0,
+          rsvps: 0,
+        }
         if (s.interactionType === 'view') acc.views++
         else if (s.interactionType === 'rsvp') acc.rsvps++
         catMix.set(ev.category.slug, acc)
@@ -333,7 +349,7 @@ router.get('/organizers/:id/analytics', requireAuth, async (req, res) => {
     )
 
     const topEvents = Array.from(perEvent.values())
-      .sort((a, b) => (b.views + b.rsvps * 2) - (a.views + a.rsvps * 2))
+      .sort((a, b) => b.views + b.rsvps * 2 - (a.views + a.rsvps * 2))
       .slice(0, 10)
 
     res.json({

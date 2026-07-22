@@ -721,8 +721,8 @@ function AutoTagPreview({ autotags }) {
 
       {!hasAny && (
         <p className="mt-1.5 text-xs text-text-muted">
-          Add a title and a few sentences of description — we&rsquo;ll suggest interest tags to
-          help the right people discover your event.
+          Add a title and a few sentences of description — we&rsquo;ll suggest interest tags to help
+          the right people discover your event.
         </p>
       )}
 

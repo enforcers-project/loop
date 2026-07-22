@@ -37,19 +37,28 @@ if (!events) {
   for (let i = arrStart; i < source.length; i++) {
     const ch = source[i]
     if (inStr) {
-      if (ch === '\\') { i++; continue }
+      if (ch === '\\') {
+        i++
+        continue
+      }
       if (ch === inStr) inStr = null
       continue
     }
-    if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      inStr = ch
+      continue
+    }
     if (ch === '[') depth++
     else if (ch === ']') {
       depth--
-      if (depth === 0) { end = i; break }
+      if (depth === 0) {
+        end = i
+        break
+      }
     }
   }
   const literal = source.slice(arrStart, end + 1)
-  events = eval(`(${literal})`) // eslint-disable-line no-eval
+  events = eval(`(${literal})`)
 }
 
 if (!Array.isArray(events)) {

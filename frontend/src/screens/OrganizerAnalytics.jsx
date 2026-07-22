@@ -60,11 +60,7 @@ export function OrganizerAnalytics() {
     if (authReady && role !== 'organizer') navigate('/profile', { replace: true })
   }, [authReady, role, navigate])
 
-  const {
-    data,
-    isLoading,
-    error,
-  } = useQuery({
+  const { data, isLoading, error } = useQuery({
     enabled: !!user?.id,
     queryKey: ['analytics', 'organizer', user?.id, dates.from, dates.to],
     queryFn: () => api.organizerAnalytics(user.id, dates),
@@ -266,4 +262,3 @@ function ColHeader({ color, children }) {
     </span>
   )
 }
-

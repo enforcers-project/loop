@@ -226,7 +226,10 @@ router.get('/:id', async (req, res) => {
       const claimedByPosition = new Map()
       for (const r of rosterEntries) {
         if (r.status !== 'claimed') continue
-        claimedByPosition.set(r.sportsPositionId, (claimedByPosition.get(r.sportsPositionId) ?? 0) + 1)
+        claimedByPosition.set(
+          r.sportsPositionId,
+          (claimedByPosition.get(r.sportsPositionId) ?? 0) + 1,
+        )
       }
       card.sports_details = {
         sport: event.sportsDetail.sport,

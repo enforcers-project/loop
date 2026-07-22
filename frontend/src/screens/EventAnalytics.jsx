@@ -56,11 +56,7 @@ export function EventAnalytics() {
     if (authReady && role !== 'organizer') navigate('/profile', { replace: true })
   }, [authReady, role, navigate])
 
-  const {
-    data,
-    isLoading,
-    error,
-  } = useQuery({
+  const { data, isLoading, error } = useQuery({
     enabled: !!id,
     queryKey: ['analytics', 'event', id, dates.from, dates.to],
     queryFn: () => api.eventAnalytics(id, dates),
@@ -107,8 +103,7 @@ export function EventAnalytics() {
   const event = data.event ?? {}
   const attendanceRate =
     totals.rsvpsGoing > 0 ? Math.round(((totals.attended ?? 0) / totals.rsvpsGoing) * 100) : null
-  const ctr =
-    recCTR.impressions > 0 ? Math.round((recCTR.clicks / recCTR.impressions) * 100) : null
+  const ctr = recCTR.impressions > 0 ? Math.round((recCTR.clicks / recCTR.impressions) * 100) : null
 
   const hasSignals =
     (totals.views ?? 0) + (totals.saves ?? 0) + (totals.rsvpsGoing ?? 0) + (totals.shares ?? 0) > 0
@@ -166,15 +161,8 @@ export function EventAnalytics() {
       </section>
 
       {/* Time series */}
-      <ChartCard
-        title="Signals over time"
-        subtitle="Daily view / save / RSVP / share activity"
-      >
-        {hasSignals ? (
-          <TimeSeriesChart data={series} series={seriesConfig} />
-        ) : (
-          <ChartEmpty />
-        )}
+      <ChartCard title="Signals over time" subtitle="Daily view / save / RSVP / share activity">
+        {hasSignals ? <TimeSeriesChart data={series} series={seriesConfig} /> : <ChartEmpty />}
       </ChartCard>
 
       {/* Funnel + Surfaces side-by-side */}
@@ -187,10 +175,7 @@ export function EventAnalytics() {
             { key: 'attended', label: 'Attended', count: funnel.attended ?? 0 },
           ]}
         />
-        <ChartCard
-          title="Where views came from"
-          subtitle="Traffic source across the app"
-        >
+        <ChartCard title="Where views came from" subtitle="Traffic source across the app">
           <BarBreakdown
             rows={surfaces.map((s) => ({
               key: s.surface,
@@ -212,10 +197,7 @@ export function EventAnalytics() {
           ) : (
             <ul className="divide-y divide-border-light">
               {searchTerms.map((t) => (
-                <li
-                  key={t.term}
-                  className="flex items-center justify-between py-2 text-sm"
-                >
+                <li key={t.term} className="flex items-center justify-between py-2 text-sm">
                   <span className="truncate text-ink">“{t.term}”</span>
                   <span className="ml-3 shrink-0 tabular-nums text-text-secondary">
                     {formatCount(t.clicks)}
@@ -225,18 +207,11 @@ export function EventAnalytics() {
             </ul>
           )}
         </ChartCard>
-        <ChartCard
-          title='"For You" performance'
-          subtitle="How the ranker treated this event"
-        >
+        <ChartCard title='"For You" performance' subtitle="How the ranker treated this event">
           <div className="grid grid-cols-3 gap-3">
             <StatTile label="Impressions" value={recCTR.impressions} />
             <StatTile label="Clicks" value={recCTR.clicks} />
-            <StatTile
-              label="CTR"
-              value={ctr ?? 0}
-              hint={ctr != null ? '%' : 'no impressions'}
-            />
+            <StatTile label="CTR" value={ctr ?? 0} hint={ctr != null ? '%' : 'no impressions'} />
           </div>
         </ChartCard>
       </section>

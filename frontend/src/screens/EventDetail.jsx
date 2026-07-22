@@ -85,9 +85,7 @@ export function EventDetail() {
     // Log a share signal so the organizer's analytics reflect it. Fire-and-
     // forget — the recommender weights this at 0.45 and it drives the Shares
     // KPI on the event analytics page.
-    api.interactions([
-      { interaction_type: 'share', surface: 'event_detail', event_id: event.id },
-    ])
+    api.interactions([{ interaction_type: 'share', surface: 'event_detail', event_id: event.id }])
     const payload = {
       title: event.title,
       text: `Come with me to ${event.title}${event.date ? ` — ${event.date}` : ''}`,

@@ -226,9 +226,7 @@ export function SportsPickupDetail() {
                         <img src={p.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
                         <div className="flex flex-col leading-tight">
                           <span className="font-medium text-ink">{p.name}</span>
-                          {p.handle && (
-                            <span className="text-xs text-text-muted">@{p.handle}</span>
-                          )}
+                          {p.handle && <span className="text-xs text-text-muted">@{p.handle}</span>}
                         </div>
                       </div>
                     </td>

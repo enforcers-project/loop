@@ -31,56 +31,286 @@
 
 const INTEREST_RULES = [
   // ── Music
-  { slug: 'afrobeats', category: 'music', keywords: ['afrobeats', 'amapiano', 'afrobeat', 'afro nation', 'afro house', 'burna boy', 'wizkid', 'davido', 'rema'] },
-  { slug: 'hiphop',    category: 'music', keywords: ['hip-hop', 'hip hop', 'hiphop', 'rap', 'cypher', 'freestyle', 'trap', 'drill'] },
-  { slug: 'house',     category: 'music', keywords: ['house music', 'deep house', 'edm', 'techno', 'dj set', 'rave', 'warehouse night'] },
-  { slug: 'live-bands', category: 'music', keywords: ['live band', 'live bands', 'live jazz', 'jazz night', 'acoustic', 'open mic', 'indie rock', 'reggae', 'r&b', 'karaoke', 'salsa', 'bachata', 'merengue', 'live music'] },
+  {
+    slug: 'afrobeats',
+    category: 'music',
+    keywords: [
+      'afrobeats',
+      'amapiano',
+      'afrobeat',
+      'afro nation',
+      'afro house',
+      'burna boy',
+      'wizkid',
+      'davido',
+      'rema',
+    ],
+  },
+  {
+    slug: 'hiphop',
+    category: 'music',
+    keywords: ['hip-hop', 'hip hop', 'hiphop', 'rap', 'cypher', 'freestyle', 'trap', 'drill'],
+  },
+  {
+    slug: 'house',
+    category: 'music',
+    keywords: ['house music', 'deep house', 'edm', 'techno', 'dj set', 'rave', 'warehouse night'],
+  },
+  {
+    slug: 'live-bands',
+    category: 'music',
+    keywords: [
+      'live band',
+      'live bands',
+      'live jazz',
+      'jazz night',
+      'acoustic',
+      'open mic',
+      'indie rock',
+      'reggae',
+      'r&b',
+      'karaoke',
+      'salsa',
+      'bachata',
+      'merengue',
+      'live music',
+    ],
+  },
 
   // ── Nightlife
-  { slug: 'rooftop',   category: 'nightlife', keywords: ['rooftop', 'skyline'] },
+  { slug: 'rooftop', category: 'nightlife', keywords: ['rooftop', 'skyline'] },
   // "cdjs" and "open decks" are the giveaway signals for a DJ/nightclub event
   // even when the copy avoids the word "club" itself.
-  { slug: 'clubbing',  category: 'nightlife', keywords: ['nightclub', 'club night', 'clubbing', 'silent disco', 'disco', 'cdj', 'cdjs', 'open decks', 'dj community'] },
+  {
+    slug: 'clubbing',
+    category: 'nightlife',
+    keywords: [
+      'nightclub',
+      'club night',
+      'clubbing',
+      'silent disco',
+      'disco',
+      'cdj',
+      'cdjs',
+      'open decks',
+      'dj community',
+    ],
+  },
   // "wine bar" is too broad — a night market with a wine bar isn't a lounge.
   // Require the venue kind to be the subject, not a stall description.
-  { slug: 'lounges',   category: 'nightlife', keywords: ['lounge', 'speakeasy', 'cocktail bar', 'wine lounge'] },
-  { slug: 'day-party', category: 'nightlife', keywords: ['day party', 'day-party', 'pool party', 'sunset party', 'yacht party', 'boat party', 'booze cruise', 'cruise party', 'catamaran'] },
+  {
+    slug: 'lounges',
+    category: 'nightlife',
+    keywords: ['lounge', 'speakeasy', 'cocktail bar', 'wine lounge'],
+  },
+  {
+    slug: 'day-party',
+    category: 'nightlife',
+    keywords: [
+      'day party',
+      'day-party',
+      'pool party',
+      'sunset party',
+      'yacht party',
+      'boat party',
+      'booze cruise',
+      'cruise party',
+      'catamaran',
+    ],
+  },
 
   // ── Sports
   // 5v5/7v7/11v11 don't imply soccer — 5v5 is the standard basketball pickup
   // format. Keep the specific soccer signals and drop the ambiguous scorelines.
   // 5-a-side is unambiguously soccer.
-  { slug: 'soccer',    category: 'sports', keywords: ['soccer', 'futbol', 'football pickup', '7v7', '11v11', '5-a-side', '5 a side'] },
-  { slug: 'basketball', category: 'sports', keywords: ['basketball', 'hoops', 'pickup basketball', 'open run', '5v5'] },
+  {
+    slug: 'soccer',
+    category: 'sports',
+    keywords: ['soccer', 'futbol', 'football pickup', '7v7', '11v11', '5-a-side', '5 a side'],
+  },
+  {
+    slug: 'basketball',
+    category: 'sports',
+    keywords: ['basketball', 'hoops', 'pickup basketball', 'open run', '5v5'],
+  },
   { slug: 'volleyball', category: 'sports', keywords: ['volleyball', 'beach volleyball'] },
-  { slug: 'running',   category: 'sports', keywords: ['run club', 'running club', 'running group', 'morning run', 'trail run', '5k', '10k'] },
+  {
+    slug: 'running',
+    category: 'sports',
+    keywords: [
+      'run club',
+      'running club',
+      'running group',
+      'morning run',
+      'trail run',
+      '5k',
+      '10k',
+    ],
+  },
 
   // ── Networking
-  { slug: 'startups',  category: 'networking', keywords: ['startup', 'startups', 'founder', 'founders', 'pitch night', 'demo day', 'vc mixer'] },
-  { slug: 'tech',      category: 'networking', keywords: ['tech meetup', 'tech talk', 'engineering', 'developer', 'ai agents', 'hackathon', 'ai meetup', 'lightning talks', 'design critique', 'ux', 'ui', 'figma', 'coworking', 'co-working', 'indie hackers', 'agent architectures'] },
-  { slug: 'career',    category: 'networking', keywords: ['career fair', 'job fair', 'hiring', 'recruiter'] },
-  { slug: 'creators',  category: 'networking', keywords: ['creator mixer', 'creators', 'content creator', 'influencer'] },
+  {
+    slug: 'startups',
+    category: 'networking',
+    keywords: ['startup', 'startups', 'founder', 'founders', 'pitch night', 'demo day', 'vc mixer'],
+  },
+  {
+    slug: 'tech',
+    category: 'networking',
+    keywords: [
+      'tech meetup',
+      'tech talk',
+      'engineering',
+      'developer',
+      'ai agents',
+      'hackathon',
+      'ai meetup',
+      'lightning talks',
+      'design critique',
+      'ux',
+      'ui',
+      'figma',
+      'coworking',
+      'co-working',
+      'indie hackers',
+      'agent architectures',
+    ],
+  },
+  {
+    slug: 'career',
+    category: 'networking',
+    keywords: ['career fair', 'job fair', 'hiring', 'recruiter'],
+  },
+  {
+    slug: 'creators',
+    category: 'networking',
+    keywords: ['creator mixer', 'creators', 'content creator', 'influencer'],
+  },
 
   // ── Food
-  { slug: 'foodie',    category: 'food', keywords: ['food festival', 'food fest', 'night market', 'street food', 'foodie', 'food crawl', 'taco', 'tacos', 'taqueria'] },
-  { slug: 'brunch',    category: 'food', keywords: ['brunch', 'bottomless brunch', 'mimosa'] },
-  { slug: 'popups',    category: 'food', keywords: ['pop-up', 'popup', 'pop up dinner', 'supper club'] },
-  { slug: 'tastings',  category: 'food', keywords: ['tasting', 'wine tasting', 'cupping', 'flight'] },
+  {
+    slug: 'foodie',
+    category: 'food',
+    keywords: [
+      'food festival',
+      'food fest',
+      'night market',
+      'street food',
+      'foodie',
+      'food crawl',
+      'taco',
+      'tacos',
+      'taqueria',
+    ],
+  },
+  { slug: 'brunch', category: 'food', keywords: ['brunch', 'bottomless brunch', 'mimosa'] },
+  {
+    slug: 'popups',
+    category: 'food',
+    keywords: ['pop-up', 'popup', 'pop up dinner', 'supper club'],
+  },
+  {
+    slug: 'tastings',
+    category: 'food',
+    keywords: ['tasting', 'wine tasting', 'cupping', 'flight'],
+  },
 
   // ── Campus
-  { slug: 'campus-life', category: 'campus', keywords: ['welcome week', 'block party', 'quad', 'campus life', 'student union'] },
-  { slug: 'greek',       category: 'campus', keywords: ['greek life', 'fraternity', 'sorority', 'rush week'] },
-  { slug: 'clubs-orgs',  category: 'campus', keywords: ['student club', 'clubs & orgs', 'club fair'] },
-  { slug: 'study-jams',  category: 'campus', keywords: ['study jam', 'study group', 'midterms', 'finals week'] },
+  {
+    slug: 'campus-life',
+    category: 'campus',
+    keywords: ['welcome week', 'block party', 'quad', 'campus life', 'student union'],
+  },
+  {
+    slug: 'greek',
+    category: 'campus',
+    keywords: ['greek life', 'fraternity', 'sorority', 'rush week'],
+  },
+  {
+    slug: 'clubs-orgs',
+    category: 'campus',
+    keywords: ['student club', 'clubs & orgs', 'club fair'],
+  },
+  {
+    slug: 'study-jams',
+    category: 'campus',
+    keywords: ['study jam', 'study group', 'midterms', 'finals week'],
+  },
 ]
 
 const VIBE_RULES = [
-  { slug: 'hype',        keywords: ['warehouse', 'rave', 'massive', 'sold out', 'lineup', 'headliner', 'wall of sound', 'go crazy', 'turn up'] },
-  { slug: 'upscale',     keywords: ['rooftop', 'skyline', 'cocktail', 'speakeasy', 'wine bar', 'dress code', 'dress to impress', 'natural wine', 'tasting menu'] },
-  { slug: 'chill',       keywords: ['acoustic', 'lounge', 'low-key', 'low key', 'intimate', 'sunset', 'jazz', 'coffee', 'sax', 'saxophone', 'brunch'] },
-  { slug: 'competitive', keywords: ['tournament', 'league', 'bracket', 'winner stays', 'match play', 'ranked'] },
-  { slug: 'casual',      keywords: ['pickup', 'all levels', 'all skill levels', 'beginner friendly', 'no experience', 'just show up', 'casual'] },
-  { slug: 'social',      keywords: ['mixer', 'meet and greet', 'networking', 'meetup', 'social hour', 'happy hour', 'open networking'] },
+  {
+    slug: 'hype',
+    keywords: [
+      'warehouse',
+      'rave',
+      'massive',
+      'sold out',
+      'lineup',
+      'headliner',
+      'wall of sound',
+      'go crazy',
+      'turn up',
+    ],
+  },
+  {
+    slug: 'upscale',
+    keywords: [
+      'rooftop',
+      'skyline',
+      'cocktail',
+      'speakeasy',
+      'wine bar',
+      'dress code',
+      'dress to impress',
+      'natural wine',
+      'tasting menu',
+    ],
+  },
+  {
+    slug: 'chill',
+    keywords: [
+      'acoustic',
+      'lounge',
+      'low-key',
+      'low key',
+      'intimate',
+      'sunset',
+      'jazz',
+      'coffee',
+      'sax',
+      'saxophone',
+      'brunch',
+    ],
+  },
+  {
+    slug: 'competitive',
+    keywords: ['tournament', 'league', 'bracket', 'winner stays', 'match play', 'ranked'],
+  },
+  {
+    slug: 'casual',
+    keywords: [
+      'pickup',
+      'all levels',
+      'all skill levels',
+      'beginner friendly',
+      'no experience',
+      'just show up',
+      'casual',
+    ],
+  },
+  {
+    slug: 'social',
+    keywords: [
+      'mixer',
+      'meet and greet',
+      'networking',
+      'meetup',
+      'social hour',
+      'happy hour',
+      'open networking',
+    ],
+  },
 ]
 
 // Escape a keyword for use in a regex. All keywords are lowercase, ASCII, and
@@ -201,11 +431,7 @@ function derivePriceTier({ isFree, priceMin }) {
  * }}
  */
 export function autotagEvent(event) {
-  const text = [
-    event.title ?? '',
-    event.description ?? '',
-    ...(event.organizerTags ?? []),
-  ]
+  const text = [event.title ?? '', event.description ?? '', ...(event.organizerTags ?? [])]
     .join('\n')
     .toLowerCase()
 

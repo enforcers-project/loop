@@ -59,8 +59,7 @@ try {
       method: 'POST',
       body: {
         title: 'Rooftop Afrobeats & Amapiano Night',
-        description:
-          'Skyline views, live percussion, DJ set. Dress to impress. 21+.',
+        description: 'Skyline views, live percussion, DJ set. Dress to impress. 21+.',
         is_free: false,
         price_min: 25,
       },
@@ -69,8 +68,14 @@ try {
     const slugs = r.json.data.interests.map((i) => i.slug)
     assert(slugs.includes('afrobeats'), 'preview returns afrobeats interest')
     assert(slugs.includes('rooftop'), 'preview returns rooftop interest')
-    assert(r.json.data.vibe?.slug === 'upscale', `preview vibe = upscale (got ${r.json.data.vibe?.slug})`)
-    assert(r.json.data.price_tier === '$$', `preview price_tier = $$ (got ${r.json.data.price_tier})`)
+    assert(
+      r.json.data.vibe?.slug === 'upscale',
+      `preview vibe = upscale (got ${r.json.data.vibe?.slug})`,
+    )
+    assert(
+      r.json.data.price_tier === '$$',
+      `preview price_tier = $$ (got ${r.json.data.price_tier})`,
+    )
   }
 
   // Empty body → 400

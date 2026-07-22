@@ -59,7 +59,8 @@ const CASES = [
   },
   {
     title: 'Bottomless Brunch & Beats',
-    description: 'Two hours of bottomless mimosas, a live sax player and a menu of brunch classics with a twist. 21+ after 3pm.',
+    description:
+      'Two hours of bottomless mimosas, a live sax player and a menu of brunch classics with a twist. 21+ after 3pm.',
     isFree: false,
     priceMin: 35,
     expect: ['brunch', 'vibe:chill'],

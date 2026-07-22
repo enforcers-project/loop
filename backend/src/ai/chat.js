@@ -84,7 +84,7 @@ function eventsForPrompt(events) {
 
 function templateReply(query, events, mode) {
   if (mode === 'chat') {
-    return "I can help you find events, explain how Loop works, or point you to a screen — try asking me about a category, a vibe, or a feature."
+    return 'I can help you find events, explain how Loop works, or point you to a screen — try asking me about a category, a vibe, or a feature.'
   }
   if (!events.length) {
     return "I couldn't find an exact match. Try broadening the vibe or the date, or clear the price filter."
@@ -114,9 +114,7 @@ function buildMessages(query, events, history, mode) {
   }
 
   const userContent =
-    mode === 'event'
-      ? `Query: ${query}\n\nAvailable events:\n${eventsForPrompt(events)}`
-      : query
+    mode === 'event' ? `Query: ${query}\n\nAvailable events:\n${eventsForPrompt(events)}` : query
 
   messages.push({ role: 'user', content: userContent })
   return messages

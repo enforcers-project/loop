@@ -30,7 +30,12 @@ router.post('/autotag', (req, res) => {
     return fail(res, 400, 'VALIDATION_ERROR', `title must be under ${MAX_TITLE_LEN} chars`)
   }
   if (description.length > MAX_DESCRIPTION_LEN) {
-    return fail(res, 400, 'VALIDATION_ERROR', `description must be under ${MAX_DESCRIPTION_LEN} chars`)
+    return fail(
+      res,
+      400,
+      'VALIDATION_ERROR',
+      `description must be under ${MAX_DESCRIPTION_LEN} chars`,
+    )
   }
 
   const result = autotagEvent({

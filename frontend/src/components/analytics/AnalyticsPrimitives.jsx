@@ -124,8 +124,7 @@ export function FunnelCard({ stages }) {
         {stages.map((s, i) => {
           const pctOfTop = top === 0 ? 0 : Math.round((s.count / top) * 100)
           const prev = i > 0 ? stages[i - 1].count : null
-          const dropPct =
-            prev != null && prev > 0 ? Math.round(100 - (s.count / prev) * 100) : null
+          const dropPct = prev != null && prev > 0 ? Math.round(100 - (s.count / prev) * 100) : null
           return (
             <Fragment key={s.key}>
               <div>

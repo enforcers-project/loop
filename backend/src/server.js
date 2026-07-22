@@ -20,6 +20,7 @@ import aiFlyerRouter from './ai/flyer.js'
 import aiDescriptionRouter from './ai/description.js'
 import preferencesRouter from './preferences/routes.js'
 import socialRouter from './social/routes.js'
+import { eventReminderRouter, userReminderRouter, reminderRouter } from './reminders/routes.js'
 import { startScheduler } from './jobs/index.js'
 
 const app = express()
@@ -105,6 +106,11 @@ app.use('/api/events', engagementRouter)
 // --- Sports roster: positions / roster / claim / release / host (§7.4, #23) --
 app.use('/api/events', rosterRouter)
 
+// --- Reminders: schedule a pre-event reminder (§7.5, #28) --------------------
+// POST /api/events/:id/reminders. The list + cancel halves mount under
+// /api/users and /api below.
+app.use('/api/events', eventReminderRouter)
+
 // --- Recommendations (Prisma-backed affinity/popularity ranking) -------------
 app.use('/api', recommendationsRouter)
 
@@ -127,6 +133,11 @@ app.use('/api/auth', authRouter)
 
 // --- Users (profile: onboarding interest commit; §7, work-plan #7) ----------
 app.use('/api/users', usersRouter)
+
+// --- Reminders: list a user's reminders + cancel one (§7.5, #28) ------------
+// GET /api/users/:id/reminders  and  DELETE /api/reminders/:id.
+app.use('/api/users', userReminderRouter)
+app.use('/api', reminderRouter)
 
 // --- Notifications (followed-organizer bell feed; §7.5, work-plan #27) -------
 app.use('/api/notifications', notificationsRouter)

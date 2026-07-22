@@ -451,8 +451,8 @@ function AgeStep({ dob, setDob, error, onContinue }) {
     <div className="flex flex-1 flex-col">
       <h1 className="font-display text-4xl font-bold text-ink">When’s your birthday?</h1>
       <p className="mt-2 text-sm text-text-secondary">
-        We use this to keep age-restricted events off your feed. You must be at least{' '}
-        {MIN_AGE} to use Loop.
+        We use this to keep age-restricted events off your feed. You must be at least {MIN_AGE} to
+        use Loop.
       </p>
 
       <div className="mt-8 grid grid-cols-[1fr_1fr_1.4fr] gap-3">

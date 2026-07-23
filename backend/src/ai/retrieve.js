@@ -308,17 +308,31 @@ export async function retrieveEvents(rawQuery, opts = {}) {
   const pills = filtersToPills(filters)
   const candidates = await candidateEvents(filters)
 
-  if (!candidates.length) {
+  // Always look for strong title/description matches OUTSIDE the LLM-guessed
+  // category filter. The parser can (and does) misclassify a named query like
+  // "afro nation rooftop" as category=music, which drops the actual nightlife
+  // event from `candidates` before we ever see it. Running a separate literal
+  // match — with only date + isFree constraints applied — guarantees a
+  // word-for-word title search surfaces the event regardless of parser
+  // guesses or embedding state.
+  const titleMatches = await titleMatchEvents(rawQuery, filters)
+
+  if (!candidates.length && !titleMatches.length) {
     return { events: [], filters, label, pills, queryVector: null, retrieval: 'empty', parse }
   }
 
   let queryVector = null
   let events = []
-  if (embeddingsConfigured()) {
+  if (candidates.length && embeddingsConfigured()) {
     try {
       const vec = await generateEmbedding(rawQuery)
       queryVector = `[${vec.join(',')}]`
-      events = await knnRerank(queryVector, candidates)
+      const knn = await knnRerank(queryVector, candidates)
+      // Title matches go first so an exact-title hit beats a merely semantically-
+      // similar event — including on un-embedded events (pgvector's LIMIT drops
+      // rows without an embedding row, so a just-published event would otherwise
+      // never appear until the every-5-min embed cron runs over it).
+      events = mergePreserveOrder(titleMatches, knn, TOP_K)
       if (events.length) {
         return { events, filters, label, pills, queryVector, retrieval: 'pgvector', parse }
       }
@@ -327,7 +341,10 @@ export async function retrieveEvents(rawQuery, opts = {}) {
     }
   }
 
-  events = keywordRerank(rawQuery, candidates)
+  // No embeddings (or the KNN turned up nothing): blend title matches with a
+  // keyword rerank over whatever candidates the parser gave us.
+  const keyword = keywordRerank(rawQuery, candidates)
+  events = mergePreserveOrder(titleMatches, keyword, TOP_K)
   if (!events.length) events = candidates.slice(0, TOP_K)
   return {
     events,
@@ -338,6 +355,83 @@ export async function retrieveEvents(rawQuery, opts = {}) {
     retrieval: queryVector ? 'keyword_fallback' : 'keyword',
     parse,
   }
+}
+
+// Fetch events whose title/description literally covers most of the query
+// tokens, applying ONLY the safe constraints (date window, isFree) — never
+// the LLM-guessed category. This is what lets "afro nation rooftop" find the
+// nightlife event even when the parser incorrectly classified the query as
+// music. Uses Postgres' full-text search index on `search_document` for the
+// title/description match; caller merges results with the semantic rerank.
+async function titleMatchEvents(rawQuery, filters) {
+  const tokens = String(rawQuery ?? '')
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((t) => t.length > 2)
+  if (!tokens.length) return []
+
+  // Prefix-match every token so "rooftop" matches "rooftops" and partial words
+  // in a still-being-typed query do useful work. AND across tokens so a
+  // 3-word title search doesn't get flooded by events that only share one word.
+  const tsQuery = tokens.map((t) => t.replace(/[^a-z0-9]/g, '') + ':*').join(' & ')
+  if (!tsQuery.replace(/[:*&\s]/g, '')) return []
+
+  const params = [tsQuery]
+  const clauses = [`status = 'published'`, `search_document @@ to_tsquery('english', $1)`]
+  if (filters.dateFrom) {
+    params.push(filters.dateFrom)
+    clauses.push(`starts_at >= $${params.length}`)
+  } else {
+    clauses.push(`starts_at >= NOW()`)
+  }
+  if (filters.dateTo) {
+    params.push(filters.dateTo)
+    clauses.push(`starts_at <= $${params.length}`)
+  }
+  if (filters.isFree) {
+    clauses.push(`is_free = true`)
+  }
+  params.push(TOP_K)
+  const limitIdx = params.length
+
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT id FROM events
+     WHERE ${clauses.join(' AND ')}
+     ORDER BY ts_rank(search_document, to_tsquery('english', $1)) DESC,
+              rsvp_count DESC
+     LIMIT $${limitIdx}`,
+    ...params,
+  )
+  if (!rows.length) return []
+  const ids = rows.map((r) => r.id)
+  const events = await prisma.event.findMany({
+    where: { id: { in: ids } },
+    include: EVENT_INCLUDE,
+  })
+  const order = new Map(ids.map((id, i) => [id, i]))
+  return events.sort((a, b) => order.get(a.id) - order.get(b.id))
+}
+
+// Concatenate two ranked lists, keeping the first list's order and appending
+// unique items from the second. Used to blend title matches with the semantic
+// rerank so exact-title hits surface first while the semantic layer fills the
+// remaining slots.
+function mergePreserveOrder(primary, secondary, limit) {
+  const seen = new Set()
+  const out = []
+  for (const ev of primary) {
+    if (seen.has(ev.id)) continue
+    seen.add(ev.id)
+    out.push(ev)
+    if (out.length >= limit) return out
+  }
+  for (const ev of secondary) {
+    if (seen.has(ev.id)) continue
+    seen.add(ev.id)
+    out.push(ev)
+    if (out.length >= limit) return out
+  }
+  return out
 }
 
 /** Serialize a Prisma event row for the drawer response (EventCard shape). */

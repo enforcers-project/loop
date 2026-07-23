@@ -1,8 +1,18 @@
-import { useState } from 'react'
-import { Sparkles, Bookmark, Eye, EyeOff, Check, AlertCircle, Share2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Sparkles,
+  Bookmark,
+  Eye,
+  EyeOff,
+  Check,
+  AlertCircle,
+  Share2,
+  Camera,
+  Images,
+} from 'lucide-react'
 import { m, AnimatePresence } from 'motion/react'
 import { cn, formatCount, ROLE_STYLE } from '../lib/utils'
-import { springSnappy } from '../lib/motion'
+import { backdrop, sheet, springSnappy } from '../lib/motion'
 
 /* --------------------------------------------------------------------------
    FormField — label (13px Inter 500 #6B6B76) above child
@@ -19,6 +29,159 @@ export function FormField({ label, children }) {
 /* Shared input styling (Figma inputSpec). */
 export const inputClass =
   'loop-input w-full rounded-input border border-border-light bg-white px-4 py-3 text-sm text-text-primary placeholder:text-placeholder transition-colors'
+
+/* --------------------------------------------------------------------------
+   ImageSourcePicker — a trigger button that lets the user either take a photo
+   with their camera or pick an existing image, feeding both to one
+   `onFile(file)` callback. The caller styles the button via `className` and
+   supplies its content as children:
+
+     <ImageSourcePicker accept={ACCEPT_IMAGE} onFile={onPickFile} className="…">
+       <ImagePlus size={28} />
+       <span>Add a photo</span>
+     </ImageSourcePicker>
+
+   The camera comes from the HTML `capture` attribute on a hidden file input,
+   which only opens a live camera on phones/tablets. So on those devices the
+   button presents a small sheet — "Take a photo" vs "Choose from library" —
+   while on desktop (where `capture` is ignored and would just re-open the file
+   dialog) it skips the sheet and opens the library picker directly. Desktop
+   behavior is therefore unchanged; only mobile gains the camera option.
+-------------------------------------------------------------------------- */
+
+// True on devices where the `capture` attribute opens a real camera — i.e.
+// touch devices with no hover (phones/tablets). Desktops (incl. touchscreen
+// laptops that still have a mouse) report a fine pointer + hover, so they get
+// the plain file dialog. Device class is stable per session, so we read it
+// once via the useState initializer (client-only SPA — window is always here).
+function detectCameraCapture() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return (
+    window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(hover: none)').matches
+  )
+}
+
+export function ImageSourcePicker({
+  accept = 'image/*',
+  cameraFacing = 'environment',
+  onFile,
+  disabled = false,
+  className,
+  children,
+  ...buttonProps
+}) {
+  const libraryRef = useRef(null)
+  const cameraRef = useRef(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [canCamera] = useState(detectCameraCapture)
+
+  const handleChange = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // let re-picking the same file fire onChange again
+    setSheetOpen(false)
+    if (file) onFile?.(file)
+  }
+
+  const open = () => {
+    if (disabled) return
+    // Mobile: offer camera vs library. Desktop: straight to the file dialog.
+    if (canCamera) setSheetOpen(true)
+    else libraryRef.current?.click()
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={open}
+        disabled={disabled}
+        className={className}
+        {...buttonProps}
+      >
+        {children}
+      </button>
+      {/* Two hidden inputs feed the same handler: one plain (gallery/files),
+          one with `capture` (camera). Always mounted so their refs are
+          click-able the instant the user chooses. */}
+      <input
+        ref={libraryRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={handleChange}
+      />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept={accept}
+        capture={cameraFacing}
+        className="hidden"
+        onChange={handleChange}
+      />
+      <AnimatePresence>
+        {sheetOpen && (
+          <ImageSourceSheet
+            onClose={() => setSheetOpen(false)}
+            onCamera={() => cameraRef.current?.click()}
+            onLibrary={() => libraryRef.current?.click()}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  )
+}
+
+/* The mobile chooser sheet: Take a photo / Choose from library. Renders above
+   any parent modal (z-[60] > the z-50 Composer/Avatar sheets it opens from) and
+   stops click propagation so dismissing it never also closes that parent. */
+function ImageSourceSheet({ onClose, onCamera, onLibrary }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const action =
+    'flex w-full items-center gap-3 rounded-input px-4 py-3.5 text-left text-sm font-medium text-ink transition-colors hover:bg-surface'
+  const icon =
+    'grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-primary-light text-primary'
+
+  return (
+    <m.div
+      variants={backdrop}
+      initial="hidden"
+      animate="show"
+      exit="exit"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClose()
+      }}
+    >
+      <m.div
+        variants={sheet}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add a photo"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full overflow-hidden rounded-t-card bg-white p-2 shadow-hero sm:max-w-xs sm:rounded-card"
+      >
+        <button type="button" onClick={onCamera} className={action}>
+          <span className={icon}>
+            <Camera size={20} />
+          </span>
+          Take a photo
+        </button>
+        <button type="button" onClick={onLibrary} className={action}>
+          <span className={icon}>
+            <Images size={20} />
+          </span>
+          Choose from library
+        </button>
+      </m.div>
+    </m.div>
+  )
+}
 
 /* --------------------------------------------------------------------------
    PasswordField — text input with show/hide eye toggle

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Bookmark,
@@ -16,7 +16,7 @@ import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { cn, formatCount, formatJoinDate, pluralize } from '../lib/utils'
 import { backdrop, sheet, dialog } from '../lib/motion'
-import { inputClass, RoleBadge, Spinner } from '../components/primitives'
+import { ImageSourcePicker, inputClass, RoleBadge, Spinner } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
 
@@ -33,8 +33,6 @@ const MAX_AVATAR_BYTES = 5 * 1024 * 1024
    photo opens this; the button opens the OS file picker, uploads to S3 via the
    presigned-URL flow, and closes on success. */
 function AvatarModal({ src, onClose, onUpload, uploading }) {
-  const fileRef = useRef(null)
-
   return (
     <m.div
       variants={backdrop}
@@ -62,27 +60,16 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
       />
 
       <div className="mt-6" onClick={(e) => e.stopPropagation()}>
-        <input
-          ref={fileRef}
-          type="file"
+        <ImageSourcePicker
           accept="image/png,image/jpeg,image/webp,image/gif"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            // Reset so re-picking the same file still fires onChange.
-            e.target.value = ''
-            if (file) onUpload(file)
-          }}
-        />
-        <button
-          type="button"
+          cameraFacing="user"
+          onFile={onUpload}
           disabled={uploading}
-          onClick={() => fileRef.current?.click()}
           className="inline-flex h-11 items-center gap-2 rounded-button bg-white px-6 text-sm font-semibold text-ink transition-transform active:scale-95 hover:opacity-90 disabled:opacity-60"
         >
           <Camera size={18} />
           {uploading ? 'Uploading…' : 'Change picture'}
-        </button>
+        </ImageSourcePicker>
       </div>
     </m.div>
   )
@@ -96,7 +83,6 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
    same path as the full-screen AvatarModal — and persists immediately on pick,
    independent of the Save button (which only commits the text fields). */
 function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSave }) {
-  const fileRef = useRef(null)
   const [name, setName] = useState(user?.name ?? '')
   // handleRaw is the stored handle (no @, may be null); fall back to empty.
   const [handle, setHandle] = useState(user?.handleRaw ?? '')
@@ -174,27 +160,16 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
               )}
             </div>
             <div>
-              <input
-                ref={fileRef}
-                type="file"
+              <ImageSourcePicker
                 accept="image/png,image/jpeg,image/webp,image/gif"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  // Reset so re-picking the same file still fires onChange.
-                  e.target.value = ''
-                  if (file) onUpload(file)
-                }}
-              />
-              <button
-                type="button"
+                cameraFacing="user"
+                onFile={onUpload}
                 disabled={uploading}
-                onClick={() => fileRef.current?.click()}
                 className="inline-flex h-9 items-center gap-2 rounded-button border border-border-light bg-white px-4 text-sm font-semibold text-ink transition-colors hover:border-text-muted disabled:opacity-60"
               >
                 <Camera size={16} />
                 {uploading ? 'Uploading…' : 'Change picture'}
-              </button>
+              </ImageSourcePicker>
               <p className="mt-1 text-xs text-text-muted">PNG, JPG, WebP or GIF · max 5MB</p>
             </div>
           </div>

@@ -18,7 +18,7 @@ import { backdrop, sheet } from '../lib/motion'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { inputClass, Spinner, VerifiedBadge } from './primitives'
+import { ImageSourcePicker, inputClass, Spinner, VerifiedBadge } from './primitives'
 import { EventImage } from './EventImage'
 import { CommentReplies } from './CommentReplies'
 
@@ -40,7 +40,6 @@ const ACCEPT_IMAGE = 'image/png,image/jpeg,image/webp,image/gif'
 -------------------------------------------------------------------------- */
 export function Composer({ mode = 'post', onClose, onCreated }) {
   const toast = useToast()
-  const fileRef = useRef(null)
   const [imageUrl, setImageUrl] = useState('') // final persisted URL (S3 or pasted)
   const [caption, setCaption] = useState('')
   const [kind, setKind] = useState('update')
@@ -54,10 +53,9 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
   const canSubmit = imageUrl.trim() && !busy && !uploading
 
   // Upload the picked file to S3; on 503 (uploads unconfigured) switch to the
-  // URL-input fallback instead of erroring.
-  const onPickFile = async (e) => {
-    const file = e.target.files?.[0]
-    e.target.value = '' // let re-picking the same file fire onChange again
+  // URL-input fallback instead of erroring. Receives a File directly from
+  // ImageSourcePicker (camera capture or library pick).
+  const onPickFile = async (file) => {
     if (!file) return
     setUploading(true)
     try {
@@ -169,7 +167,11 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
                   className={inputClass}
                 />
               ) : (
-                <label
+                <ImageSourcePicker
+                  accept={ACCEPT_IMAGE}
+                  cameraFacing={isStory ? 'user' : 'environment'}
+                  onFile={onPickFile}
+                  disabled={uploading}
                   className={cn(
                     'flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-input border-2 border-dashed border-border-light bg-surface text-text-muted transition-colors hover:border-primary',
                     uploading && 'pointer-events-none opacity-70',
@@ -183,19 +185,10 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
                   ) : (
                     <>
                       <ImagePlus size={28} />
-                      <span className="text-sm">
-                        {isStory ? 'Upload story media' : 'Upload an image'}
-                      </span>
+                      <span className="text-sm">{isStory ? 'Add story media' : 'Add a photo'}</span>
                     </>
                   )}
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept={ACCEPT_IMAGE}
-                    className="hidden"
-                    onChange={onPickFile}
-                  />
-                </label>
+                </ImageSourcePicker>
               ))}
 
             {/* toggle between upload and paste-a-URL */}

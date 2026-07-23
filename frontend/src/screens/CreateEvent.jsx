@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ImagePlus, RefreshCw, Sparkles, Undo2 } from 'lucide-react'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
-import { FormField, InlineAlert, inputClass } from '../components/primitives'
+import { FormField, ImageSourcePicker, InlineAlert, inputClass } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
 import { VenueAutocomplete } from '../components/VenueAutocomplete'
 import { useApp } from '../context/AppContext'
@@ -425,13 +425,18 @@ export function CreateEvent() {
                 {aiOpen ? 'Hide AI generator' : 'Generate with AI'}
               </button>
             </div>
-            <label className="relative flex h-40 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-card border-2 border-dashed border-border-light bg-surface text-text-muted transition-colors hover:border-primary">
+            <ImageSourcePicker
+              accept="image/*"
+              onFile={onPickFlyer}
+              disabled={flyerUploading}
+              className="relative flex h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-card border-2 border-dashed border-border-light bg-surface text-text-muted transition-colors hover:border-primary"
+            >
               {shownFlyer ? (
                 <img src={shownFlyer} alt="" className="h-full w-full rounded-card object-cover" />
               ) : (
                 <>
                   <ImagePlus size={28} />
-                  <span className="text-sm">Upload a flyer</span>
+                  <span className="text-sm">Add a flyer</span>
                 </>
               )}
               {flyerUploading && (
@@ -439,13 +444,7 @@ export function CreateEvent() {
                   Uploading…
                 </div>
               )}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => onPickFlyer(e.target.files?.[0])}
-              />
-            </label>
+            </ImageSourcePicker>
             {flyerError && (
               <div className="mt-2">
                 <InlineAlert message={flyerError} />

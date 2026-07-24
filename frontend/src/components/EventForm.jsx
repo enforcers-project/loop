@@ -32,6 +32,33 @@ const FLYER_STYLES = [
 // indecisive draft — the backend enforces the same limit per user/hour.
 const MAX_FLYER_GENERATIONS = 3
 
+// "Require" switch beside Min age. Off = the number is just a recommended age
+// shown on the event. On = a hard age requirement (events.age_restricted) that
+// the backend enforces at RSVP — a too-young or birthdate-less user is blocked.
+function RequireToggle({ on, onToggle }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onToggle}
+      title={on ? 'Enforced at RSVP' : 'Just a recommended age'}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-[11px] font-medium transition-colors',
+        on ? 'bg-primary/10 text-primary' : 'bg-surface text-text-muted hover:text-text-secondary',
+      )}
+    >
+      <span
+        className={cn(
+          'inline-block h-3 w-3 rounded-full border transition-colors',
+          on ? 'border-primary bg-primary' : 'border-text-muted bg-white',
+        )}
+      />
+      {on ? 'Required' : 'Recommended'}
+    </button>
+  )
+}
+
 export const EMPTY_DRAFT = {
   title: '',
   category: 'Nightlife',
@@ -47,6 +74,7 @@ export const EMPTY_DRAFT = {
   price: '',
   capacity: '',
   age: '',
+  ageRestricted: false,
   description: '',
   flyer: null,
   isSports: false,
@@ -100,6 +128,7 @@ export function EventForm({
   const [price, setPrice] = useState(iv.price)
   const [capacity, setCapacity] = useState(iv.capacity)
   const [age, setAge] = useState(iv.age)
+  const [ageRestricted, setAgeRestricted] = useState(iv.ageRestricted)
   const [description, setDescription] = useState(iv.description)
 
   const [flyer, setFlyer] = useState(iv.flyer)
@@ -311,6 +340,7 @@ export function EventForm({
   if (!date.trim()) missing.push('date')
   if (!location.trim()) missing.push('location')
   if (!mapsConfigured && !city.trim()) missing.push('city')
+  if (ageRestricted && !age) missing.push('minimum age')
   if (isSports && !Number(playersNeeded)) missing.push('players needed')
   const canSubmit = missing.length === 0 && !flyerUploading
 
@@ -328,6 +358,7 @@ export function EventForm({
     price: price ? Number(price) : 0,
     capacity: capacity ? Number(capacity) : null,
     ageRestriction: age ? Number(age) : null,
+    ageRestricted: ageRestricted && !!age,
     description: description.trim(),
     flyer,
     isSports,
@@ -618,7 +649,17 @@ export function EventForm({
               className={inputClass}
             />
           </FormField>
-          <FormField label="Min age">
+          <FormField
+            label={
+              <span className="flex items-center justify-between gap-2">
+                Min age
+                <RequireToggle
+                  on={ageRestricted}
+                  onToggle={() => setAgeRestricted((v) => !v)}
+                />
+              </span>
+            }
+          >
             <input
               type="number"
               inputMode="numeric"
@@ -632,6 +673,13 @@ export function EventForm({
             />
           </FormField>
         </div>
+        {ageRestricted && (
+          <p className="-mt-2 text-xs text-text-muted">
+            {age
+              ? `Attendees under ${age} will be blocked from RSVPing.`
+              : 'Set a minimum age — it will be enforced at RSVP.'}
+          </p>
+        )}
 
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">

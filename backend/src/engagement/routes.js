@@ -57,8 +57,61 @@ async function emitInteraction(tx, { type, req, event }) {
 async function loadEvent(id) {
   return prisma.event.findUnique({
     where: { id },
-    select: { id: true, categoryId: true, status: true, isSports: true },
+    select: {
+      id: true,
+      categoryId: true,
+      status: true,
+      isSports: true,
+      ageRestricted: true,
+      ageMin: true,
+    },
   })
+}
+
+/** Whole-years age on `asOf` from a DOB, or null if no DOB. Mirrors the
+ *  UTC-noon convention used when the birthdate is stored (users/routes.js). */
+function ageFrom(birthDate, asOf = new Date()) {
+  if (!birthDate) return null
+  let age = asOf.getUTCFullYear() - birthDate.getUTCFullYear()
+  const monthDelta = asOf.getUTCMonth() - birthDate.getUTCMonth()
+  if (monthDelta < 0 || (monthDelta === 0 && asOf.getUTCDate() < birthDate.getUTCDate())) {
+    age -= 1
+  }
+  return age
+}
+
+/**
+ * Enforce an event's age requirement for a committed RSVP (going/interested/
+ * waitlisted). Returns null when allowed, or a { status, code, message } to
+ * fail with. Only gates when the event is age_restricted AND has an age_min —
+ * otherwise age_min is just a recommendation. A cancel is never gated.
+ *   - no birthdate on file → BIRTHDATE_REQUIRED (client prompts for DOB)
+ *   - under age_min        → AGE_RESTRICTED
+ */
+async function checkAgeGate(userId, event, status) {
+  if (status === 'cancelled') return null
+  if (!event.ageRestricted || !event.ageMin) return null
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { birthDate: true },
+  })
+  const age = ageFrom(user?.birthDate)
+  if (age == null) {
+    return {
+      status: 403,
+      code: 'BIRTHDATE_REQUIRED',
+      message: 'Add your date of birth to RSVP to this age-restricted event',
+    }
+  }
+  if (age < event.ageMin) {
+    return {
+      status: 403,
+      code: 'AGE_RESTRICTED',
+      message: `This event is ${event.ageMin}+. You don't meet the age requirement.`,
+    }
+  }
+  return null
 }
 
 // --- PUT /api/events/:id/save — idempotent bookmark --------------------------
@@ -185,6 +238,12 @@ router.put('/:id/rsvp', requireAuth, async (req, res) => {
     if (event.status === 'cancelled' || event.status === 'past') {
       return fail(res, 409, 'CONFLICT', `Cannot RSVP to a ${event.status} event`)
     }
+
+    // Age gate — only for age-restricted events with an age_min (§7.4). A
+    // too-young or birthdate-less user is blocked with a distinct code so the
+    // client can either prompt for DOB or explain the age requirement.
+    const gate = await checkAgeGate(req.user.id, event, status)
+    if (gate) return fail(res, gate.status, gate.code, gate.message)
 
     const prior = await prisma.rsvp.findUnique({
       where: { userId_eventId: { userId: req.user.id, eventId: event.id } },

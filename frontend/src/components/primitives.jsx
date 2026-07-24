@@ -1,8 +1,18 @@
-import { useState } from 'react'
-import { Sparkles, Bookmark, Eye, EyeOff, Check, AlertCircle, Share2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Sparkles,
+  Bookmark,
+  Eye,
+  EyeOff,
+  Check,
+  AlertCircle,
+  Share2,
+  Camera,
+  Images,
+} from 'lucide-react'
 import { m, AnimatePresence } from 'motion/react'
 import { cn, formatCount, ROLE_STYLE } from '../lib/utils'
-import { springSnappy } from '../lib/motion'
+import { backdrop, sheet, springSnappy } from '../lib/motion'
 
 /* --------------------------------------------------------------------------
    FormField — label (13px Inter 500 #6B6B76) above child
@@ -19,6 +29,159 @@ export function FormField({ label, children }) {
 /* Shared input styling (Figma inputSpec). */
 export const inputClass =
   'loop-input w-full rounded-input border border-border-light bg-white px-4 py-3 text-sm text-text-primary placeholder:text-placeholder transition-colors'
+
+/* --------------------------------------------------------------------------
+   ImageSourcePicker — a trigger button that lets the user either take a photo
+   with their camera or pick an existing image, feeding both to one
+   `onFile(file)` callback. The caller styles the button via `className` and
+   supplies its content as children:
+
+     <ImageSourcePicker accept={ACCEPT_IMAGE} onFile={onPickFile} className="…">
+       <ImagePlus size={28} />
+       <span>Add a photo</span>
+     </ImageSourcePicker>
+
+   The camera comes from the HTML `capture` attribute on a hidden file input,
+   which only opens a live camera on phones/tablets. So on those devices the
+   button presents a small sheet — "Take a photo" vs "Choose from library" —
+   while on desktop (where `capture` is ignored and would just re-open the file
+   dialog) it skips the sheet and opens the library picker directly. Desktop
+   behavior is therefore unchanged; only mobile gains the camera option.
+-------------------------------------------------------------------------- */
+
+// True on devices where the `capture` attribute opens a real camera — i.e.
+// touch devices with no hover (phones/tablets). Desktops (incl. touchscreen
+// laptops that still have a mouse) report a fine pointer + hover, so they get
+// the plain file dialog. Device class is stable per session, so we read it
+// once via the useState initializer (client-only SPA — window is always here).
+function detectCameraCapture() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+  return (
+    window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(hover: none)').matches
+  )
+}
+
+export function ImageSourcePicker({
+  accept = 'image/*',
+  cameraFacing = 'environment',
+  onFile,
+  disabled = false,
+  className,
+  children,
+  ...buttonProps
+}) {
+  const libraryRef = useRef(null)
+  const cameraRef = useRef(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [canCamera] = useState(detectCameraCapture)
+
+  const handleChange = (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // let re-picking the same file fire onChange again
+    setSheetOpen(false)
+    if (file) onFile?.(file)
+  }
+
+  const open = () => {
+    if (disabled) return
+    // Mobile: offer camera vs library. Desktop: straight to the file dialog.
+    if (canCamera) setSheetOpen(true)
+    else libraryRef.current?.click()
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={open}
+        disabled={disabled}
+        className={className}
+        {...buttonProps}
+      >
+        {children}
+      </button>
+      {/* Two hidden inputs feed the same handler: one plain (gallery/files),
+          one with `capture` (camera). Always mounted so their refs are
+          click-able the instant the user chooses. */}
+      <input
+        ref={libraryRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        onChange={handleChange}
+      />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept={accept}
+        capture={cameraFacing}
+        className="hidden"
+        onChange={handleChange}
+      />
+      <AnimatePresence>
+        {sheetOpen && (
+          <ImageSourceSheet
+            onClose={() => setSheetOpen(false)}
+            onCamera={() => cameraRef.current?.click()}
+            onLibrary={() => libraryRef.current?.click()}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  )
+}
+
+/* The mobile chooser sheet: Take a photo / Choose from library. Renders above
+   any parent modal (z-[60] > the z-50 Composer/Avatar sheets it opens from) and
+   stops click propagation so dismissing it never also closes that parent. */
+function ImageSourceSheet({ onClose, onCamera, onLibrary }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const action =
+    'flex w-full items-center gap-3 rounded-input px-4 py-3.5 text-left text-sm font-medium text-ink transition-colors hover:bg-surface'
+  const icon =
+    'grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-primary-light text-primary'
+
+  return (
+    <m.div
+      variants={backdrop}
+      initial="hidden"
+      animate="show"
+      exit="exit"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClose()
+      }}
+    >
+      <m.div
+        variants={sheet}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add a photo"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full overflow-hidden rounded-t-card bg-white p-2 shadow-hero sm:max-w-xs sm:rounded-card"
+      >
+        <button type="button" onClick={onCamera} className={action}>
+          <span className={icon}>
+            <Camera size={20} />
+          </span>
+          Take a photo
+        </button>
+        <button type="button" onClick={onLibrary} className={action}>
+          <span className={icon}>
+            <Images size={20} />
+          </span>
+          Choose from library
+        </button>
+      </m.div>
+    </m.div>
+  )
+}
 
 /* --------------------------------------------------------------------------
    PasswordField — text input with show/hide eye toggle
@@ -226,30 +389,44 @@ export function GoingStack({ count, avatars = [], size = 'sm', labelClassName })
 }
 
 /* --------------------------------------------------------------------------
-   Spinner — the app's canonical loading indicator. Ten brand-violet bars
-   fanned around a center, each pulsing outward on a staggered delay (see
-   `.loop-spinner` in index.css). Sized in px so it drops into buttons (sm),
-   section placeholders (md), or full-screen loaders (lg) without extra math.
+   Spinner — the app's canonical loading indicator: the Loop infinity (∞) mark,
+   drawn as a single SVG stroke, with a bright "comet" segment racing around the
+   figure-8 forever (a faint full ∞ sits underneath as the track). Both strokes
+   use the Loop brand pink (--color-loop).
+
+   The ∞ geometry + the running animation live in `.loop-infinity` (index.css);
+   here we just size the box. Reduced-motion swaps the race for a gentle
+   breathing pulse (also in CSS). Sized in px via the `size` prop so it drops
+   into buttons (sm), section placeholders (md), or full-screen (lg).
 -------------------------------------------------------------------------- */
 export function Spinner({ size = 'md', className, label = 'Loading' }) {
-  // Container box; the 10 bars orbit outside it, so visual footprint is ~6.5× px.
-  const px = size === 'sm' ? 2.5 : size === 'lg' ? 6 : 4
+  // Rendered box width in px; the ∞ keeps a 2:1 aspect (viewBox 100×50).
+  const w = size === 'sm' ? 34 : size === 'lg' ? 88 : 58
+  // Lemniscate-style figure-8 path (cubic béziers) centered in a 100×50 box.
+  const d =
+    'M 22 25 C 22 10, 45 10, 50 25 C 55 40, 78 40, 78 25 C 78 10, 55 10, 50 25 C 45 40, 22 40, 22 25 Z'
   return (
     <span
       role="status"
       aria-label={label}
-      className={cn('loop-spinner', className)}
-      style={{ width: px, height: px }}
+      className={cn('loop-infinity', className)}
+      style={{ width: w }}
     >
-      {Array.from({ length: 10 }, (_, i) => (
-        <span key={i} style={{ '--rotation': (i + 1) * 36, '--delay': (i + 1) / 10 }} />
-      ))}
+      <svg viewBox="0 0 100 50" fill="none" aria-hidden="true">
+        {/* faint full ∞ track */}
+        <path className="loop-infinity-track" d={d} />
+        {/* Bright comet segment racing around the same path. pathLength="100"
+            normalizes the path to 100 units so the dash math below is exact and
+            browser-independent (actual geometry ≈158 units, and it varies per
+            engine) — the comet then loops with no seam at the ∞ crossover. */}
+        <path className="loop-infinity-comet" d={d} pathLength="100" />
+      </svg>
     </span>
   )
 }
 
 /* --------------------------------------------------------------------------
-   PageLoader — full-viewport-height centered spinner for screens waiting on
+   PageLoader — full-viewport-height centered ∞ loader for screens waiting on
    their initial data. Height matches the app shell so it fills the main area
    below the top nav (80px) without pushing the bottom bar off-screen.
 -------------------------------------------------------------------------- */

@@ -33,6 +33,7 @@ function eventToDraft(event) {
     price: event.priceMin != null ? String(event.priceMin) : '',
     capacity: event.capacity != null ? String(event.capacity) : '',
     age: event.ageMin != null ? String(event.ageMin) : '',
+    ageRestricted: Boolean(event.ageRestricted),
     description: event.description || '',
     flyer: event.poster || null,
     isSports: Boolean(event.isSports),
@@ -49,7 +50,8 @@ function eventToDraft(event) {
 function diffDraft(initial, next) {
   const out = {}
   const keys = ['title', 'category', 'date', 'time', 'location', 'address', 'lat', 'lng',
-    'placeId', 'city', 'price', 'capacity', 'ageRestriction', 'description', 'flyer']
+    'placeId', 'city', 'price', 'capacity', 'ageRestriction', 'ageRestricted',
+    'description', 'flyer']
   for (const k of keys) {
     const iv = initial[k]
     const nv = next[k]
@@ -111,6 +113,7 @@ export function EditEvent() {
       price: event.priceMin != null ? Number(event.priceMin) : 0,
       capacity: event.capacity ?? null,
       ageRestriction: event.ageMin ?? null,
+      ageRestricted: Boolean(event.ageRestricted && event.ageMin),
       description: (event.description || '').trim(),
       flyer: event.poster || null,
     }

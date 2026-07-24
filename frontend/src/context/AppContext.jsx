@@ -392,7 +392,15 @@ export function AppProvider({ children }) {
         return willGo
       } catch (err) {
         setGoingFlag(id, wasGoing) // roll back
-        toast.error(err.message || 'Could not update RSVP. Please try again.')
+        // Age gate (backend RSVP gate): a missing birthdate points the user at
+        // where they set it; too-young shows the backend's age message.
+        if (err.code === 'BIRTHDATE_REQUIRED') {
+          toast.error('Add your date of birth to RSVP to age-restricted events.')
+        } else if (err.code === 'AGE_RESTRICTED') {
+          toast.error(err.message || "You don't meet the age requirement for this event.")
+        } else {
+          toast.error(err.message || 'Could not update RSVP. Please try again.')
+        }
         return wasGoing
       }
     },

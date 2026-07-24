@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bell } from 'lucide-react'
+import { Bell, CalendarCheck, ImagePlus, Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { cn } from '../lib/utils'
+
+// Milestone (self-addressed) notifications carry no actor, so instead of a face
+// we show a branded icon keyed by metadata.kind — set by notifySelf() on the
+// server for "your event is live" / "your post is published" / "your story is
+// live". Anything unmapped falls back to the generic Sparkles milestone glyph.
+const MILESTONE_ICON = {
+  event_published: CalendarCheck,
+  post_published: ImagePlus,
+  story_posted: ImagePlus,
+}
 
 // Compact "3m / 2h / 5d" relative time for the feed. Falls back to a date once
 // the notification is over a week old.
@@ -122,34 +132,47 @@ export function NotificationBell() {
             {items.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-text-muted">No notifications yet.</p>
             ) : (
-              items.map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => onItemClick(n)}
-                  className={cn(
-                    'flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface',
-                    !n.is_read && 'bg-primary/5',
-                  )}
-                >
-                  <img
-                    src={n.actor?.avatar_url || 'https://i.pravatar.cc/150?img=12'}
-                    alt=""
-                    className="mt-0.5 h-8 w-8 flex-shrink-0 rounded-full border border-border-light bg-surface object-cover"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm text-ink">{n.title}</span>
-                    {n.body && (
-                      <span className="block truncate text-xs text-text-secondary">{n.body}</span>
+              items.map((n) => {
+                // Milestone notifications have no actor — render a branded icon
+                // (keyed by metadata.kind) instead of a stranger's avatar.
+                const MilestoneIcon = n.actor
+                  ? null
+                  : (MILESTONE_ICON[n.metadata?.kind] ?? Sparkles)
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => onItemClick(n)}
+                    className={cn(
+                      'flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface',
+                      !n.is_read && 'bg-primary/5',
                     )}
-                    <span className="mt-0.5 block text-[11px] text-text-muted">
-                      {relativeTime(n.created_at)}
+                  >
+                    {MilestoneIcon ? (
+                      <span className="mt-0.5 grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-primary-light text-primary">
+                        <MilestoneIcon size={16} />
+                      </span>
+                    ) : (
+                      <img
+                        src={n.actor?.avatar_url || 'https://i.pravatar.cc/150?img=12'}
+                        alt=""
+                        className="mt-0.5 h-8 w-8 flex-shrink-0 rounded-full border border-border-light bg-surface object-cover"
+                      />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm text-ink">{n.title}</span>
+                      {n.body && (
+                        <span className="block truncate text-xs text-text-secondary">{n.body}</span>
+                      )}
+                      <span className="mt-0.5 block text-[11px] text-text-muted">
+                        {relativeTime(n.created_at)}
+                      </span>
                     </span>
-                  </span>
-                  {!n.is_read && (
-                    <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-accent" />
-                  )}
-                </button>
-              ))
+                    {!n.is_read && (
+                      <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-accent" />
+                    )}
+                  </button>
+                )
+              })
             )}
           </div>
         </div>

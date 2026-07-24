@@ -7,6 +7,7 @@ import {
   notifyFollowersOfNewEvent,
   notifyAttendeesOfEventUpdate,
   notifyAttendeesOfEventCancel,
+  notifySelf,
 } from '../notifications/publish.js'
 import { tagAndPersist } from '../ai/autotag.persist.js'
 import { cached, invalidate, invalidatePattern } from '../lib/cache.js'
@@ -526,6 +527,7 @@ router.post('/', requireAuth, async (req, res) => {
           capacity: b.capacity ?? null,
           ageMin: b.age_min ?? null,
           ageLabel: b.age_label ?? null,
+          ageRestricted: b.age_restricted ?? false,
           isSports: Boolean(b.is_sports),
         },
       })
@@ -642,6 +644,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
       capacity: 'capacity',
       age_min: 'ageMin',
       age_label: 'ageLabel',
+      age_restricted: 'ageRestricted',
       status: 'status',
     }
     for (const [key, col] of Object.entries(scalarMap)) {
@@ -911,6 +914,16 @@ router.post('/:id/publish', requireAuth, async (req, res) => {
     bustEventCaches(published.id, event.organizerId).catch((err) =>
       console.warn('[cache] bust after publish failed:', err.message),
     )
+
+    // Milestone notification to the organizer themselves — a durable bell
+    // record their event went live, with a tap-through to it, alongside the
+    // transient "Event published!" toast. Fire-and-forget.
+    notifySelf(event.organizerId, {
+      kind: 'event_published',
+      title: 'Your event is live',
+      body: event.title || null,
+      eventId: published.id,
+    })
 
     return res.json({
       data: { id: published.id, status: published.status, published_at: published.publishedAt },

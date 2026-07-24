@@ -1,12 +1,50 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Moon, Sun, LogOut, User, MapPin, Pencil, X } from 'lucide-react'
+import { Moon, Sun, LogOut, User, MapPin, Cake, Pencil, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { useToast } from '../context/ToastContext'
 import { cn } from '../lib/utils'
 import { AddressPicker } from '../components/AddressPicker'
 import { InlineAlert } from '../components/primitives'
+
+// Loop's minimum age is 13 (COPPA) — mirrors the backend validator in
+// PUT /users/:id/birthdate and the onboarding DOB slide.
+const MIN_AGE = 13
+
+// Whole-years age from a 'YYYY-MM-DD' string, or NaN if unparseable.
+function ageFromIso(iso) {
+  if (!iso) return NaN
+  const dob = new Date(`${iso}T12:00:00Z`)
+  if (isNaN(dob.getTime())) return NaN
+  const now = new Date()
+  let age = now.getUTCFullYear() - dob.getUTCFullYear()
+  const md = now.getUTCMonth() - dob.getUTCMonth()
+  if (md < 0 || (md === 0 && now.getUTCDate() < dob.getUTCDate())) age -= 1
+  return age
+}
+
+// The latest DOB that satisfies MIN_AGE, as 'YYYY-MM-DD' — used as the date
+// input's `max` so the picker itself blocks under-13 selections.
+function maxBirthdateIso() {
+  const d = new Date()
+  d.setUTCFullYear(d.getUTCFullYear() - MIN_AGE)
+  return d.toISOString().slice(0, 10)
+}
+
+// Format 'YYYY-MM-DD' for display (e.g. "Jan 5, 2000"). Falls back to the raw
+// string if it doesn't parse.
+function formatBirthdate(iso) {
+  if (!iso) return null
+  const d = new Date(`${iso}T12:00:00Z`)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  })
+}
 
 // Radius presets shown in the picker. Stored on the user in kilometers to match
 // the backend column + the recommender's earth_distance math; displayed in
@@ -222,6 +260,122 @@ function LocationEditor({ user, onSaved }) {
   )
 }
 
+// Date-of-birth editor. Birthdate is captured at onboarding, but users who
+// skipped it (or signed up before it shipped) had no way to add one — which
+// left them permanently blocked from age-restricted events by the RSVP gate.
+// This closes that gap: a native date input wired to the same
+// PUT /users/:id/birthdate as onboarding, with the same MIN_AGE=13 floor.
+function BirthdateEditor({ user }) {
+  const { saveBirthDate } = useApp()
+  const toast = useToast()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(user?.birthDate ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const current = formatBirthdate(user?.birthDate)
+
+  const cancel = () => {
+    setEditing(false)
+    setError('')
+    setValue(user?.birthDate ?? '')
+  }
+
+  const save = async () => {
+    if (!value) {
+      setError('Pick your date of birth.')
+      return
+    }
+    const age = ageFromIso(value)
+    if (!Number.isFinite(age) || age < MIN_AGE) {
+      setError(`You must be at least ${MIN_AGE} to use Loop.`)
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      const res = await saveBirthDate(value)
+      if (res?.pending) {
+        toast.info('Saved locally — will sync when you sign in.')
+      } else {
+        toast.success('Date of birth updated.')
+      }
+      setEditing(false)
+    } catch (err) {
+      setError(err?.message || 'Could not save your date of birth. Try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-2">
+          <Cake size={16} className="mt-0.5 flex-shrink-0 text-text-muted" />
+          <div className="min-w-0">
+            <div className="truncate text-sm text-text-primary">{current || 'Not set'}</div>
+            <div className="mt-0.5 text-xs text-text-secondary">
+              {current
+                ? 'Used to verify you meet age-restricted events.'
+                : 'Add it to RSVP to age-restricted events.'}
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-button border border-border-light bg-white px-3 text-sm font-medium text-text-secondary hover:border-text-muted"
+        >
+          <Pencil size={14} />
+          {current ? 'Edit' : 'Add'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <input
+        type="date"
+        value={value}
+        max={maxBirthdateIso()}
+        onChange={(e) => setValue(e.target.value)}
+        onClick={(e) => e.currentTarget.showPicker?.()}
+        aria-label="Date of birth"
+        className="loop-input w-full rounded-input border border-border-light bg-white px-4 py-3 text-sm text-text-primary"
+      />
+
+      <InlineAlert message={error} className="mt-3" />
+
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={cancel}
+          disabled={saving}
+          className="inline-flex h-10 items-center gap-1.5 rounded-button border border-border-light bg-white px-4 text-sm font-medium text-text-secondary hover:border-text-muted"
+        >
+          <X size={14} />
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving || !value}
+          className={cn(
+            'inline-flex h-10 items-center gap-1.5 rounded-button px-4 text-sm font-semibold text-white transition-colors',
+            saving || !value
+              ? 'cursor-not-allowed bg-surface text-text-muted'
+              : 'bg-accent active:scale-95',
+          )}
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function Settings() {
   const navigate = useNavigate()
   const { user, logout } = useApp()
@@ -282,6 +436,12 @@ export function Settings() {
             description="Set your address to see events near you. The radius controls how far out we search."
           >
             <LocationEditor user={user} />
+          </StackedRow>
+          <StackedRow
+            title="Date of birth"
+            description="Used to verify your age for age-restricted events. Only you can see this."
+          >
+            <BirthdateEditor user={user} />
           </StackedRow>
         </section>
       )}

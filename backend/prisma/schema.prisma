@@ -248,6 +248,11 @@ model User {
   displayName           String?        @map("display_name") @db.VarChar(120)
   handle                String?        @unique @db.Citext
   isVerified            Boolean        @default(false) @map("is_verified")
+  // Date of birth for age verification against age-restricted events (§7.4
+  // gate). Maps to the existing `birth_date` column already on the shared DB.
+  // Nullable: existing accounts have none and are prompted on the first
+  // age-gated action. Bare DATE (a birthday isn't an instant).
+  birthDate             DateTime?      @map("birth_date") @db.Date
   avatarUrl             String?        @map("avatar_url")
   coverImageUrl         String?        @map("cover_image_url")
   bio                   String?
@@ -256,7 +261,6 @@ model User {
   homeLng               Float?         @map("home_lng")
   homePlaceId           String?        @map("home_place_id")
   locationRadiusKm      Int            @default(40) @map("location_radius_km")
-  birthDate             DateTime?      @map("birth_date") @db.Date
   onboardingCompletedAt DateTime?      @map("onboarding_completed_at") @db.Timestamptz(6)
   notificationPrefs     Json?          @map("notification_prefs")
   followerCount         Int            @default(0) @map("follower_count")
@@ -411,6 +415,11 @@ model Event {
   capacity              Int?
   ageMin                Int?                     @map("age_min") @db.SmallInt
   ageLabel              String?                  @map("age_label") @db.VarChar(20)
+  // When true, ageMin is a HARD requirement enforced at RSVP (a too-young or
+  // birthdate-less user is blocked). When false, ageMin is only a recommended
+  // age shown on the event — no gate. Default false so existing events stay
+  // recommendations, not gates.
+  ageRestricted         Boolean                  @default(false) @map("age_restricted")
   isSports              Boolean                  @default(false) @map("is_sports")
   rsvpCount             Int                      @default(0) @map("rsvp_count")
   saveCount             Int                      @default(0) @map("save_count")

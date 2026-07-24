@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Calendar, MapPin, ShieldCheck, Share2 } from 'lucide-react'
+import { ArrowLeft, Calendar, MapPin, ShieldCheck, Share2, Pencil, Ban, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
+import { useModal } from '../context/ModalContext'
 import { CATEGORY_COLOR, pluralize } from '../lib/utils'
 import {
   FollowBtn,
@@ -34,8 +35,9 @@ function formatTime(iso) {
 export function EventDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { savedIds, goingIds, followingIds, toggleSaved, toggleGoing, toggleFollow } = useApp()
+  const { user, savedIds, goingIds, followingIds, toggleSaved, toggleGoing, toggleFollow } = useApp()
   const toast = useToast()
+  const modal = useModal()
   const [event, setEvent] = useState(null)
   const [related, setRelated] = useState([])
   // Local "going" count so the header + GoingStack update immediately on RSVP;
@@ -112,12 +114,46 @@ export function EventDetail() {
     toast.info(`Share this link: ${url}`)
   }, [event, toast])
 
+  // Confirm + fire the organizer cancel action. Reason is optional and typed
+  // into the confirm dialog via a plain prompt() — a proper reason textarea
+  // is a later polish; for now we lean on the platform prompt so the flow is
+  // discoverable without an extra modal variant.
+  const onCancel = async () => {
+    if (!event) return
+    const ok = await modal.confirm({
+      title: 'Cancel this event?',
+      message:
+        'Everyone who RSVPed will be notified. This can’t be undone — attendees will see a cancelled banner.',
+      confirmLabel: 'Cancel event',
+      cancelLabel: 'Keep event',
+      danger: true,
+    })
+    if (!ok) return
+    const reason = typeof window !== 'undefined'
+      ? window.prompt('Optional: tell attendees why (leave blank to skip).') || ''
+      : ''
+    try {
+      const updated = await api.cancelEvent(event.id, reason.trim() || undefined)
+      setEvent(updated)
+      toast.success('Event cancelled. Attendees have been notified.')
+    } catch (err) {
+      if (err?.status === 409) {
+        toast.info('This event has already been cancelled.')
+      } else {
+        toast.error(err?.message || 'Could not cancel the event. Try again.')
+      }
+    }
+  }
+
   if (!event) return <PageLoader label="Loading event" />
 
   const saved = savedIds.has(event.id)
   const going = goingIds.has(event.id)
   const following = event.organizer ? followingIds.has(event.organizer.id) : false
   const hasAbout = Boolean(event.description?.trim())
+  const isCancelled = event.status === 'cancelled'
+  const isOrganizer = Boolean(user?.id && event.organizer?.id && user.id === event.organizer.id)
+  const canEdit = isOrganizer && !isCancelled && event.status !== 'past'
   const timeStr = formatTime(event.isoDate)
   // Prefer "{event.date} · {time}" when both exist; the mock seed's date field
   // already includes time so we detect that and skip the double-print.
@@ -139,6 +175,22 @@ export function EventDetail() {
 
   return (
     <main id="main" className="pb-24 md:pb-24">
+      {isCancelled && (
+        <div
+          role="alert"
+          className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-800"
+        >
+          <div className="mx-auto flex max-w-[1140px] items-start gap-2">
+            <AlertTriangle size={18} className="mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="font-semibold">This event was cancelled by the organizer.</p>
+              {event.cancelReason && (
+                <p className="mt-0.5 text-red-700">{event.cancelReason}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* dark immersive header */}
       <div className="relative overflow-hidden bg-ink">
         <img
@@ -245,20 +297,56 @@ export function EventDetail() {
                 </div>
               </div>
 
-              {/* CTAs — ref anchors the sticky-pill IntersectionObserver */}
+              {/* CTAs — ref anchors the sticky-pill IntersectionObserver.
+                  Cancelled events swap the RSVP button for a static badge so
+                  the row still holds space without inviting a signup. */}
               <div ref={heroCtaRef} className="mt-4 flex items-center gap-3">
-                <RSVPBtn variant={going ? 'outline' : 'filled'} onClick={onRsvp}>
-                  {going ? "You're going ✓" : 'RSVP now'}
-                </RSVPBtn>
+                {isCancelled ? (
+                  <span className="inline-flex items-center gap-2 rounded-button bg-white/15 px-4 py-2 text-sm font-semibold text-white/85">
+                    <Ban size={16} /> Cancelled
+                  </span>
+                ) : (
+                  <RSVPBtn variant={going ? 'outline' : 'filled'} onClick={onRsvp}>
+                    {going ? "You're going ✓" : 'RSVP now'}
+                  </RSVPBtn>
+                )}
                 <SaveBtn saved={saved} onToggle={() => toggleSaved(event.id)} />
                 <IconButton onClick={onShare} label="Share event">
                   <Share2 size={18} />
                 </IconButton>
               </div>
 
+              {/* Organizer action bar — edit + cancel. Only rendered for the
+                  event's own organizer; hidden once the event is cancelled or
+                  past. Attendees never see this row. */}
+              {canEdit && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-card border border-white/15 bg-white/10 px-3 py-2 text-sm text-white/90 backdrop-blur-sm">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-white/60">
+                    Organizer
+                  </span>
+                  <Link
+                    to={`/event/${event.id}/edit`}
+                    className="inline-flex items-center gap-1.5 rounded-pill bg-white/15 px-3 py-1 text-xs font-semibold text-white hover:bg-white/25"
+                  >
+                    <Pencil size={13} /> Edit event
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={onCancel}
+                    className="inline-flex items-center gap-1.5 rounded-pill bg-red-500/80 px-3 py-1 text-xs font-semibold text-white hover:bg-red-500"
+                  >
+                    <Ban size={13} /> Cancel event
+                  </button>
+                </div>
+              )}
+
               {/* Reminder picker — surfaces once the user has committed (RSVP or
-                  save), so we only offer a nudge for events they care about. */}
-              {(going || saved) && <ReminderPicker eventId={event.id} startsAt={event.isoDate} />}
+                  save), so we only offer a nudge for events they care about.
+                  Suppressed on cancelled events so we never nudge someone
+                  toward a run that isn't happening. */}
+              {!isCancelled && (going || saved) && (
+                <ReminderPicker eventId={event.id} startsAt={event.isoDate} />
+              )}
             </div>
           </div>
         </div>
@@ -342,19 +430,22 @@ export function EventDetail() {
       </div>
 
       {/* Sticky pill CTA — floats in only after the hero CTA scrolls off so
-          it's never redundant with the primary button. */}
-      <StickyRsvpBar
-        title={event.title}
-        poster={event.poster}
-        price={event.price}
-        isFree={event.isFree}
-        going={going}
-        saved={saved}
-        onRsvp={onRsvp}
-        onSave={() => toggleSaved(event.id)}
-        onShare={onShare}
-        visible={pillVisible}
-      />
+          it's never redundant with the primary button. Suppressed entirely
+          on cancelled events since there's no action left to promote. */}
+      {!isCancelled && (
+        <StickyRsvpBar
+          title={event.title}
+          poster={event.poster}
+          price={event.price}
+          isFree={event.isFree}
+          going={going}
+          saved={saved}
+          onRsvp={onRsvp}
+          onSave={() => toggleSaved(event.id)}
+          onShare={onShare}
+          visible={pillVisible}
+        />
+      )}
     </main>
   )
 }

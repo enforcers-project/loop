@@ -419,6 +419,8 @@ model Event {
   // Unsupported so Prisma keeps the column across later diffs.
   searchDocument        Unsupported("tsvector")? @map("search_document")
   publishedAt           DateTime?                @map("published_at") @db.Timestamptz(6)
+  cancelledAt           DateTime?                @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason          String?                  @map("cancel_reason")
   createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

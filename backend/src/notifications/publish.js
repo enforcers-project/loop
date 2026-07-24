@@ -1,13 +1,35 @@
-// Followed-organizer new-event fan-out (planning §6, work-plan #27).
-//
-// When an organizer publishes an event, every follower gets an in-app
-// `followed_new_event` notification. Called best-effort from the publish
-// handler — a failure here must never fail the publish itself.
+// Followed-organizer new-event fan-out (planning §6, work-plan #27) plus the
+// two attendee-side fan-outs: `event_updated` when the organizer edits a
+// meaningful field, `event_cancelled` when they cancel outright. All three are
+// called best-effort from their route handler — a failure here must never fail
+// the underlying write.
 import prisma from '../lib/prisma.js'
 
-// Insert followers in batches so a very-followed organizer never builds one
-// enormous createMany payload. Demo scale is tiny; this is just a safety cap.
+// Insert notification rows in batches so a very-attended or very-followed
+// event never builds one enormous createMany payload. Demo scale is tiny;
+// this is just a safety cap.
 const BATCH_SIZE = 500
+
+// Map a MEANINGFUL_FIELDS diff key onto the human label an attendee sees in
+// the notification body. Multiple keys collapse onto one label (Time covers
+// starts_at + ends_at + timezone, Venue covers venue_name + address + city +
+// coords) so a single "starts_at + timezone" edit reads as one "Time" change.
+const CHANGE_LABEL = {
+  startsAt: 'Time',
+  endsAt: 'Time',
+  timezone: 'Time',
+  venueName: 'Venue',
+  address: 'Venue',
+  city: 'Venue',
+  lat: 'Venue',
+  lng: 'Venue',
+  priceMin: 'Price',
+  priceMax: 'Price',
+  isFree: 'Price',
+  capacity: 'Capacity',
+  ageMin: 'Age policy',
+  ageLabel: 'Age policy',
+}
 
 /**
  * Create a `followed_new_event` notification for each follower of `organizerId`
@@ -69,4 +91,140 @@ export async function notifyFollowersOfNewEvent(organizerId, eventId) {
   }
 
   return created
+}
+
+// --- Attendee fan-outs -----------------------------------------------------
+//
+// Recipients of edit / cancel notifications are the union of:
+//   - `rsvps` rows with status ∈ {going, interested, waitlisted}
+//   - `roster_entries` rows with status ∈ {claimed, waitlisted} (sports only —
+//     these are the committed states; cancelled/no_show/attended are excluded)
+//   - `saved_events` rows (users who bookmarked the event without RSVPing)
+// Deduplicated by user_id so a user who's in multiple tables only gets one row.
+// The organizer themselves is always excluded.
+async function fetchAttendeeIdsPage(eventId, organizerId, cursorId) {
+  // We page by ordered user_id and a cursor rather than OFFSET so a very
+  // popular event doesn't force the DB to re-scan already-notified users on
+  // each page. Postgres UUID sort is total, so this is a stable pagination.
+  const params = [eventId]
+  let organizerClause = ''
+  if (organizerId) {
+    params.push(organizerId)
+    organizerClause = `AND user_id <> $${params.length}::uuid`
+  }
+  let cursorClause = ''
+  if (cursorId) {
+    params.push(cursorId)
+    cursorClause = `AND user_id > $${params.length}::uuid`
+  }
+  params.push(BATCH_SIZE)
+  const limitParam = `$${params.length}`
+  const sql = `
+    SELECT DISTINCT user_id FROM (
+      SELECT user_id FROM rsvps
+        WHERE event_id = $1::uuid AND status IN ('going','interested','waitlisted')
+      UNION
+      SELECT user_id FROM roster_entries
+        WHERE event_id = $1::uuid AND status IN ('claimed','waitlisted')
+      UNION
+      SELECT user_id FROM saved_events
+        WHERE event_id = $1::uuid
+    ) t
+    WHERE TRUE ${organizerClause} ${cursorClause}
+    ORDER BY user_id
+    LIMIT ${limitParam}
+  `
+  const rows = await prisma.$queryRawUnsafe(sql, ...params)
+  return rows.map((r) => r.user_id)
+}
+
+// Build a "Time and Venue changed" (or "Time changed") summary from the
+// MEANINGFUL_FIELDS diff. Caps at two distinct labels so the body stays short.
+function summariseChanges(changedFields) {
+  const labels = []
+  const seen = new Set()
+  for (const key of changedFields || []) {
+    const label = CHANGE_LABEL[key]
+    if (!label || seen.has(label)) continue
+    seen.add(label)
+    labels.push(label)
+    if (labels.length === 2) break
+  }
+  if (!labels.length) return 'Event details changed'
+  return `${labels.join(' and ')} changed`
+}
+
+async function fanoutToAttendees(eventId, organizerId, buildRow) {
+  if (!eventId) return 0
+  let created = 0
+  let cursor = null
+  for (;;) {
+    const userIds = await fetchAttendeeIdsPage(eventId, organizerId, cursor)
+    if (userIds.length === 0) break
+    const rows = userIds.map((userId) => buildRow(userId))
+    const result = await prisma.notification.createMany({ data: rows })
+    created += result.count
+    if (userIds.length < BATCH_SIZE) break
+    cursor = userIds[userIds.length - 1]
+  }
+  return created
+}
+
+/**
+ * Notify every attendee (rsvp + roster) that an event they're committed to
+ * had one or more meaningful fields change. Called fire-and-forget from the
+ * PATCH handler after the write commits.
+ */
+export async function notifyAttendeesOfEventUpdate(eventId, changedFields) {
+  if (!eventId || !changedFields || changedFields.length === 0) return 0
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, title: true, organizerId: true },
+  })
+  if (!event) return 0
+
+  const title = `"${event.title || 'Event'}" was updated`
+  const body = summariseChanges(changedFields)
+
+  return fanoutToAttendees(event.id, event.organizerId, (userId) => ({
+    userId,
+    type: 'event_updated',
+    channel: 'in_app',
+    actorId: event.organizerId,
+    eventId: event.id,
+    title,
+    body,
+    metadata: { changed: changedFields },
+  }))
+}
+
+/**
+ * Notify every attendee (rsvp + roster) that an event they're committed to
+ * has been cancelled by the organizer. Called fire-and-forget from the
+ * dedicated cancel route.
+ */
+export async function notifyAttendeesOfEventCancel(eventId, reason) {
+  if (!eventId) return 0
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { id: true, title: true, organizerId: true },
+  })
+  if (!event) return 0
+
+  const trimmed = typeof reason === 'string' ? reason.trim() : ''
+  const title = `"${event.title || 'Event'}" was cancelled`
+  const body = trimmed || null
+
+  return fanoutToAttendees(event.id, event.organizerId, (userId) => ({
+    userId,
+    type: 'event_cancelled',
+    channel: 'in_app',
+    actorId: event.organizerId,
+    eventId: event.id,
+    title,
+    body,
+    metadata: trimmed ? { reason: trimmed } : null,
+  }))
 }

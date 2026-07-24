@@ -14,6 +14,7 @@ import { Discover } from './screens/Discover'
 import { EventDetail } from './screens/EventDetail'
 import { SocialFeed } from './screens/SocialFeed'
 import { CreateEvent } from './screens/CreateEvent'
+import { EditEvent } from './screens/EditEvent'
 import { SportsPickupDetail } from './screens/SportsPickupDetail'
 import { OrganizerProfile } from './screens/OrganizerProfile'
 import { UserProfile } from './screens/UserProfile'
@@ -54,6 +55,14 @@ function Shell() {
           <Route path="/feed" element={<ForYouFeed />} />
           <Route path="/discover" element={<Discover />} />
           <Route path="/event/:id" element={<EventDetail />} />
+          <Route
+            path="/event/:id/edit"
+            element={
+              <ProtectedRoute>
+                <EditEvent />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/sports/:id" element={<SportsPickupDetail />} />
           <Route path="/social" element={<SocialFeed />} />
           <Route

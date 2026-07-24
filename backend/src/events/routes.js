@@ -3,33 +3,97 @@ import prisma from '../lib/prisma.js'
 import { toEventCard, toEventDetail, EVENT_DETAIL_INCLUDE } from './serialize.js'
 import { requireAuth, fail } from '../auth/middleware.js'
 import { runJob } from '../jobs/index.js'
-import { notifyFollowersOfNewEvent } from '../notifications/publish.js'
+import {
+  notifyFollowersOfNewEvent,
+  notifyAttendeesOfEventUpdate,
+  notifyAttendeesOfEventCancel,
+} from '../notifications/publish.js'
 import { tagAndPersist } from '../ai/autotag.persist.js'
+import { cached, invalidate, invalidatePattern } from '../lib/cache.js'
 
 const router = Router()
+
+const EVENT_LIST_TTL_SECONDS = 60
+const EVENT_RELATED_TTL_SECONDS = 120
+
+// Fields whose change should notify committed attendees. Keeps description,
+// flyer, category, and tag edits silent — those don't affect whether an
+// attendee can still make it. Matches the labels in
+// notifications/publish.js#CHANGE_LABEL.
+const MEANINGFUL_FIELDS = [
+  'startsAt',
+  'endsAt',
+  'timezone',
+  'venueName',
+  'address',
+  'city',
+  'lat',
+  'lng',
+  'priceMin',
+  'priceMax',
+  'isFree',
+  'capacity',
+  'ageMin',
+  'ageLabel',
+]
+
+// Small helper: after a write to event `id`, wipe every cache that could
+// return stale data about it. Feed and list keys use SCAN patterns; related
+// and analytics keys anchor on a single event id.
+async function bustEventCaches(eventId, organizerId) {
+  await Promise.all([
+    invalidatePattern('feed:user:*'),
+    invalidatePattern('events:list:*'),
+    invalidate(`events:related:${eventId}`),
+    invalidatePattern(`analytics:event:${eventId}:*`),
+    organizerId ? invalidatePattern(`analytics:org:${organizerId}:*`) : Promise.resolve(),
+  ])
+}
+
+// Build a stable cache key from the filter params. Sorted so ?a=1&b=2 and
+// ?b=2&a=1 hit the same key; excludes cursor because paginated pages get their
+// own key naturally via the cursor value.
+function eventsListCacheKey(query) {
+  const keys = Object.keys(query).sort()
+  const parts = keys.map((k) => {
+    const v = query[k]
+    return Array.isArray(v) ? `${k}=${[...v].sort().join(',')}` : `${k}=${v}`
+  })
+  return `events:list:${parts.join('|') || 'default'}`
+}
 
 // GET /api/events
 router.get('/', async (req, res) => {
   try {
-    const {
-      category,
-      source,
-      q,
-      nearLat,
-      nearLng,
-      radiusKm,
-      city,
-      dateFrom,
-      dateTo,
-      priceMin,
-      priceMax,
-      isFree,
-      ageMax,
-      isSports,
-      sort,
-      cursor,
-      limit: rawLimit,
-    } = req.query
+    const cacheKey = eventsListCacheKey(req.query)
+    const result = await cached(cacheKey, EVENT_LIST_TTL_SECONDS, () => fetchEventsList(req.query))
+    res.json(result)
+  } catch (err) {
+    console.error('GET /api/events error:', err)
+    res.status(500).json({ error: { message: 'Failed to fetch events' } })
+  }
+})
+
+async function fetchEventsList(query) {
+  const {
+    category,
+    source,
+    q,
+    nearLat,
+    nearLng,
+    radiusKm,
+    city,
+    dateFrom,
+    dateTo,
+    priceMin,
+    priceMax,
+    isFree,
+    ageMax,
+    isSports,
+    sort,
+    cursor,
+    limit: rawLimit,
+  } = query
 
     // --- Pagination setup ---
     const limit = Math.min(Math.max(Number(rawLimit) || 20, 1), 50)
@@ -49,8 +113,12 @@ router.get('/', async (req, res) => {
       where.source = { in: sources }
     }
 
-    // City filter
-    if (city) {
+    // City filter. When lat/lng are also present we do NOT apply a hard city
+    // equals here — the geo block below folds `city` into an OR (radius-match
+    // OR city-match) so events created without pinned coordinates still
+    // surface to users with a home coordinate saved.
+    const hasGeoParams = nearLat && nearLng && radiusKm
+    if (city && !hasGeoParams) {
       where.city = { equals: city, mode: 'insensitive' }
     }
 
@@ -90,6 +158,11 @@ router.get('/', async (req, res) => {
     }
 
     // --- Geo filter (uses raw SQL because Prisma can't do earthdistance) ---
+    // When the caller passes city alongside lat/lng, we UNION the two: an
+    // event is in-scope if it's within the radius OR it matches the city
+    // (case-insensitive) — the latter covers events whose organizer skipped
+    // Places autocomplete so lat/lng are null. Without the union, any user
+    // with a home coord saved would never see those events.
     const hasGeo = nearLat && nearLng && radiusKm
     let geoEventIds = null
 
@@ -98,26 +171,36 @@ router.get('/', async (req, res) => {
       const lng = Number(nearLng)
       const radius = Number(radiusKm) * 1000 // earthdistance works in meters
 
+      const params = [lat, lng, radius]
+      let cityClause = ''
+      if (city) {
+        params.push(city)
+        cityClause = `OR (lat IS NULL AND lng IS NULL AND city ILIKE $4)`
+      }
+
       const geoRows = await prisma.$queryRawUnsafe(
         `SELECT id,
-                earth_distance(
-                  ll_to_earth($1, $2),
-                  ll_to_earth(lat, lng)
-                ) AS distance_m
+                CASE
+                  WHEN lat IS NULL OR lng IS NULL THEN NULL
+                  ELSE earth_distance(ll_to_earth($1, $2), ll_to_earth(lat, lng))
+                END AS distance_m
          FROM events
-         WHERE lat IS NOT NULL
-           AND lng IS NOT NULL
-           AND earth_distance(ll_to_earth($1, $2), ll_to_earth(lat, lng)) <= $3
-         ORDER BY distance_m ASC`,
-        lat,
-        lng,
-        radius,
+         WHERE (
+             lat IS NOT NULL
+             AND lng IS NOT NULL
+             AND earth_distance(ll_to_earth($1, $2), ll_to_earth(lat, lng)) <= $3
+           )
+           ${cityClause}
+         ORDER BY distance_m NULLS LAST`,
+        ...params,
       )
 
-      geoEventIds = new Map(geoRows.map((r) => [r.id, r.distance_m / 1000]))
+      geoEventIds = new Map(
+        geoRows.map((r) => [r.id, r.distance_m != null ? r.distance_m / 1000 : null]),
+      )
 
       if (geoEventIds.size === 0) {
-        return res.json({ data: [], nextCursor: null })
+        return { data: [], nextCursor: null }
       }
 
       where.id = { ...(where.id || {}), in: [...geoEventIds.keys()] }
@@ -141,7 +224,7 @@ router.get('/', async (req, res) => {
       searchIds = searchRows.map((r) => r.id)
 
       if (searchIds.length === 0) {
-        return res.json({ data: [], nextCursor: null })
+        return { data: [], nextCursor: null }
       }
 
       if (where.id?.in) {
@@ -183,12 +266,8 @@ router.get('/', async (req, res) => {
       data.sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
     }
 
-    res.json({ data, nextCursor })
-  } catch (err) {
-    console.error('GET /api/events error:', err)
-    res.status(500).json({ error: { message: 'Failed to fetch events' } })
-  }
-})
+    return { data, nextCursor }
+}
 
 // GET /api/events/:id
 // Detail read; increments view_count on each fetch (§7.3, #14). The atomic
@@ -280,13 +359,27 @@ router.get('/:id', async (req, res) => {
 // GET /api/events/:id/related
 router.get('/:id/related', async (req, res) => {
   try {
+    const cacheKey = `events:related:${req.params.id}`
+    const payload = await cached(cacheKey, EVENT_RELATED_TTL_SECONDS, () =>
+      fetchRelatedEvents(req.params.id),
+    )
+    if (payload.notFound) return res.status(404).json({ error: { message: 'Event not found' } })
+    res.json({ data: payload.data })
+  } catch (err) {
+    console.error('GET /api/events/:id/related error:', err)
+    res.status(500).json({ error: { message: 'Failed to fetch related events' } })
+  }
+})
+
+async function fetchRelatedEvents(eventId) {
+  {
     const sourceEvent = await prisma.event.findUnique({
-      where: { id: req.params.id },
+      where: { id: eventId },
       select: { id: true, categoryId: true, city: true },
     })
 
     if (!sourceEvent) {
-      return res.status(404).json({ error: { message: 'Event not found' } })
+      return { notFound: true }
     }
 
     // Primary: same category + same city. Recommending a Washington DC taco
@@ -349,12 +442,9 @@ router.get('/:id/related', async (req, res) => {
       })
     }
 
-    res.json({ data: related.map((e) => toEventCard(e)) })
-  } catch (err) {
-    console.error('GET /api/events/:id/related error:', err)
-    res.status(500).json({ error: { message: 'Failed to fetch related events' } })
+    return { data: related.map((e) => toEventCard(e)) }
   }
-})
+}
 
 // ===========================================================================
 // Write path (§7.3 create / update / delete / publish). All gated: create
@@ -494,6 +584,12 @@ router.post('/', requireAuth, async (req, res) => {
       where: { id: created },
       include: EVENT_DETAIL_INCLUDE,
     })
+    // Bust so the organizer's next feed / event-list fetch shows the new
+    // event immediately instead of waiting up to the TTL. Fire-and-forget:
+    // a cache failure must not undo a successful create.
+    bustEventCaches(created, req.user.id).catch((err) =>
+      console.warn('[cache] bust after create failed:', err.message),
+    )
     return res.status(201).json({ data: toEventDetail(detail) })
   } catch (err) {
     if (err.code === 'P2003') {
@@ -592,6 +688,20 @@ router.patch('/:id', requireAuth, async (req, res) => {
       b.price_min !== undefined ||
       b.category_id !== undefined
 
+    // "Meaningful" changes attendees deserve a notification for. Description,
+    // flyer, category, and tag edits stay silent — those don't affect whether
+    // someone can attend. Compare against `existing` (already fetched above)
+    // via a normalized string so Decimal columns compare correctly.
+    const norm = (v) => {
+      if (v == null) return ''
+      if (v instanceof Date) return v.toISOString()
+      if (typeof v === 'object' && typeof v.toString === 'function') return v.toString()
+      return String(v)
+    }
+    const changedFields = MEANINGFUL_FIELDS.filter(
+      (col) => data[col] !== undefined && norm(existing[col]) !== norm(data[col]),
+    )
+
     await prisma.$transaction(async (tx) => {
       await tx.event.update({ where: { id: existing.id }, data })
       if (sportsUpdate) {
@@ -625,6 +735,24 @@ router.patch('/:id', requireAuth, async (req, res) => {
       where: { id: existing.id },
       include: EVENT_DETAIL_INCLUDE,
     })
+    bustEventCaches(existing.id, existing.organizerId).catch((err) =>
+      console.warn('[cache] bust after patch failed:', err.message),
+    )
+
+    // Fan out attendee notifications for meaningful edits on a live event.
+    // Awaited (not fire-and-forget) so a refresh right after Save always sees
+    // the row — the extra latency is one bounded batch of INSERTs. A fanout
+    // failure is logged but must not fail the PATCH: the write already
+    // succeeded, and returning 500 here would confuse the organizer.
+    // Draft edits stay silent — no attendees yet.
+    if (existing.status === 'published' && changedFields.length > 0) {
+      try {
+        await notifyAttendeesOfEventUpdate(existing.id, changedFields)
+      } catch (err) {
+        console.error('notifyAttendeesOfEventUpdate error:', err)
+      }
+    }
+
     return res.json({ data: toEventDetail(detail) })
   } catch (err) {
     if (err.code === 'P2003') {
@@ -632,6 +760,70 @@ router.patch('/:id', requireAuth, async (req, res) => {
     }
     console.error('PATCH /api/events/:id error:', err)
     return fail(res, 500, 'INTERNAL', 'Failed to update event')
+  }
+})
+
+// POST /api/events/:id/cancel — dedicated organizer-cancel action. Split off
+// from PATCH so the semantics (status flip + attendee fanout) sit in one
+// place and re-clicking is a natural 409 no-op instead of a silent second
+// notification. RSVPs are intentionally NOT flipped — the row history is a
+// signal for analytics, and new RSVPs are already refused for cancelled
+// events (engagement/routes.js:185).
+router.post('/:id/cancel', requireAuth, async (req, res) => {
+  try {
+    const existing = await prisma.event.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, organizerId: true, source: true, status: true, title: true },
+    })
+    if (!existing) return fail(res, 404, 'NOT_FOUND', 'Event not found')
+    if (existing.organizerId !== req.user.id) {
+      return fail(res, 403, 'FORBIDDEN', 'You do not own this event')
+    }
+    if (existing.source !== 'native') {
+      return fail(res, 403, 'FORBIDDEN', 'Synced events cannot be cancelled')
+    }
+    if (existing.status === 'cancelled') {
+      return fail(res, 409, 'CONFLICT', 'Event is already cancelled')
+    }
+    if (existing.status !== 'published' && existing.status !== 'draft') {
+      return fail(res, 422, 'VALIDATION_ERROR', `Cannot cancel an event that is ${existing.status}`)
+    }
+
+    const rawReason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : ''
+    if (rawReason.length > 500) {
+      return fail(res, 422, 'VALIDATION_ERROR', 'reason must be 500 characters or fewer')
+    }
+    const reason = rawReason || null
+
+    await prisma.event.update({
+      where: { id: existing.id },
+      data: { status: 'cancelled', cancelledAt: new Date(), cancelReason: reason },
+    })
+
+    const detail = await prisma.event.findUnique({
+      where: { id: existing.id },
+      include: EVENT_DETAIL_INCLUDE,
+    })
+    bustEventCaches(existing.id, existing.organizerId).catch((err) =>
+      console.warn('[cache] bust after cancel failed:', err.message),
+    )
+
+    // Only fan out to attendees when the event was previously live. A draft
+    // cancel has no attendees. Awaited so a refresh right after cancel
+    // always sees the row; a fanout failure is logged but does not fail the
+    // request (the cancel write already succeeded).
+    if (existing.status === 'published') {
+      try {
+        await notifyAttendeesOfEventCancel(existing.id, reason)
+      } catch (err) {
+        console.error('notifyAttendeesOfEventCancel error:', err)
+      }
+    }
+
+    return res.json({ data: toEventDetail(detail) })
+  } catch (err) {
+    console.error('POST /api/events/:id/cancel error:', err)
+    return fail(res, 500, 'INTERNAL', 'Failed to cancel event')
   }
 })
 
@@ -650,6 +842,9 @@ router.delete('/:id', requireAuth, async (req, res) => {
       return fail(res, 403, 'FORBIDDEN', 'Synced events cannot be deleted')
     }
     await prisma.event.delete({ where: { id: existing.id } })
+    bustEventCaches(existing.id, existing.organizerId).catch((err) =>
+      console.warn('[cache] bust after delete failed:', err.message),
+    )
     return res.status(204).end()
   } catch (err) {
     console.error('DELETE /api/events/:id error:', err)
@@ -707,6 +902,14 @@ router.post('/:id/publish', requireAuth, async (req, res) => {
     // notification failure must never fail the publish itself.
     notifyFollowersOfNewEvent(event.organizerId, published.id).catch((err) =>
       console.error('notifyFollowersOfNewEvent error:', err),
+    )
+
+    // Bust every read-path cache the newly-published event could show up in.
+    // This is what makes the "create → back to feed → see it" flow instant
+    // during the demo: without it, the ranked feed could serve up to 60s of
+    // stale ranking that doesn't include the new event.
+    bustEventCaches(published.id, event.organizerId).catch((err) =>
+      console.warn('[cache] bust after publish failed:', err.message),
     )
 
     return res.json({

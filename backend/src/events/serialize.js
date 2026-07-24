@@ -54,6 +54,8 @@ export function toEventDetail(event, viewer = null) {
     save_count: event.saveCount,
     view_count: event.viewCount,
     published_at: event.publishedAt,
+    cancelled_at: event.cancelledAt ?? null,
+    cancel_reason: event.cancelReason ?? null,
     tags: (event.tags ?? []).map((t) => ({
       id: t.id,
       slug: t.slug,

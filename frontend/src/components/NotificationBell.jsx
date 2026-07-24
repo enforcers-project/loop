@@ -47,15 +47,18 @@ export function NotificationBell() {
   const rootRef = useRef(null)
 
   // Seeded with the empty envelope so the dot/list never render undefined.
-  // Refetches on window focus (bell is the one place a stale count matters) and
-  // on a light interval so a freshly published event surfaces without a reload.
+  // Refetches on window focus (so tab-switching pulls the latest), on remount
+  // (so a hard refresh always fetches fresh), and every 15 seconds so a
+  // just-published notification surfaces in near-real-time without a reload.
   const { data } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => api.notifications.list({ limit: 20 }),
     enabled: isLoggedIn,
     initialData: { data: [], nextCursor: null, unread_count: 0 },
     refetchOnWindowFocus: true,
-    refetchInterval: 60000,
+    refetchOnMount: 'always',
+    refetchInterval: 15000,
+    staleTime: 0,
   })
 
   const items = data?.data ?? []

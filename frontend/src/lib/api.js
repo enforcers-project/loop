@@ -75,12 +75,27 @@ export function toEventCardShape(e) {
         })
       : '',
     isoDate: e.starts_at ?? '',
+    endsAt: e.ends_at ?? null,
+    timezone: e.timezone ?? null,
     publishedAt: e.published_at ?? null,
+    // Lifecycle state — surfaced to the client so EditEvent/EventDetail can
+    // show a cancelled banner, gate the RSVP CTA, and hide the organizer
+    // action bar for past/cancelled events. `status` is one of
+    // 'draft'|'published'|'cancelled'|'past'.
+    status: e.status ?? null,
+    cancelledAt: e.cancelled_at ?? null,
+    cancelReason: e.cancel_reason ?? null,
     description: e.description ?? '',
     venueName: e.venue_name ?? '',
+    address: e.address ?? '',
     city: e.city ?? '',
     lat: e.lat,
     lng: e.lng,
+    placeId: e.google_place_id ?? null,
+    priceMin: e.price_min ?? null,
+    priceMax: e.price_max ?? null,
+    ageMin: e.age_min ?? null,
+    categorySlug: e.category?.slug ?? null,
     distanceKm: e.distance_km ?? null,
     organizerId: e.organizer?.id ?? null,
     organizer: e.organizer
@@ -539,6 +554,56 @@ async function toCreateEventBody(draft) {
     }
   }
 
+  return body
+}
+
+// Build a snake_case PATCH body for `updateEvent`. Only keys the organizer
+// actually touched appear on the wire, so a form resubmit with no changes is
+// a 200 no-op and the backend's meaningful-field diff sees nothing to notify
+// on. Mirrors `toCreateEventBody` field-for-field.
+async function toUpdateEventBody(patch) {
+  const body = {}
+  if (patch.title !== undefined) body.title = patch.title
+  if (patch.category !== undefined) {
+    const categoryId = await resolveCategoryId(patch.category)
+    if (!categoryId) throw new Error(`Unknown category "${patch.category}"`)
+    body.category_id = categoryId
+  }
+  if (patch.date !== undefined || patch.time !== undefined) {
+    const stamp = patch.time ? `${patch.date}T${patch.time}` : patch.date
+    const startsAt = new Date(stamp)
+    if (isNaN(startsAt.getTime())) throw new Error('Enter a valid date and time')
+    body.starts_at = startsAt.toISOString()
+  }
+  if (patch.timezone !== undefined) body.timezone = patch.timezone
+  if (patch.city !== undefined) body.city = patch.city
+  if (patch.location !== undefined) body.venue_name = patch.location || null
+  if (patch.address !== undefined) body.address = patch.address || null
+  if (patch.lat !== undefined) body.lat = patch.lat ?? null
+  if (patch.lng !== undefined) body.lng = patch.lng ?? null
+  if (patch.placeId !== undefined) body.google_place_id = patch.placeId ?? null
+  if (patch.description !== undefined) body.description = patch.description || null
+  if (patch.flyer !== undefined) {
+    body.flyer_url =
+      typeof patch.flyer === 'string' &&
+      (patch.flyer.startsWith('data:') || patch.flyer.startsWith('http'))
+        ? patch.flyer
+        : null
+  }
+  if (patch.price !== undefined) {
+    const priceMin = Number(patch.price) || 0
+    body.price_min = priceMin
+    body.price_max = priceMin
+    body.is_free = priceMin === 0
+  }
+  if (patch.capacity !== undefined) body.capacity = patch.capacity ?? null
+  if (patch.ageRestriction !== undefined) {
+    body.age_min = patch.ageRestriction ?? null
+    body.age_label = patch.ageRestriction ? `${patch.ageRestriction}+` : null
+  }
+  if (patch.ageRestricted !== undefined) {
+    body.age_restricted = Boolean(patch.ageRestricted)
+  }
   return body
 }
 
@@ -1164,6 +1229,26 @@ export const api = {
     // full created detail merged with the new status so the caller has both an
     // id to navigate to and the live status.
     return { ...created, status: published?.status ?? created.status }
+  },
+
+  // Update a published or draft event the caller owns. Only sends the keys
+  // the organizer actually changed so a form re-submit with no edits is a
+  // 200 no-op. Backend fans out `event_updated` notifications for meaningful
+  // field changes (schedule, venue, price, capacity, age policy).
+  updateEvent: async (id, patch) => {
+    const body = await toUpdateEventBody(patch)
+    const updated = await request(`/events/${id}`, { method: 'PATCH', body })
+    return toEventCardShape(updated)
+  },
+
+  // Cancel an event the caller owns. Idempotent: a second call on an already-
+  // cancelled event 409s so the UI can toast "already cancelled" instead of
+  // firing a duplicate notification. `reason` is optional; when provided it
+  // shows up in the attendee notification body and on the cancelled banner.
+  cancelEvent: async (id, reason) => {
+    const body = reason ? { reason } : {}
+    const cancelled = await request(`/events/${id}/cancel`, { method: 'POST', body })
+    return toEventCardShape(cancelled)
   },
 
   // Organizer AI description writer (POST /api/ai/description). Groq-backed,

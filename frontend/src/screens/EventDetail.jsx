@@ -46,7 +46,8 @@ function formatTime(iso) {
 export function EventDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, savedIds, goingIds, followingIds, toggleSaved, toggleGoing, toggleFollow } = useApp()
+  const { user, savedIds, goingIds, followingIds, toggleSaved, toggleGoing, toggleFollow } =
+    useApp()
   const toast = useToast()
   const modal = useModal()
   const [event, setEvent] = useState(null)
@@ -140,9 +141,10 @@ export function EventDetail() {
       danger: true,
     })
     if (!ok) return
-    const reason = typeof window !== 'undefined'
-      ? window.prompt('Optional: tell attendees why (leave blank to skip).') || ''
-      : ''
+    const reason =
+      typeof window !== 'undefined'
+        ? window.prompt('Optional: tell attendees why (leave blank to skip).') || ''
+        : ''
     try {
       const updated = await api.cancelEvent(event.id, reason.trim() || undefined)
       setEvent(updated)
@@ -195,9 +197,7 @@ export function EventDetail() {
             <AlertTriangle size={18} className="mt-0.5 flex-shrink-0" />
             <div>
               <p className="font-semibold">This event was cancelled by the organizer.</p>
-              {event.cancelReason && (
-                <p className="mt-0.5 text-red-700">{event.cancelReason}</p>
-              )}
+              {event.cancelReason && <p className="mt-0.5 text-red-700">{event.cancelReason}</p>}
             </div>
           </div>
         </div>

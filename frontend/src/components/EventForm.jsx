@@ -620,9 +620,7 @@ export function EventForm({
             </FormField>
           </div>
         )}
-        {venueResolved && address && (
-          <p className="-mt-2 text-xs text-text-muted">📍 {address}</p>
-        )}
+        {venueResolved && address && <p className="-mt-2 text-xs text-text-muted">📍 {address}</p>}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <FormField label="Price ($)">
@@ -653,10 +651,7 @@ export function EventForm({
             label={
               <span className="flex items-center justify-between gap-2">
                 Min age
-                <RequireToggle
-                  on={ageRestricted}
-                  onToggle={() => setAgeRestricted((v) => !v)}
-                />
+                <RequireToggle on={ageRestricted} onToggle={() => setAgeRestricted((v) => !v)} />
               </span>
             }
           >
@@ -752,9 +747,7 @@ export function EventForm({
             <label className="flex cursor-pointer items-center justify-between">
               <div>
                 <span className="text-sm font-semibold text-ink">This is a pickup run</span>
-                <p className="text-xs text-text-secondary">
-                  Add roster, positions & skill level.
-                </p>
+                <p className="text-xs text-text-secondary">Add roster, positions & skill level.</p>
               </div>
               <input
                 type="checkbox"

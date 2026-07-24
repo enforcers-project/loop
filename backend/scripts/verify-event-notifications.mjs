@@ -107,9 +107,8 @@ port1.unref()
 
 globalThis.__PRISMA_STUB__ = makePrismaStub()
 
-const { notifyAttendeesOfEventUpdate, notifyAttendeesOfEventCancel } = await import(
-  '../src/notifications/publish.js'
-)
+const { notifyAttendeesOfEventUpdate, notifyAttendeesOfEventCancel } =
+  await import('../src/notifications/publish.js')
 
 // --------------------------------------------------------------------------
 // Test harness
@@ -175,19 +174,31 @@ assert(
   insertedRows.some((r) => r.userId === '00000000-0000-0000-0000-000000000015'),
   'saved-only user gets notified',
 )
+assert(!insertedRows.some((r) => r.userId === ORGANIZER_ID), 'organizer never appears as recipient')
 assert(
-  !insertedRows.some((r) => r.userId === ORGANIZER_ID),
-  'organizer never appears as recipient',
+  insertedRows.every((r) => r.type === 'event_updated'),
+  'all rows type=event_updated',
 )
-assert(insertedRows.every((r) => r.type === 'event_updated'), 'all rows type=event_updated')
-assert(insertedRows.every((r) => r.channel === 'in_app'), 'all rows channel=in_app')
-assert(insertedRows.every((r) => r.actorId === ORGANIZER_ID), 'all rows actor=organizer')
-assert(insertedRows.every((r) => r.eventId === EVENT_ID), 'all rows point at the event')
+assert(
+  insertedRows.every((r) => r.channel === 'in_app'),
+  'all rows channel=in_app',
+)
+assert(
+  insertedRows.every((r) => r.actorId === ORGANIZER_ID),
+  'all rows actor=organizer',
+)
+assert(
+  insertedRows.every((r) => r.eventId === EVENT_ID),
+  'all rows point at the event',
+)
 assert(
   insertedRows.every((r) => r.title === '"Sunday soccer" was updated'),
   'title format correct',
 )
-assert(insertedRows.every((r) => r.body === 'Time and Venue changed'), 'body summarises fields')
+assert(
+  insertedRows.every((r) => r.body === 'Time and Venue changed'),
+  'body summarises fields',
+)
 assert(
   insertedRows.every(
     (r) =>
@@ -223,7 +234,10 @@ currentScenario = {
 }
 const cancelWithReason = await notifyAttendeesOfEventCancel(EVENT_ID, '  Rain \n')
 assert(cancelWithReason === 2, `2 rows written (got ${cancelWithReason})`)
-assert(insertedRows.every((r) => r.type === 'event_cancelled'), 'type=event_cancelled')
+assert(
+  insertedRows.every((r) => r.type === 'event_cancelled'),
+  'type=event_cancelled',
+)
 assert(
   insertedRows.every((r) => r.title === '"Rooftop yoga" was cancelled'),
   'cancel title',

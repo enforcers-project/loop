@@ -96,91 +96,91 @@ async function fetchEventsList(query) {
     limit: rawLimit,
   } = query
 
-    // --- Pagination setup ---
-    const limit = Math.min(Math.max(Number(rawLimit) || 20, 1), 50)
+  // --- Pagination setup ---
+  const limit = Math.min(Math.max(Number(rawLimit) || 20, 1), 50)
 
-    // --- Build the WHERE conditions ---
-    const where = { status: 'published' }
+  // --- Build the WHERE conditions ---
+  const where = { status: 'published' }
 
-    // Category filter (multi-select: ?category=music&category=nightlife)
-    const categories = toArray(category)
-    if (categories.length) {
-      where.category = { slug: { in: categories } }
+  // Category filter (multi-select: ?category=music&category=nightlife)
+  const categories = toArray(category)
+  if (categories.length) {
+    where.category = { slug: { in: categories } }
+  }
+
+  // Source filter (multi-select)
+  const sources = toArray(source)
+  if (sources.length) {
+    where.source = { in: sources }
+  }
+
+  // City filter. When lat/lng are also present we do NOT apply a hard city
+  // equals here — the geo block below folds `city` into an OR (radius-match
+  // OR city-match) so events created without pinned coordinates still
+  // surface to users with a home coordinate saved.
+  const hasGeoParams = nearLat && nearLng && radiusKm
+  if (city && !hasGeoParams) {
+    where.city = { equals: city, mode: 'insensitive' }
+  }
+
+  // Date range filter. When the caller doesn't pass an explicit range we
+  // hide events whose start time is already in the past — a Home/Search
+  // list should only show things the user can still attend.
+  if (dateFrom || dateTo) {
+    where.startsAt = {}
+    if (dateFrom) where.startsAt.gte = new Date(dateFrom)
+    if (dateTo) where.startsAt.lte = new Date(dateTo)
+  } else {
+    where.startsAt = { gte: new Date() }
+  }
+
+  // Price range filter
+  if (priceMin) where.priceMin = { gte: Number(priceMin) }
+  if (priceMax) where.priceMax = { lte: Number(priceMax) }
+
+  // Boolean filters
+  if (isFree === 'true') where.isFree = true
+  if (isSports === 'true') where.isSports = true
+
+  // Age filter
+  if (ageMax) where.ageMin = { lte: Number(ageMax) }
+
+  // Cursor: fetch events after this ID
+  if (cursor) {
+    where.id = { gt: cursor }
+  }
+
+  // --- Determine sort order ---
+  let orderBy = [{ startsAt: 'asc' }, { id: 'asc' }]
+  if (sort === 'popularity') {
+    orderBy = [{ rsvpCount: 'desc' }, { saveCount: 'desc' }, { id: 'asc' }]
+  } else if (sort === 'date') {
+    orderBy = [{ startsAt: 'asc' }, { id: 'asc' }]
+  }
+
+  // --- Geo filter (uses raw SQL because Prisma can't do earthdistance) ---
+  // When the caller passes city alongside lat/lng, we UNION the two: an
+  // event is in-scope if it's within the radius OR it matches the city
+  // (case-insensitive) — the latter covers events whose organizer skipped
+  // Places autocomplete so lat/lng are null. Without the union, any user
+  // with a home coord saved would never see those events.
+  const hasGeo = nearLat && nearLng && radiusKm
+  let geoEventIds = null
+
+  if (hasGeo) {
+    const lat = Number(nearLat)
+    const lng = Number(nearLng)
+    const radius = Number(radiusKm) * 1000 // earthdistance works in meters
+
+    const params = [lat, lng, radius]
+    let cityClause = ''
+    if (city) {
+      params.push(city)
+      cityClause = `OR (lat IS NULL AND lng IS NULL AND city ILIKE $4)`
     }
 
-    // Source filter (multi-select)
-    const sources = toArray(source)
-    if (sources.length) {
-      where.source = { in: sources }
-    }
-
-    // City filter. When lat/lng are also present we do NOT apply a hard city
-    // equals here — the geo block below folds `city` into an OR (radius-match
-    // OR city-match) so events created without pinned coordinates still
-    // surface to users with a home coordinate saved.
-    const hasGeoParams = nearLat && nearLng && radiusKm
-    if (city && !hasGeoParams) {
-      where.city = { equals: city, mode: 'insensitive' }
-    }
-
-    // Date range filter. When the caller doesn't pass an explicit range we
-    // hide events whose start time is already in the past — a Home/Search
-    // list should only show things the user can still attend.
-    if (dateFrom || dateTo) {
-      where.startsAt = {}
-      if (dateFrom) where.startsAt.gte = new Date(dateFrom)
-      if (dateTo) where.startsAt.lte = new Date(dateTo)
-    } else {
-      where.startsAt = { gte: new Date() }
-    }
-
-    // Price range filter
-    if (priceMin) where.priceMin = { gte: Number(priceMin) }
-    if (priceMax) where.priceMax = { lte: Number(priceMax) }
-
-    // Boolean filters
-    if (isFree === 'true') where.isFree = true
-    if (isSports === 'true') where.isSports = true
-
-    // Age filter
-    if (ageMax) where.ageMin = { lte: Number(ageMax) }
-
-    // Cursor: fetch events after this ID
-    if (cursor) {
-      where.id = { gt: cursor }
-    }
-
-    // --- Determine sort order ---
-    let orderBy = [{ startsAt: 'asc' }, { id: 'asc' }]
-    if (sort === 'popularity') {
-      orderBy = [{ rsvpCount: 'desc' }, { saveCount: 'desc' }, { id: 'asc' }]
-    } else if (sort === 'date') {
-      orderBy = [{ startsAt: 'asc' }, { id: 'asc' }]
-    }
-
-    // --- Geo filter (uses raw SQL because Prisma can't do earthdistance) ---
-    // When the caller passes city alongside lat/lng, we UNION the two: an
-    // event is in-scope if it's within the radius OR it matches the city
-    // (case-insensitive) — the latter covers events whose organizer skipped
-    // Places autocomplete so lat/lng are null. Without the union, any user
-    // with a home coord saved would never see those events.
-    const hasGeo = nearLat && nearLng && radiusKm
-    let geoEventIds = null
-
-    if (hasGeo) {
-      const lat = Number(nearLat)
-      const lng = Number(nearLng)
-      const radius = Number(radiusKm) * 1000 // earthdistance works in meters
-
-      const params = [lat, lng, radius]
-      let cityClause = ''
-      if (city) {
-        params.push(city)
-        cityClause = `OR (lat IS NULL AND lng IS NULL AND city ILIKE $4)`
-      }
-
-      const geoRows = await prisma.$queryRawUnsafe(
-        `SELECT id,
+    const geoRows = await prisma.$queryRawUnsafe(
+      `SELECT id,
                 CASE
                   WHEN lat IS NULL OR lng IS NULL THEN NULL
                   ELSE earth_distance(ll_to_earth($1, $2), ll_to_earth(lat, lng))
@@ -193,81 +193,81 @@ async function fetchEventsList(query) {
            )
            ${cityClause}
          ORDER BY distance_m NULLS LAST`,
-        ...params,
-      )
+      ...params,
+    )
 
-      geoEventIds = new Map(
-        geoRows.map((r) => [r.id, r.distance_m != null ? r.distance_m / 1000 : null]),
-      )
+    geoEventIds = new Map(
+      geoRows.map((r) => [r.id, r.distance_m != null ? r.distance_m / 1000 : null]),
+    )
 
-      if (geoEventIds.size === 0) {
-        return { data: [], nextCursor: null }
-      }
-
-      where.id = { ...(where.id || {}), in: [...geoEventIds.keys()] }
+    if (geoEventIds.size === 0) {
+      return { data: [], nextCursor: null }
     }
 
-    // --- Full-text search (uses the search_document tsvector column) ---
-    let searchIds = null
-    if (q && q.trim()) {
-      const tsQuery = q
-        .trim()
-        .split(/\s+/)
-        .map((w) => w + ':*')
-        .join(' & ')
+    where.id = { ...(where.id || {}), in: [...geoEventIds.keys()] }
+  }
 
-      const searchRows = await prisma.$queryRawUnsafe(
-        `SELECT id FROM events
+  // --- Full-text search (uses the search_document tsvector column) ---
+  let searchIds = null
+  if (q && q.trim()) {
+    const tsQuery = q
+      .trim()
+      .split(/\s+/)
+      .map((w) => w + ':*')
+      .join(' & ')
+
+    const searchRows = await prisma.$queryRawUnsafe(
+      `SELECT id FROM events
          WHERE search_document @@ to_tsquery('english', $1)`,
-        tsQuery,
-      )
+      tsQuery,
+    )
 
-      searchIds = searchRows.map((r) => r.id)
+    searchIds = searchRows.map((r) => r.id)
 
-      if (searchIds.length === 0) {
-        return { data: [], nextCursor: null }
-      }
-
-      if (where.id?.in) {
-        // Intersect with geo filter
-        const geoSet = new Set(where.id.in)
-        where.id.in = searchIds.filter((id) => geoSet.has(id))
-      } else {
-        where.id = { ...(where.id || {}), in: searchIds }
-      }
+    if (searchIds.length === 0) {
+      return { data: [], nextCursor: null }
     }
 
-    // --- Execute the main query ---
-    const events = await prisma.event.findMany({
-      where,
-      orderBy,
-      take: limit + 1, // fetch one extra to know if there's a next page
-      include: {
-        category: true,
-        organizer: true,
-        sportsDetail: true,
-      },
-    })
-
-    // --- Pagination: determine nextCursor ---
-    let nextCursor = null
-    if (events.length > limit) {
-      events.pop() // remove the extra row
-      nextCursor = events[events.length - 1].id
+    if (where.id?.in) {
+      // Intersect with geo filter
+      const geoSet = new Set(where.id.in)
+      where.id.in = searchIds.filter((id) => geoSet.has(id))
+    } else {
+      where.id = { ...(where.id || {}), in: searchIds }
     }
+  }
 
-    // --- Serialize into EventCard shape ---
-    const data = events.map((event) => {
-      const distanceKm = geoEventIds?.get(event.id) ?? null
-      return toEventCard(event, distanceKm)
-    })
+  // --- Execute the main query ---
+  const events = await prisma.event.findMany({
+    where,
+    orderBy,
+    take: limit + 1, // fetch one extra to know if there's a next page
+    include: {
+      category: true,
+      organizer: true,
+      sportsDetail: true,
+    },
+  })
 
-    // --- If sorting by distance, re-sort (Prisma couldn't do it) ---
-    if (sort === 'distance' && hasGeo) {
-      data.sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
-    }
+  // --- Pagination: determine nextCursor ---
+  let nextCursor = null
+  if (events.length > limit) {
+    events.pop() // remove the extra row
+    nextCursor = events[events.length - 1].id
+  }
 
-    return { data, nextCursor }
+  // --- Serialize into EventCard shape ---
+  const data = events.map((event) => {
+    const distanceKm = geoEventIds?.get(event.id) ?? null
+    return toEventCard(event, distanceKm)
+  })
+
+  // --- If sorting by distance, re-sort (Prisma couldn't do it) ---
+  if (sort === 'distance' && hasGeo) {
+    data.sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
+  }
+
+  return { data, nextCursor }
 }
 
 // GET /api/events/:id

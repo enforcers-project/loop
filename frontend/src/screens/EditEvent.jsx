@@ -49,9 +49,24 @@ function eventToDraft(event) {
 // short-circuit into an empty diff (no notification).
 function diffDraft(initial, next) {
   const out = {}
-  const keys = ['title', 'category', 'date', 'time', 'location', 'address', 'lat', 'lng',
-    'placeId', 'city', 'price', 'capacity', 'ageRestriction', 'ageRestricted',
-    'description', 'flyer']
+  const keys = [
+    'title',
+    'category',
+    'date',
+    'time',
+    'location',
+    'address',
+    'lat',
+    'lng',
+    'placeId',
+    'city',
+    'price',
+    'capacity',
+    'ageRestriction',
+    'ageRestricted',
+    'description',
+    'flyer',
+  ]
   for (const k of keys) {
     const iv = initial[k]
     const nv = next[k]

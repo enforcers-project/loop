@@ -412,13 +412,18 @@ router.get('/:id/rsvps', requireAuth, async (req, res) => {
       nextCursor = rows[rows.length - 1].createdAt.toISOString()
     }
 
-    // Whole-event counts (not page-scoped) for the dashboard header.
-    const grouped = await prisma.rsvp.groupBy({
-      by: ['status'],
-      where: { eventId: id },
-      _count: { _all: true },
-    })
-    const counts = { going: 0, interested: 0, waitlisted: 0 }
+    // Whole-event counts (not page-scoped) for the dashboard header. `attended`
+    // is the count of checked-in RSVPs across the whole event, so the dashboard
+    // can show a "N checked in" KPI without paging the full roster.
+    const [grouped, attended] = await Promise.all([
+      prisma.rsvp.groupBy({
+        by: ['status'],
+        where: { eventId: id },
+        _count: { _all: true },
+      }),
+      prisma.rsvp.count({ where: { eventId: id, attended: true } }),
+    ])
+    const counts = { going: 0, interested: 0, waitlisted: 0, attended }
     for (const g of grouped) {
       if (g.status in counts) counts[g.status] = g._count._all
     }

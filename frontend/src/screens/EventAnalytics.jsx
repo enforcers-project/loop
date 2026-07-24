@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, ExternalLink } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Users } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { PageLoader } from '../components/primitives'
@@ -138,12 +138,20 @@ export function EventAnalytics() {
             {fmtDate(data.range?.to)}
           </div>
         </div>
-        <Link
-          to={`/event/${event.id}`}
-          className="inline-flex items-center gap-1 rounded-button border border-border-light bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface"
-        >
-          View event <ExternalLink size={14} />
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to={`/organizer/events/${event.id}/dashboard`}
+            className="inline-flex items-center gap-1 rounded-button border border-border-light bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface"
+          >
+            <Users size={14} /> Attendees
+          </Link>
+          <Link
+            to={`/event/${event.id}`}
+            className="inline-flex items-center gap-1 rounded-button border border-border-light bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface"
+          >
+            View event <ExternalLink size={14} />
+          </Link>
+        </div>
       </header>
 
       {/* KPI row */}

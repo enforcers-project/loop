@@ -890,8 +890,8 @@ export const api = {
   // check-in. Both are owner-gated server-side (403 for non-organizers).
   //   eventRsvps: GET /api/events/:id/rsvps → { data:[{ id, user, status,
   //     guests_count, attended, checked_in_at, created_at }], nextCursor,
-  //     counts:{ going, interested, waitlisted } }. Returns the raw envelope so
-  //     the screen can read counts + page. Degrades to an empty envelope.
+  //     counts:{ going, interested, waitlisted, attended } }. Returns the raw
+  //     envelope so the screen can read counts + page. Degrades to an empty one.
   //   checkInAttendee: PATCH /api/events/:id/rsvps/:userId { attended:true } —
   //     fires the ranker's top-weight `attend` signal. Throws on 403/404 so the
   //     dashboard can surface it.
@@ -908,7 +908,11 @@ export const api = {
       if (!res.ok) throw new Error(String(res.status))
       return await res.json() // { data, nextCursor, counts }
     } catch {
-      return { data: [], nextCursor: null, counts: { going: 0, interested: 0, waitlisted: 0 } }
+      return {
+        data: [],
+        nextCursor: null,
+        counts: { going: 0, interested: 0, waitlisted: 0, attended: 0 },
+      }
     }
   },
   checkInAttendee: (eventId, userId) =>

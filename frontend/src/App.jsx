@@ -20,6 +20,7 @@ import { UserProfile } from './screens/UserProfile'
 import { Settings } from './screens/Settings'
 import { OrganizerAnalytics } from './screens/OrganizerAnalytics'
 import { EventAnalytics } from './screens/EventAnalytics'
+import { OrganizerDashboard } from './screens/OrganizerDashboard'
 
 /* Routes that render standalone (no app chrome / bars / assistant). */
 const BARE_ROUTES = ['/', '/auth', '/onboarding']
@@ -94,6 +95,14 @@ function Shell() {
             element={
               <ProtectedRoute>
                 <EventAnalytics />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organizer/events/:id/dashboard"
+            element={
+              <ProtectedRoute>
+                <OrganizerDashboard />
               </ProtectedRoute>
             }
           />

@@ -3,7 +3,7 @@ import prisma from '../lib/prisma.js'
 import { toEventCard, toEventDetail, EVENT_DETAIL_INCLUDE } from './serialize.js'
 import { requireAuth, fail } from '../auth/middleware.js'
 import { runJob } from '../jobs/index.js'
-import { notifyFollowersOfNewEvent } from '../notifications/publish.js'
+import { notifyFollowersOfNewEvent, notifySelf } from '../notifications/publish.js'
 import { tagAndPersist } from '../ai/autotag.persist.js'
 
 const router = Router()
@@ -710,6 +710,16 @@ router.post('/:id/publish', requireAuth, async (req, res) => {
     notifyFollowersOfNewEvent(event.organizerId, published.id).catch((err) =>
       console.error('notifyFollowersOfNewEvent error:', err),
     )
+
+    // Milestone notification to the organizer themselves — a durable bell
+    // record their event went live, with a tap-through to it, alongside the
+    // transient "Event published!" toast. Fire-and-forget.
+    notifySelf(event.organizerId, {
+      kind: 'event_published',
+      title: 'Your event is live',
+      body: event.title || null,
+      eventId: published.id,
+    })
 
     return res.json({
       data: { id: published.id, status: published.status, published_at: published.publishedAt },

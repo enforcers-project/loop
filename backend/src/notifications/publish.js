@@ -70,3 +70,45 @@ export async function notifyFollowersOfNewEvent(organizerId, eventId) {
 
   return created
 }
+
+/**
+ * Create a milestone notification for a user about their OWN action — e.g.
+ * "Your event is live", "Your post is published". Unlike the social
+ * notifications (a like/comment/follow, which have an `actor` and land in
+ * someone else's feed), these are self-addressed confirmations that persist in
+ * the bell so the user has a durable record + a tap-through to what they made.
+ * The transient toast still fires in the UI for instant feedback; this is the
+ * lasting copy.
+ *
+ * Deliberately uses the existing `system` NotificationType (a catch-all with no
+ * acting user) tagged with `metadata.kind` rather than adding new enum values —
+ * new Postgres enum values need a migration, and deploys here don't run
+ * `migrate deploy`, so a fresh enum value would 500 every insert until the DB
+ * was hand-migrated. `metadata.kind` gives the client everything it needs to
+ * pick an icon without touching the schema.
+ *
+ * Best-effort by contract: callers invoke this fire-and-forget (never awaited in
+ * the request path), so a notification failure can't fail the mutation that
+ * triggered it. Returns the created row (or null on any failure).
+ */
+export async function notifySelf(userId, { kind, title, body = null, eventId = null }) {
+  if (!userId || !kind || !title) return null
+  try {
+    return await prisma.notification.create({
+      data: {
+        userId,
+        type: 'system',
+        channel: 'in_app',
+        // actorId stays null — the user IS the actor, so there's no "someone
+        // else did this" avatar to show; the client renders a milestone icon.
+        eventId,
+        title,
+        body,
+        metadata: { kind },
+      },
+    })
+  } catch (err) {
+    console.error('notifySelf error:', err)
+    return null
+  }
+}

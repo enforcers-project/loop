@@ -35,8 +35,7 @@ const HEADLINE = [
   { text: 'Find', accent: false },
   { text: 'your', accent: false },
   { text: 'next', accent: false },
-  { text: 'night', accent: true },
-  { text: 'out.', accent: true },
+  { text: 'adventure', accent: true },
 ]
 
 // Placeholder prompts that cycle in the hero search bar to hint at what the AI

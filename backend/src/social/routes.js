@@ -18,6 +18,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, fail } from '../auth/middleware.js'
+import { notifySelf } from '../notifications/publish.js'
 import {
   presignPutUrl,
   isConfigured as s3Configured,
@@ -223,6 +224,16 @@ router.post('/posts', requireAuth, async (req, res) => {
         eventId: event_id ?? null,
       },
       select: POST_SELECT,
+    })
+
+    // Milestone notification to the author — a durable bell record of the post
+    // alongside the transient "Post published" toast. Fire-and-forget so it
+    // never delays or fails the create.
+    notifySelf(req.user.id, {
+      kind: 'post_published',
+      title: 'Your post is published',
+      body: caption?.trim()?.slice(0, 140) || null,
+      eventId: event_id ?? null,
     })
 
     return res.status(201).json({ data: toPost(created, false) })
@@ -542,6 +553,15 @@ router.post('/stories', requireAuth, async (req, res) => {
         createdAt: true,
         expiresAt: true,
       },
+    })
+
+    // Milestone notification to the author (durable record + tap-through)
+    // alongside the transient "Story posted" toast. Fire-and-forget.
+    notifySelf(req.user.id, {
+      kind: 'story_posted',
+      title: 'Your story is live',
+      body: caption?.trim()?.slice(0, 140) || null,
+      eventId: event_id ?? null,
     })
 
     return res.status(201).json({

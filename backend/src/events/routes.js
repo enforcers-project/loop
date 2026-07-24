@@ -10,12 +10,8 @@ import {
   notifySelf,
 } from '../notifications/publish.js'
 import { tagAndPersist } from '../ai/autotag.persist.js'
-import { cached, invalidate, invalidatePattern } from '../lib/cache.js'
 
 const router = Router()
-
-const EVENT_LIST_TTL_SECONDS = 60
-const EVENT_RELATED_TTL_SECONDS = 120
 
 // Fields whose change should notify committed attendees. Keeps description,
 // flyer, category, and tag edits silent — those don't affect whether an
@@ -38,36 +34,10 @@ const MEANINGFUL_FIELDS = [
   'ageLabel',
 ]
 
-// Small helper: after a write to event `id`, wipe every cache that could
-// return stale data about it. Feed and list keys use SCAN patterns; related
-// and analytics keys anchor on a single event id.
-async function bustEventCaches(eventId, organizerId) {
-  await Promise.all([
-    invalidatePattern('feed:user:*'),
-    invalidatePattern('events:list:*'),
-    invalidate(`events:related:${eventId}`),
-    invalidatePattern(`analytics:event:${eventId}:*`),
-    organizerId ? invalidatePattern(`analytics:org:${organizerId}:*`) : Promise.resolve(),
-  ])
-}
-
-// Build a stable cache key from the filter params. Sorted so ?a=1&b=2 and
-// ?b=2&a=1 hit the same key; excludes cursor because paginated pages get their
-// own key naturally via the cursor value.
-function eventsListCacheKey(query) {
-  const keys = Object.keys(query).sort()
-  const parts = keys.map((k) => {
-    const v = query[k]
-    return Array.isArray(v) ? `${k}=${[...v].sort().join(',')}` : `${k}=${v}`
-  })
-  return `events:list:${parts.join('|') || 'default'}`
-}
-
 // GET /api/events
 router.get('/', async (req, res) => {
   try {
-    const cacheKey = eventsListCacheKey(req.query)
-    const result = await cached(cacheKey, EVENT_LIST_TTL_SECONDS, () => fetchEventsList(req.query))
+    const result = await fetchEventsList(req.query)
     res.json(result)
   } catch (err) {
     console.error('GET /api/events error:', err)
@@ -360,10 +330,7 @@ router.get('/:id', async (req, res) => {
 // GET /api/events/:id/related
 router.get('/:id/related', async (req, res) => {
   try {
-    const cacheKey = `events:related:${req.params.id}`
-    const payload = await cached(cacheKey, EVENT_RELATED_TTL_SECONDS, () =>
-      fetchRelatedEvents(req.params.id),
-    )
+    const payload = await fetchRelatedEvents(req.params.id)
     if (payload.notFound) return res.status(404).json({ error: { message: 'Event not found' } })
     res.json({ data: payload.data })
   } catch (err) {
@@ -586,12 +553,6 @@ router.post('/', requireAuth, async (req, res) => {
       where: { id: created },
       include: EVENT_DETAIL_INCLUDE,
     })
-    // Bust so the organizer's next feed / event-list fetch shows the new
-    // event immediately instead of waiting up to the TTL. Fire-and-forget:
-    // a cache failure must not undo a successful create.
-    bustEventCaches(created, req.user.id).catch((err) =>
-      console.warn('[cache] bust after create failed:', err.message),
-    )
     return res.status(201).json({ data: toEventDetail(detail) })
   } catch (err) {
     if (err.code === 'P2003') {
@@ -738,10 +699,6 @@ router.patch('/:id', requireAuth, async (req, res) => {
       where: { id: existing.id },
       include: EVENT_DETAIL_INCLUDE,
     })
-    bustEventCaches(existing.id, existing.organizerId).catch((err) =>
-      console.warn('[cache] bust after patch failed:', err.message),
-    )
-
     // Fan out attendee notifications for meaningful edits on a live event.
     // Awaited (not fire-and-forget) so a refresh right after Save always sees
     // the row — the extra latency is one bounded batch of INSERTs. A fanout
@@ -807,10 +764,6 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
       where: { id: existing.id },
       include: EVENT_DETAIL_INCLUDE,
     })
-    bustEventCaches(existing.id, existing.organizerId).catch((err) =>
-      console.warn('[cache] bust after cancel failed:', err.message),
-    )
-
     // Only fan out to attendees when the event was previously live. A draft
     // cancel has no attendees. Awaited so a refresh right after cancel
     // always sees the row; a fanout failure is logged but does not fail the
@@ -845,9 +798,6 @@ router.delete('/:id', requireAuth, async (req, res) => {
       return fail(res, 403, 'FORBIDDEN', 'Synced events cannot be deleted')
     }
     await prisma.event.delete({ where: { id: existing.id } })
-    bustEventCaches(existing.id, existing.organizerId).catch((err) =>
-      console.warn('[cache] bust after delete failed:', err.message),
-    )
     return res.status(204).end()
   } catch (err) {
     console.error('DELETE /api/events/:id error:', err)
@@ -905,14 +855,6 @@ router.post('/:id/publish', requireAuth, async (req, res) => {
     // notification failure must never fail the publish itself.
     notifyFollowersOfNewEvent(event.organizerId, published.id).catch((err) =>
       console.error('notifyFollowersOfNewEvent error:', err),
-    )
-
-    // Bust every read-path cache the newly-published event could show up in.
-    // This is what makes the "create → back to feed → see it" flow instant
-    // during the demo: without it, the ranked feed could serve up to 60s of
-    // stale ranking that doesn't include the new event.
-    bustEventCaches(published.id, event.organizerId).catch((err) =>
-      console.warn('[cache] bust after publish failed:', err.message),
     )
 
     // Milestone notification to the organizer themselves — a durable bell

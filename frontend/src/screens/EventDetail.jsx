@@ -32,6 +32,7 @@ import { EventComments } from '../components/EventComments'
 import { EventMap } from '../components/EventMap'
 import { OrganizerFooterCard } from '../components/OrganizerFooterCard'
 import { ReminderPicker } from '../components/ReminderPicker'
+import { ShareEventSheet } from '../components/messages'
 
 // Format an ISO instant into "9:00 PM" so the hero can pair date + time on one
 // line ("Sun, Jul 19 · 9:00 PM"). Guards missing / unparseable values so the
@@ -62,6 +63,8 @@ export function EventDetail() {
   // user never loses the RSVP action on a long page.
   const [pillVisible, setPillVisible] = useState(false)
   const heroCtaRef = useRef(null)
+  // Instagram-style "share to DM / group" sheet — opens on the Share icon.
+  const [shareOpen, setShareOpen] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -88,43 +91,25 @@ export function EventDetail() {
     return () => io.disconnect()
   }, [event])
 
-  // Share the event using the platform's native share sheet when available
-  // (mobile + secure contexts on Chrome/Edge/Safari); fall back to copying the
-  // link and toasting so desktop users still get something to send friends.
-  // Nightlife/social events grow through invites, so Share is a first-class
-  // action alongside Save and RSVP.
-  const onShare = useCallback(async () => {
+  // Share = open the in-app share sheet (Instagram-style). Sending the event
+  // into a chat is the primary path here; the sheet handles thread selection,
+  // search, and the optional note. We fire the share signal up-front so the
+  // organizer analytics still reflect the intent even if the user cancels the
+  // sheet — matches the semantics of the old "opened the share menu" event.
+  const onShare = useCallback(() => {
     if (!event) return
-    const url = typeof window !== 'undefined' ? window.location.href : ''
-    // Log a share signal so the organizer's analytics reflect it. Fire-and-
-    // forget — the recommender weights this at 0.45 and it drives the Shares
-    // KPI on the event analytics page.
     api.interactions([{ interaction_type: 'share', surface: 'event_detail', event_id: event.id }])
-    const payload = {
-      title: event.title,
-      text: `Come with me to ${event.title}${event.date ? ` — ${event.date}` : ''}`,
-      url,
-    }
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      try {
-        await navigator.share(payload)
-        return
-      } catch {
-        // User cancelled or a permissions issue — fall through to copy so the
-        // click never becomes a no-op.
-      }
-    }
-    if (navigator?.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(url)
-        toast.success('Link copied.')
-        return
-      } catch {
-        // Silent — the toast below still fires as a last resort.
-      }
-    }
-    toast.info(`Share this link: ${url}`)
-  }, [event, toast])
+    setShareOpen(true)
+  }, [event])
+
+  const handleShareSent = useCallback(
+    (threadIds) => {
+      const n = threadIds?.length ?? 0
+      if (!n) return
+      toast.success(n > 1 ? `Shared to ${n} chats` : 'Shared')
+    },
+    [toast],
+  )
 
   // Confirm + fire the organizer cancel action. Reason is optional and typed
   // into the confirm dialog via a plain prompt() — a proper reason textarea
@@ -467,6 +452,17 @@ export function EventDetail() {
           onSave={() => toggleSaved(event.id)}
           onShare={onShare}
           visible={pillVisible}
+        />
+      )}
+
+      {/* Share-to-DM sheet — the Instagram-style flow. Only mounted while open
+          so the sheet's useThreads subscription doesn't run on every event
+          page view. */}
+      {shareOpen && (
+        <ShareEventSheet
+          event={event}
+          onClose={() => setShareOpen(false)}
+          onSent={handleShareSent}
         />
       )}
     </main>

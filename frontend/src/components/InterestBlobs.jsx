@@ -256,7 +256,7 @@ export function InterestBlobs({ interests, picked, onToggle, minPicks = 3 }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {worlds.map(({ name, items }, idx) => {
           const meta = CATEGORY_META[name] ?? FALLBACK_META
           const isOpen = expanded.has(name)
@@ -319,7 +319,7 @@ function World({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1, transition: { duration: 0.18 } }}
             exit={{ opacity: 0, transition: { duration: 0.12 } }}
-            className="flex flex-col px-4 py-4"
+            className="flex flex-col px-5 py-5"
           >
             {/* header row — small blob glyph + world name + collapse button */}
             <div className="mb-3 flex items-center gap-2.5">
@@ -354,13 +354,17 @@ function World({
               </button>
             </div>
 
-            {/* burst cluster — small blobs pop out with a staggered spring */}
+            {/* burst cluster — small blobs pop out with a staggered spring.
+                2-col grid inside each world card so each interest tile is
+                large enough for two-word labels ("Rooftop Parties",
+                "Silent Disco") to sit inside without wrapping into a stack
+                of one-letter lines. */}
             <m.div
               variants={clusterParent}
               initial="hidden"
               animate="show"
               exit="exit"
-              className="flex flex-wrap gap-2"
+              className="grid grid-cols-2 gap-3"
             >
               {items.map((interest, i) => {
                 const on = picked.has(interest.id)
@@ -377,7 +381,7 @@ function World({
                     whileHover={{
                       scale: 1.07,
                       borderRadius: hoverShape,
-                      y: -2,
+                      y: -3,
                       transition: { type: 'spring', stiffness: 320, damping: 14 },
                     }}
                     whileTap={{
@@ -389,26 +393,28 @@ function World({
                     style={{
                       borderRadius: shape,
                       background: on ? blobGradient(meta) : meta.soft,
-                      boxShadow: on ? `0 8px 18px -10px ${meta.accent}` : 'none',
+                      boxShadow: on
+                        ? `0 10px 22px -12px ${meta.accent}`
+                        : `inset 0 0 0 1px ${meta.soft}`,
                     }}
                     className={cn(
-                      'relative px-3.5 py-2 text-[13px] font-semibold transition-colors',
-                      on ? 'text-white' : 'text-ink',
+                      'relative flex aspect-square w-full items-center justify-center px-3 py-2 text-center text-[13px] font-semibold leading-tight transition-colors',
+                      on ? 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.25)]' : 'text-ink',
                     )}
                     aria-pressed={on}
                   >
-                    <span className="relative flex items-center gap-1.5">
+                    <span className="relative flex flex-col items-center gap-1.5">
                       {on && (
                         <m.span
                           initial={{ scale: 0, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-                          className="grid h-3.5 w-3.5 place-items-center rounded-full bg-white/30"
+                          className="grid h-4 w-4 place-items-center rounded-full bg-white/30"
                         >
-                          <Check size={9} strokeWidth={3} />
+                          <Check size={10} strokeWidth={3} />
                         </m.span>
                       )}
-                      {interest.label}
+                      <span className="px-1 leading-snug">{interest.label}</span>
                     </span>
                   </m.button>
                 )

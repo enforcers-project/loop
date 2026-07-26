@@ -238,8 +238,17 @@ export function Onboarding() {
     ? FALLBACK_CITIES.filter((c) => c.toLowerCase().includes(citySearch.toLowerCase()))
     : []
 
+  // Step 2 (the blob picker) needs a wider canvas than the other steps so the
+  // interest tiles are square enough for their labels to sit inside without
+  // wrapping into three lines. Age + location keep the tighter reading width.
+  const wide = step === 2
   return (
-    <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-5 py-10">
+    <div
+      className={cn(
+        'mx-auto flex min-h-screen flex-col px-5 py-10',
+        wide ? 'max-w-6xl' : 'max-w-2xl',
+      )}
+    >
       {/* progress */}
       <div className="mb-8 flex items-center gap-2">
         {[1, 2, 3].map((s) => (

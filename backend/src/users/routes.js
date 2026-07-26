@@ -397,6 +397,37 @@ router.patch('/:id', requireAuth, async (req, res) => {
   }
 })
 
+// --- GET /api/users/search?q= — people picker search ------------------------
+// Case-insensitive prefix/substring match against display_name and handle. Used
+// by the new-message picker + group composer, so the caller (their own row)
+// is excluded from results and the response is capped so a giant DB never
+// spills through. Requires auth — messaging is a member feature. Public columns
+// only (PUBLIC_USER_SELECT), so nothing PII leaks.
+router.get('/search', requireAuth, async (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : ''
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 30)
+  if (!q) return res.json({ data: [] })
+
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        id: { not: req.user.id },
+        OR: [
+          { displayName: { contains: q, mode: 'insensitive' } },
+          { handle: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: [{ isVerified: 'desc' }, { followerCount: 'desc' }, { displayName: 'asc' }],
+      take: limit,
+      select: PUBLIC_USER_SELECT,
+    })
+    return res.json({ data: users.map((u) => toPublicUser(u, null)) })
+  } catch (err) {
+    console.error('GET /api/users/search error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not search users')
+  }
+})
+
 // --- GET /api/users/:id — public profile ------------------------------------
 // Powers OrganizerProfile. Public; `is_following` is viewer-relative (null when
 // logged out). 400 for a non-UUID id so a stray mock `org-*` id 404s cleanly.

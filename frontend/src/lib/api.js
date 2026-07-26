@@ -855,6 +855,36 @@ export const api = {
     return request(`/users/${userId}/avatar`, { method: 'PUT', body: { avatar_url: public_url } })
   },
 
+  // People search (GET /api/users/search?q=…) — powers the new-message picker
+  // and group composer. Returns the backend snake_case PublicUser shape mapped
+  // to the client { id, name, handle, avatar, verified } the messaging surface
+  // already renders. Mock fallback scans MOCK_ORGANIZERS so the picker still
+  // returns something when the backend is offline. [] on empty query.
+  searchUsers: async (q) => {
+    const term = String(q ?? '').trim()
+    if (!term) return []
+    const list = await get(`/users/search?q=${encodeURIComponent(term)}`, () => {
+      const n = term.toLowerCase()
+      return MOCK_ORGANIZERS.filter(
+        (o) => o.name.toLowerCase().includes(n) || (o.handle ?? '').toLowerCase().includes(n),
+      ).slice(0, 20)
+    })
+    return (list ?? []).map((u) => {
+      // Backend row → { name, handle, avatar, verified }. Mock rows already have
+      // that shape, so leave them alone.
+      if (u.display_name !== undefined || u.avatar_url !== undefined) {
+        return {
+          id: u.id,
+          name: u.display_name || u.handle || 'Someone',
+          handle: u.handle ? `@${u.handle}` : '',
+          avatar: u.avatar_url || DEFAULT_AVATAR,
+          verified: !!u.is_verified,
+        }
+      }
+      return u
+    })
+  },
+
   // Follow / unfollow an organizer (no mock fallback — a follow must genuinely
   // persist). POST returns { is_following, followee: { follower_count } };
   // DELETE is 204 (request() returns null). Both throw on failure so the caller

@@ -125,9 +125,10 @@ export function AIAssistant() {
         <button
           onClick={() => setOpen(true)}
           className={cn(
-            'fixed right-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-white shadow-card-hover transition-transform hover:scale-105 md:bottom-6 md:right-6',
+            'fixed left-5 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-white shadow-card-hover transition-transform hover:scale-105 md:bottom-6 md:left-6',
             // Sit above the BottomBar by default; on detail routes sit higher
             // still so the FAB clears the floating StickyRsvpBar on mobile.
+            // Left corner so the bottom-right stays clear for MessagesWidget.
             hasStickyBar
               ? 'bottom-[calc(9rem+env(safe-area-inset-bottom))]'
               : 'bottom-[calc(5rem+env(safe-area-inset-bottom))]',
@@ -148,11 +149,12 @@ export function AIAssistant() {
         />
       )}
 
-      {/* right-side drawer */}
+      {/* left-side drawer — kept on the left so the bottom-right stays clear
+          for the persistent MessagesWidget. */}
       <aside
         className={cn(
-          'fixed right-0 top-0 z-50 flex h-full w-[320px] max-w-[90vw] flex-col bg-white shadow-card-hover transition-transform duration-300',
-          open ? 'translate-x-0' : 'translate-x-full',
+          'fixed left-0 top-0 z-50 flex h-full w-[320px] max-w-[90vw] flex-col bg-white shadow-card-hover transition-transform duration-300',
+          open ? 'translate-x-0' : '-translate-x-full',
         )}
       >
         {/* gradient header */}

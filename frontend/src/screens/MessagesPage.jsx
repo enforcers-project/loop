@@ -59,11 +59,7 @@ export function MessagesPage() {
         {/* right pane — active thread (or empty state) */}
         <section className={`flex min-h-0 flex-1 flex-col ${activeId ? 'flex' : 'hidden md:flex'}`}>
           {activeThread ? (
-            <ThreadView
-              threadId={activeThread.id}
-              showBack
-              onBack={() => navigate('/messages')}
-            />
+            <ThreadView threadId={activeThread.id} showBack onBack={() => navigate('/messages')} />
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
               <span className="grid h-16 w-16 place-items-center rounded-full border-2 border-ink text-ink">

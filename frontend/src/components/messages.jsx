@@ -59,7 +59,10 @@ function AvatarStack({ avatars, size, border = 'border-white' }) {
       <img
         src={avatars[0]}
         alt=""
-        className={cn('absolute left-0 top-0 rounded-full border-2 bg-surface object-cover', border)}
+        className={cn(
+          'absolute left-0 top-0 rounded-full border-2 bg-surface object-cover',
+          border,
+        )}
         style={{ width: inner, height: inner }}
       />
       <img
@@ -91,13 +94,7 @@ function AvatarStack({ avatars, size, border = 'border-white' }) {
    inside a flex parent that provides height; the list itself does the
    overflow. `activeThreadId` highlights the currently-open row.
 -------------------------------------------------------------------------- */
-export function ThreadList({
-  threads,
-  activeThreadId,
-  onSelect,
-  onCompose,
-  dense = false,
-}) {
+export function ThreadList({ threads, activeThreadId, onSelect, onCompose, dense = false }) {
   if (!threads.length) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-14 text-center">
@@ -236,9 +233,7 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
   if (!thread) {
     return (
       <div className="flex flex-1 items-center justify-center px-6 py-10 text-center">
-        <p className="text-sm text-text-secondary">
-          This conversation isn&apos;t around anymore.
-        </p>
+        <p className="text-sm text-text-secondary">This conversation isn&apos;t around anymore.</p>
       </div>
     )
   }
@@ -246,7 +241,8 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
   const desc = describeThread(thread)
   // DM header links to the partner's profile; group header is not a link
   // (there's no "group profile" surface yet).
-  const dmProfileHref = !desc.isGroup && thread.partner?.id ? `/organizer/${thread.partner.id}` : null
+  const dmProfileHref =
+    !desc.isGroup && thread.partner?.id ? `/organizer/${thread.partner.id}` : null
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -286,9 +282,7 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
             <AvatarStack avatars={desc.avatars} size={36} />
             <div className="min-w-0">
               <span className="truncate text-sm font-semibold text-ink">{desc.title}</span>
-              {desc.subtitle && (
-                <p className="truncate text-xs text-text-muted">{desc.subtitle}</p>
-              )}
+              {desc.subtitle && <p className="truncate text-xs text-text-muted">{desc.subtitle}</p>}
             </div>
           </div>
         )}
@@ -300,9 +294,7 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
         className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-surface/40 px-3 py-4"
       >
         {groups.length === 0 && (
-          <p className="py-10 text-center text-sm text-text-muted">
-            No messages yet. Say hi 👋
-          </p>
+          <p className="py-10 text-center text-sm text-text-muted">No messages yet. Say hi 👋</p>
         )}
         {groups.map((g, i) => {
           const sender = g.from === 'them' ? participantOf(thread, g.senderId) : null
@@ -432,18 +424,11 @@ function SharedEventCard({ event, mine, onOpen }) {
       )}
     >
       {event.poster && (
-        <img
-          src={event.poster}
-          alt=""
-          className="h-32 w-full flex-shrink-0 object-cover"
-        />
+        <img src={event.poster} alt="" className="h-32 w-full flex-shrink-0 object-cover" />
       )}
       <div className="flex flex-col gap-1 px-3 py-2.5">
         <span
-          className={cn(
-            'line-clamp-2 text-sm font-semibold',
-            mine ? 'text-white' : 'text-ink',
-          )}
+          className={cn('line-clamp-2 text-sm font-semibold', mine ? 'text-white' : 'text-ink')}
         >
           {event.title}
         </span>
@@ -468,12 +453,7 @@ function SharedEventCard({ event, mine, onOpen }) {
           </span>
         )}
         <div className="mt-1 flex items-center justify-between">
-          <span
-            className={cn(
-              'text-xs font-semibold',
-              mine ? 'text-white' : 'text-primary',
-            )}
-          >
+          <span className={cn('text-xs font-semibold', mine ? 'text-white' : 'text-primary')}>
             {event.isFree ? 'Free' : event.price || 'View event'}
           </span>
           <span
@@ -497,11 +477,7 @@ function groupBySender(messages) {
     // Two consecutive messages from the same actor collapse into one bubble
     // group. For groups we also need the senderId to match — two different
     // participants' `them` lines shouldn't fuse.
-    if (
-      last &&
-      last.from === m.from &&
-      (m.from === 'me' || last.senderId === m.senderId)
-    ) {
+    if (last && last.from === m.from && (m.from === 'me' || last.senderId === m.senderId)) {
       last.messages.push(m)
     } else {
       groups.push({ from: m.from, senderId: m.senderId ?? null, messages: [m] })
@@ -824,9 +800,7 @@ export function ShareEventSheet({ event, onClose, onSent }) {
     }
     return s
   }, [threads])
-  const visibleResults = results.filter(
-    (p) => p.id !== user?.id && !existingDmPartnerIds.has(p.id),
-  )
+  const visibleResults = results.filter((p) => p.id !== user?.id && !existingDmPartnerIds.has(p.id))
 
   const send = async () => {
     if (!user?.id || !event?.id || selectedList.length === 0 || sending) return
@@ -894,9 +868,7 @@ export function ShareEventSheet({ event, onClose, onSent }) {
               )}
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-ink">{event.title}</p>
-                {event.date && (
-                  <p className="truncate text-xs text-text-muted">{event.date}</p>
-                )}
+                {event.date && <p className="truncate text-xs text-text-muted">{event.date}</p>}
               </div>
             </div>
           )}
@@ -1033,7 +1005,11 @@ export function ShareEventSheet({ event, onClose, onSent }) {
               className="inline-flex h-10 items-center gap-2 rounded-button bg-primary px-5 text-sm font-semibold text-white transition-transform active:scale-95 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Send size={15} />
-              {sending ? 'Sending…' : selectedList.length > 1 ? `Send to ${selectedList.length}` : 'Send'}
+              {sending
+                ? 'Sending…'
+                : selectedList.length > 1
+                  ? `Send to ${selectedList.length}`
+                  : 'Send'}
             </button>
           </div>
         </div>

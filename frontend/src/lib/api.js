@@ -866,9 +866,7 @@ export const api = {
     const list = await get(`/users/search?q=${encodeURIComponent(term)}`, () => {
       const n = term.toLowerCase()
       return MOCK_ORGANIZERS.filter(
-        (o) =>
-          o.name.toLowerCase().includes(n) ||
-          (o.handle ?? '').toLowerCase().includes(n),
+        (o) => o.name.toLowerCase().includes(n) || (o.handle ?? '').toLowerCase().includes(n),
       ).slice(0, 20)
     })
     return (list ?? []).map((u) => {

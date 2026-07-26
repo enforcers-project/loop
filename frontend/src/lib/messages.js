@@ -109,9 +109,7 @@ export function threadIdFor(myId, partnerId) {
 // re-opening a group composed of the same people lands on the same thread.
 // Prefixed with `g::` so it can't collide with a DM id.
 export function groupThreadId(participantIds) {
-  const sorted = [...new Set(participantIds.map((id) => String(id ?? '')))]
-    .filter(Boolean)
-    .sort()
+  const sorted = [...new Set(participantIds.map((id) => String(id ?? '')))].filter(Boolean).sort()
   return `g::${sorted.join('::')}`
 }
 
@@ -398,7 +396,7 @@ const EVENT_SHARE_REPLIES = [
   'Bet — RSVPing right now',
   "Damn I've been meaning to check them out. We linking?",
   'lock in a +1 for me if you got the plug',
-  "Nice — what time you rolling?",
+  'Nice — what time you rolling?',
   'omg saved. thanks for the heads up 🙏',
 ]
 function pickReply(seed, kind = 'text') {

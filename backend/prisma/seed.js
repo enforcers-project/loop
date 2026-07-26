@@ -267,55 +267,68 @@ const CATEGORIES = [
   { slug: 'campus', name: 'Campus', colorHex: '#FF7A45', icon: 'school', sortOrder: 5 },
 ]
 
+// 52 interests across 6 categories. Keep aligned with backend/src/data/seed.js
+// and frontend/src/data/seed.js. Slugs are the client-facing ids; the API
+// accepts either the UUID or the slug (see users/routes.js PUT interests).
 const INTERESTS = [
+  // ── MUSIC ──
   { slug: 'afrobeats', label: 'Afrobeats', category: 'music', icon: 'headphones', sortOrder: 0 },
   { slug: 'hiphop', label: 'Hip-Hop', category: 'music', icon: 'mic', sortOrder: 1 },
   { slug: 'house', label: 'House / EDM', category: 'music', icon: 'disc', sortOrder: 2 },
   { slug: 'live-bands', label: 'Live Bands', category: 'music', icon: 'guitar', sortOrder: 3 },
-  {
-    slug: 'rooftop',
-    label: 'Rooftop Parties',
-    category: 'nightlife',
-    icon: 'sparkles',
-    sortOrder: 0,
-  },
+  { slug: 'rnb', label: 'R&B / Soul', category: 'music', icon: 'heart', sortOrder: 4 },
+  { slug: 'latin', label: 'Latin & Reggaeton', category: 'music', icon: 'music-2', sortOrder: 5 },
+  { slug: 'indie', label: 'Indie & Alt', category: 'music', icon: 'radio', sortOrder: 6 },
+  { slug: 'jazz', label: 'Jazz & Neo-Soul', category: 'music', icon: 'piano', sortOrder: 7 },
+  { slug: 'techno', label: 'Techno / Rave', category: 'music', icon: 'zap', sortOrder: 8 },
+  { slug: 'kpop', label: 'K-Pop', category: 'music', icon: 'star', sortOrder: 9 },
+  // ── NIGHTLIFE ──
+  { slug: 'rooftop', label: 'Rooftop Parties', category: 'nightlife', icon: 'sparkles', sortOrder: 0 },
   { slug: 'clubbing', label: 'Clubbing', category: 'nightlife', icon: 'disco-ball', sortOrder: 1 },
   { slug: 'lounges', label: 'Lounges', category: 'nightlife', icon: 'cocktail', sortOrder: 2 },
   { slug: 'day-party', label: 'Day Parties', category: 'nightlife', icon: 'sun', sortOrder: 3 },
+  { slug: 'karaoke', label: 'Karaoke', category: 'nightlife', icon: 'mic-2', sortOrder: 4 },
+  { slug: 'silent-disco', label: 'Silent Disco', category: 'nightlife', icon: 'headphones', sortOrder: 5 },
+  { slug: 'bar-crawls', label: 'Bar Crawls', category: 'nightlife', icon: 'beer', sortOrder: 6 },
+  { slug: 'hookah', label: 'Hookah Lounges', category: 'nightlife', icon: 'wind', sortOrder: 7 },
+  // ── SPORTS ──
   { slug: 'soccer', label: 'Soccer', category: 'sports', icon: 'football', sortOrder: 0 },
   { slug: 'basketball', label: 'Basketball', category: 'sports', icon: 'basketball', sortOrder: 1 },
   { slug: 'volleyball', label: 'Volleyball', category: 'sports', icon: 'volleyball', sortOrder: 2 },
   { slug: 'running', label: 'Running Clubs', category: 'sports', icon: 'footprints', sortOrder: 3 },
+  { slug: 'tennis', label: 'Tennis', category: 'sports', icon: 'circle-dot', sortOrder: 4 },
+  { slug: 'pickleball', label: 'Pickleball', category: 'sports', icon: 'target', sortOrder: 5 },
+  { slug: 'yoga', label: 'Yoga & Pilates', category: 'sports', icon: 'flower', sortOrder: 6 },
+  { slug: 'cycling', label: 'Cycling', category: 'sports', icon: 'bike', sortOrder: 7 },
+  { slug: 'climbing', label: 'Climbing', category: 'sports', icon: 'mountain', sortOrder: 8 },
+  { slug: 'flag-football', label: 'Flag Football', category: 'sports', icon: 'flag', sortOrder: 9 },
+  // ── NETWORKING ──
   { slug: 'startups', label: 'Startups', category: 'networking', icon: 'rocket', sortOrder: 0 },
   { slug: 'tech', label: 'Tech Meetups', category: 'networking', icon: 'cpu', sortOrder: 1 },
-  {
-    slug: 'career',
-    label: 'Career Fairs',
-    category: 'networking',
-    icon: 'briefcase',
-    sortOrder: 2,
-  },
-  {
-    slug: 'creators',
-    label: 'Creator Mixers',
-    category: 'networking',
-    icon: 'palette',
-    sortOrder: 3,
-  },
+  { slug: 'career', label: 'Career Fairs', category: 'networking', icon: 'briefcase', sortOrder: 2 },
+  { slug: 'creators', label: 'Creator Mixers', category: 'networking', icon: 'palette', sortOrder: 3 },
+  { slug: 'finance', label: 'Finance & VC', category: 'networking', icon: 'trending-up', sortOrder: 4 },
+  { slug: 'product', label: 'Product & Design', category: 'networking', icon: 'shapes', sortOrder: 5 },
+  { slug: 'marketing', label: 'Marketing', category: 'networking', icon: 'megaphone', sortOrder: 6 },
+  { slug: 'alumni', label: 'Alumni Meetups', category: 'networking', icon: 'handshake', sortOrder: 7 },
+  // ── FOOD ──
   { slug: 'foodie', label: 'Food Festivals', category: 'food', icon: 'utensils', sortOrder: 0 },
   { slug: 'brunch', label: 'Brunch', category: 'food', icon: 'coffee', sortOrder: 1 },
   { slug: 'popups', label: 'Pop-ups', category: 'food', icon: 'store', sortOrder: 2 },
   { slug: 'tastings', label: 'Tastings', category: 'food', icon: 'wine', sortOrder: 3 },
-  {
-    slug: 'campus-life',
-    label: 'Campus Life',
-    category: 'campus',
-    icon: 'graduation-cap',
-    sortOrder: 0,
-  },
+  { slug: 'coffee', label: 'Coffee Culture', category: 'food', icon: 'coffee', sortOrder: 4 },
+  { slug: 'cocktails', label: 'Cocktail Bars', category: 'food', icon: 'martini', sortOrder: 5 },
+  { slug: 'vegan', label: 'Vegan & Plant-Based', category: 'food', icon: 'leaf', sortOrder: 6 },
+  { slug: 'bbq', label: 'BBQ & Grill', category: 'food', icon: 'flame', sortOrder: 7 },
+  // ── CAMPUS ──
+  { slug: 'campus-life', label: 'Campus Life', category: 'campus', icon: 'graduation-cap', sortOrder: 0 },
   { slug: 'greek', label: 'Greek Life', category: 'campus', icon: 'landmark', sortOrder: 1 },
   { slug: 'clubs-orgs', label: 'Clubs & Orgs', category: 'campus', icon: 'users', sortOrder: 2 },
   { slug: 'study-jams', label: 'Study Jams', category: 'campus', icon: 'book-open', sortOrder: 3 },
+  { slug: 'hackathons', label: 'Hackathons', category: 'campus', icon: 'code', sortOrder: 4 },
+  { slug: 'intramurals', label: 'Intramurals', category: 'campus', icon: 'trophy', sortOrder: 5 },
+  { slug: 'game-nights', label: 'Game Nights', category: 'campus', icon: 'gamepad-2', sortOrder: 6 },
+  { slug: 'film-screenings', label: 'Film Screenings', category: 'campus', icon: 'film', sortOrder: 7 },
 ]
 
 // Bay Area demo events — real venues, real coordinates

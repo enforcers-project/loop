@@ -6,6 +6,7 @@ import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { cn } from '../lib/utils'
 import { InlineAlert } from '../components/primitives'
+import { InterestBlobs } from '../components/InterestBlobs'
 import {
   cityFromGeocode,
   getCurrentLocation,
@@ -269,37 +270,12 @@ export function Onboarding() {
       ) : step === 2 ? (
         <div className="flex flex-1 flex-col">
           <h1 className="font-display text-4xl font-bold text-ink">What are you into?</h1>
-          <div className="mt-2 flex items-center gap-3">
-            <p className="text-sm text-text-secondary">Pick at least 3 to tune your feed.</p>
-            <span
-              className={cn(
-                'rounded-pill px-2.5 py-1 text-xs font-semibold',
-                canContinue ? 'bg-success/15 text-success' : 'bg-surface text-text-muted',
-              )}
-            >
-              {picked.size} selected
-            </span>
-          </div>
+          <p className="mt-2 text-sm text-text-secondary">
+            Tap a world to open it. Every pick tunes what we recommend.
+          </p>
 
-          {/* chips flush below subhead */}
-          <div className="mt-6 flex flex-wrap gap-2">
-            {interests.map((i) => {
-              const on = picked.has(i.id)
-              return (
-                <button
-                  key={i.id}
-                  onClick={() => toggle(i.id)}
-                  className={cn(
-                    'rounded-pill border px-4 py-2 text-sm font-medium transition-colors',
-                    on
-                      ? 'border-primary bg-primary text-white'
-                      : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
-                  )}
-                >
-                  {i.label}
-                </button>
-              )
-            })}
+          <div className="mt-6">
+            <InterestBlobs interests={interests} picked={picked} onToggle={toggle} minPicks={3} />
           </div>
 
           <div className="mt-auto pt-10">

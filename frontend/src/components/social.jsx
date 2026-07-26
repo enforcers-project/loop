@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Bookmark,
   ChevronLeft,
@@ -21,6 +22,12 @@ import { useToast } from '../context/ToastContext'
 import { ImageSourcePicker, inputClass, Spinner, VerifiedBadge } from './primitives'
 import { EventImage } from './EventImage'
 import { CommentReplies } from './CommentReplies'
+
+// Public profile route for a user/organizer. The app's public profile lives at
+// /organizer/:id — the same URL an organizer's followers reach, and the same
+// route the OrganizerProfile screen owns (a real user id 404s cleanly and a
+// mock org-* id renders the seed profile).
+export const authorHref = (id) => (id ? `/organizer/${id}` : null)
 
 const POST_KINDS = [
   { value: 'flyer', label: 'Flyer' },
@@ -434,19 +441,42 @@ export function StoryViewer({ groups, startIndex = 0, onClose, onViewed }) {
           ))}
         </div>
 
-        {/* author header */}
+        {/* author header — links to their public profile */}
         <div className="absolute left-0 right-0 top-0 z-10 flex items-center gap-3 px-4 pb-3 pt-6">
-          <img
-            src={group.avatar}
-            alt=""
-            className="h-9 w-9 rounded-full border border-white/40 bg-surface object-cover"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-white">{group.name}</p>
-            {story.createdAt && (
-              <p className="text-xs text-white/70">{timeAgo(story.createdAt)} ago</p>
-            )}
-          </div>
+          {group.id ? (
+            <Link
+              to={authorHref(group.id)}
+              onClick={onClose}
+              className="flex items-center gap-3 min-w-0 flex-1"
+              aria-label={`Open ${group.name}'s profile`}
+            >
+              <img
+                src={group.avatar}
+                alt=""
+                className="h-9 w-9 rounded-full border border-white/40 bg-surface object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">{group.name}</p>
+                {story.createdAt && (
+                  <p className="text-xs text-white/70">{timeAgo(story.createdAt)} ago</p>
+                )}
+              </div>
+            </Link>
+          ) : (
+            <>
+              <img
+                src={group.avatar}
+                alt=""
+                className="h-9 w-9 rounded-full border border-white/40 bg-surface object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">{group.name}</p>
+                {story.createdAt && (
+                  <p className="text-xs text-white/70">{timeAgo(story.createdAt)} ago</p>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* media — hold to pause; tap left/right halves to navigate */}
@@ -575,18 +605,39 @@ export function PostCard({ post }) {
     }
   }
 
+  const profileHref = authorHref(org?.id)
+
   return (
     <article className="overflow-hidden rounded-card border border-border-light bg-white shadow-card">
-      {/* header */}
+      {/* header — avatar + name link to the author's public profile */}
       <div className="flex items-center gap-3 px-4 py-3.5">
-        <img
-          src={org?.avatar}
-          alt=""
-          className="h-11 w-11 flex-shrink-0 rounded-full bg-surface object-cover"
-        />
+        {profileHref ? (
+          <Link to={profileHref} aria-label={`Open ${org?.name}'s profile`}>
+            <img
+              src={org?.avatar}
+              alt=""
+              className="h-11 w-11 flex-shrink-0 rounded-full bg-surface object-cover transition-transform hover:scale-[1.03]"
+            />
+          </Link>
+        ) : (
+          <img
+            src={org?.avatar}
+            alt=""
+            className="h-11 w-11 flex-shrink-0 rounded-full bg-surface object-cover"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
-            <span className="truncate text-sm font-semibold text-ink">{org?.name}</span>
+            {profileHref ? (
+              <Link
+                to={profileHref}
+                className="truncate text-sm font-semibold text-ink transition-colors hover:text-primary"
+              >
+                {org?.name}
+              </Link>
+            ) : (
+              <span className="truncate text-sm font-semibold text-ink">{org?.name}</span>
+            )}
             {org?.verified && <VerifiedBadge size={14} />}
           </div>
           {when && <span className="text-xs text-text-muted">{when} ago</span>}
@@ -634,7 +685,17 @@ export function PostCard({ post }) {
           {formatCount(likeCount)} {pluralize(likeCount, 'like')}
         </div>
         <p className="text-sm leading-relaxed text-text-primary">
-          <span className="font-semibold">{org?.handle?.replace('@', '')}</span> {post.caption}
+          {profileHref ? (
+            <Link
+              to={profileHref}
+              className="font-semibold text-ink transition-colors hover:text-primary"
+            >
+              {org?.handle?.replace('@', '')}
+            </Link>
+          ) : (
+            <span className="font-semibold">{org?.handle?.replace('@', '')}</span>
+          )}{' '}
+          {post.caption}
         </p>
         {/* Comment entry point — mirrors Instagram's "View all N comments".
             Tapping it (or the comment icon above) opens the overlay where the
@@ -731,29 +792,62 @@ function CommentsModal({
             </p>
           ) : (
             <div className="space-y-3">
-              {comments.map((c) => (
-                <div key={c.id}>
-                  <div className="group flex items-start gap-1.5">
-                    <p className="min-w-0 flex-1 text-sm leading-relaxed text-text-secondary">
-                      <span className="font-semibold text-ink">{c.author}</span> {c.text}
-                    </p>
-                    {canDeleteComment(c) && (
-                      <button
-                        onClick={() => removeComment(c)}
-                        className="mt-0.5 text-text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
-                        aria-label="Delete comment"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+              {comments.map((c) => {
+                const authorHrefStr = authorHref(c.authorId)
+                return (
+                  <div key={c.id}>
+                    <div className="group flex items-start gap-2.5">
+                      {c.authorAvatar &&
+                        (authorHrefStr ? (
+                          <Link
+                            to={authorHrefStr}
+                            aria-label={`Open ${c.author}'s profile`}
+                            className="flex-shrink-0"
+                          >
+                            <img
+                              src={c.authorAvatar}
+                              alt=""
+                              className="h-7 w-7 rounded-full bg-surface object-cover transition-transform hover:scale-[1.05]"
+                            />
+                          </Link>
+                        ) : (
+                          <img
+                            src={c.authorAvatar}
+                            alt=""
+                            className="h-7 w-7 flex-shrink-0 rounded-full bg-surface object-cover"
+                          />
+                        ))}
+                      <p className="min-w-0 flex-1 text-sm leading-relaxed text-text-secondary">
+                        {authorHrefStr ? (
+                          <Link
+                            to={authorHrefStr}
+                            className="font-semibold text-ink transition-colors hover:text-primary"
+                          >
+                            {c.author}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold text-ink">{c.author}</span>
+                        )}{' '}
+                        {c.text}
+                      </p>
+                      {canDeleteComment(c) && (
+                        <button
+                          onClick={() => removeComment(c)}
+                          className="mt-0.5 text-text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
+                          aria-label="Delete comment"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                    {/* Reply thread only for real (server) comments — a local echo
+                        has no id the backend knows, so it can't take a parentId. */}
+                    {c.authorId != null && (
+                      <CommentReplies comment={c} api={replyApi} canDelete={canDeleteComment} />
                     )}
                   </div>
-                  {/* Reply thread only for real (server) comments — a local echo
-                      has no id the backend knows, so it can't take a parentId. */}
-                  {c.authorId != null && (
-                    <CommentReplies comment={c} api={replyApi} canDelete={canDeleteComment} />
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

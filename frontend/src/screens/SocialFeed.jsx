@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence } from 'motion/react'
-import { PenSquare } from 'lucide-react'
+import { PenSquare, Search } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { StoriesRow, StoryViewer, PostCard, Composer } from '../components/social'
@@ -37,6 +37,95 @@ function SidebarCard({ title, children }) {
   )
 }
 
+function FollowRow({ user, following, onToggle }) {
+  return (
+    <div className="flex items-center gap-3">
+      <Link to={`/organizer/${user.id}`} aria-label={`Open ${user.name}'s profile`}>
+        <img
+          src={user.avatar}
+          alt=""
+          className="h-10 w-10 flex-shrink-0 rounded-full bg-surface object-cover transition-transform hover:scale-[1.03]"
+        />
+      </Link>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <Link
+            to={`/organizer/${user.id}`}
+            className="truncate text-[13px] font-semibold text-ink transition-colors hover:text-primary"
+          >
+            {user.name}
+          </Link>
+          {user.verified && <VerifiedBadge size={12} />}
+        </div>
+        <p className="truncate text-xs text-text-muted">{user.handle}</p>
+      </div>
+      <FollowBtn following={following} onToggle={onToggle} sm />
+    </div>
+  )
+}
+
+// Debounced people-search input. Empty query → parent renders the default
+// suggested list. TODO: if a dedicated "browse people" endpoint is ever added,
+// swap `api.searchUsers` for it; the underlying user shape is the same.
+function PeopleSearch({ onResults }) {
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const term = query.trim()
+    if (!term) {
+      onResults(null)
+      return
+    }
+    let cancelled = false
+    const t = setTimeout(() => {
+      setLoading(true)
+      api.searchUsers(term).then(
+        (list) => {
+          if (cancelled) return
+          onResults(list ?? [])
+          setLoading(false)
+        },
+        () => {
+          if (!cancelled) setLoading(false)
+        },
+      )
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+      // Clear any lingering spinner if the input was cleared mid-fetch;
+      // same-value setState is a no-op so this is safe on every cleanup.
+      setLoading(false)
+    }
+    // onResults is a stable setter from the parent
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
+
+  return (
+    <div className="relative mb-3.5">
+      <Search
+        size={14}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
+        aria-hidden="true"
+      />
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search people"
+        aria-label="Search people"
+        className="h-9 w-full rounded-pill border border-border-light bg-surface pl-8 pr-8 text-[13px] text-ink placeholder:text-text-muted focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+      />
+      {loading && (
+        <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+          <Spinner size="sm" label="Searching people" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Attach each post's first few comments (the feed carries only a comment_count,
 // not the bodies). Small N at demo scale.
 async function hydrateComments(list) {
@@ -59,6 +148,9 @@ export function SocialFeed() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [composer, setComposer] = useState(null) // 'post' | 'story' | null
   const [viewerIndex, setViewerIndex] = useState(null) // group index being viewed, or null
+  // People-search results in the left rail. null = no active query; render the
+  // default "Suggested follows" list. Array (possibly empty) = a query is active.
+  const [peopleResults, setPeopleResults] = useState(null)
   const loading = posts === null || events === null
 
   const near = nearForUser(user)
@@ -226,28 +318,29 @@ export function SocialFeed() {
             </SidebarCard>
 
             <SidebarCard title="Suggested follows">
+              <PeopleSearch onResults={setPeopleResults} />
               <div className="space-y-3.5">
-                {suggested.map((o) => (
-                  <div key={o.id} className="flex items-center gap-3">
-                    <img
-                      src={o.avatar}
-                      alt=""
-                      className="h-10 w-10 flex-shrink-0 rounded-full bg-surface object-cover"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1">
-                        <p className="truncate text-[13px] font-semibold text-ink">{o.name}</p>
-                        {o.verified && <VerifiedBadge size={12} />}
-                      </div>
-                      <p className="truncate text-xs text-text-muted">{o.handle}</p>
-                    </div>
-                    <FollowBtn
+                {peopleResults === null ? (
+                  suggested.map((o) => (
+                    <FollowRow
+                      key={o.id}
+                      user={o}
                       following={followingIds.has(o.id)}
                       onToggle={() => toggleFollow(o.id)}
-                      sm
                     />
-                  </div>
-                ))}
+                  ))
+                ) : peopleResults.length === 0 ? (
+                  <p className="py-2 text-xs text-text-muted">No people found</p>
+                ) : (
+                  peopleResults.map((o) => (
+                    <FollowRow
+                      key={o.id}
+                      user={o}
+                      following={followingIds.has(o.id)}
+                      onToggle={() => toggleFollow(o.id)}
+                    />
+                  ))
+                )}
               </div>
             </SidebarCard>
           </div>

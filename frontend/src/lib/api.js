@@ -213,6 +213,25 @@ async function getPage(path, fallback) {
   }
 }
 
+// Fetch one page of a follow-list endpoint and flatten { user, followed_at }
+// rows down to the PublicUser (keeping viewer-relative is_following). Returns
+// { users, nextCursor }; empty page + null cursor on failure so a modal can
+// degrade to "no one" rather than throwing.
+async function followPage(path, cursor) {
+  const suffix = cursor
+    ? `${path.includes('?') ? '&' : '?'}cursor=${encodeURIComponent(cursor)}`
+    : ''
+  try {
+    const res = await fetch(apiUrl(`${path}${suffix}`), { credentials: 'include' })
+    if (!res.ok) throw new Error(String(res.status))
+    const json = await res.json()
+    const users = (json.data ?? []).map((row) => row.user).filter(Boolean)
+    return { users, nextCursor: json.nextCursor ?? null }
+  } catch {
+    return { users: [], nextCursor: null }
+  }
+}
+
 async function post(path, body, fallback) {
   try {
     const res = await fetch(apiUrl(path), {
@@ -993,6 +1012,13 @@ export const api = {
       return []
     }
   },
+
+  // One page of a user's followers / following, for the follow-list modals.
+  // Backend returns { data: [{ user: PublicUser, followed_at }], nextCursor };
+  // we flatten to the PublicUser (carrying viewer-relative is_following) so the
+  // shared UserResultList can render each row. [] + null cursor on any failure.
+  followerList: (id, cursor) => followPage(`/users/${id}/followers`, cursor),
+  followingList: (id, cursor) => followPage(`/users/${id}/following`, cursor),
 
   // RSVP / cancel for an event (no mock fallback — an RSVP must genuinely
   // persist). PUT sets status='going'; DELETE cancels. Both throw on failure so

@@ -2,8 +2,24 @@ import { Router } from 'express'
 import { fetchTicketmasterEvents } from './ticketmaster.js'
 import { fetchSeatgeekEvents } from './seatgeek.js'
 import { upsertSyncedEvents, getSyncStatus } from './upsert.js'
+import { runExternalSync } from './run.js'
 
 const router = Router()
+
+// POST /api/admin/sync/all — full fan-out: both providers, paginated, across
+// every market derived from user home locations (or the fallback metros). This
+// is what the scheduled job runs; the endpoint lets an admin trigger it on
+// demand. Body (all optional): { maxPages, windowDays, markets }.
+router.post('/sync/all', async (req, res) => {
+  try {
+    const { maxPages, windowDays, markets } = req.body || {}
+    const result = await runExternalSync({ maxPages, windowDays, markets })
+    res.json({ data: result })
+  } catch (err) {
+    console.error('Full sync error:', err)
+    res.status(500).json({ error: { message: 'Internal sync error' } })
+  }
+})
 
 // POST /api/admin/sync/ticketmaster
 router.post('/sync/ticketmaster', async (req, res) => {

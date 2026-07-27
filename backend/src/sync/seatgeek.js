@@ -2,50 +2,77 @@ import { mapSeatgeekCategory, DEFAULT_CATEGORY } from './taxonomy-map.js'
 
 const SG_BASE = 'https://api.seatgeek.com/2/events'
 
+const PAGE_SIZE = 50
+
 /**
- * Fetch events from SeatGeek API.
+ * Fetch events from SeatGeek API, paging until exhausted (or `maxPages` is
+ * reached). Results across pages are concatenated and normalized.
  * Returns normalized event objects ready for upsert.
  */
-export async function fetchSeatgeekEvents({ city, lat, lng, radiusKm, dateFrom, dateTo }) {
+export async function fetchSeatgeekEvents({
+  city,
+  lat,
+  lng,
+  radiusKm,
+  dateFrom,
+  dateTo,
+  maxPages = 4,
+}) {
   const clientId = process.env.SEATGEEK_CLIENT_ID
   if (!clientId) {
     return { events: [], error: 'SEATGEEK_CLIENT_ID not configured' }
   }
 
-  const params = new URLSearchParams({
+  const baseParams = new URLSearchParams({
     client_id: clientId,
-    per_page: '50',
+    per_page: String(PAGE_SIZE),
     sort: 'datetime_local.asc',
   })
 
   if (process.env.SEATGEEK_CLIENT_SECRET) {
-    params.set('client_secret', process.env.SEATGEEK_CLIENT_SECRET)
+    baseParams.set('client_secret', process.env.SEATGEEK_CLIENT_SECRET)
   }
 
   if (lat && lng && radiusKm) {
-    params.set('lat', String(lat))
-    params.set('lon', String(lng))
-    params.set('range', `${radiusKm}km`)
+    baseParams.set('lat', String(lat))
+    baseParams.set('lon', String(lng))
+    baseParams.set('range', `${radiusKm}km`)
   } else if (city) {
-    params.set('venue.city', city)
+    baseParams.set('venue.city', city)
   }
 
-  if (dateFrom) params.set('datetime_local.gte', new Date(dateFrom).toISOString().slice(0, 19))
-  if (dateTo) params.set('datetime_local.lte', new Date(dateTo).toISOString().slice(0, 19))
+  if (dateFrom) baseParams.set('datetime_local.gte', new Date(dateFrom).toISOString().slice(0, 19))
+  if (dateTo) baseParams.set('datetime_local.lte', new Date(dateTo).toISOString().slice(0, 19))
 
-  const url = `${SG_BASE}?${params.toString()}`
-  const res = await fetch(url)
+  const events = []
+  let error = null
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    return { events: [], error: `SeatGeek API ${res.status}: ${text.slice(0, 200)}` }
+  // SeatGeek pages are 1-indexed.
+  for (let page = 1; page <= maxPages; page++) {
+    const params = new URLSearchParams(baseParams)
+    params.set('page', String(page))
+
+    const res = await fetch(`${SG_BASE}?${params.toString()}`)
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      error = `SeatGeek API ${res.status} on page ${page}: ${text.slice(0, 200)}`
+      break
+    }
+
+    const data = await res.json()
+    const raw = data.events || []
+    for (const e of raw) {
+      const transformed = transformSeatgeekEvent(e)
+      if (transformed) events.push(transformed)
+    }
+
+    // meta.total tells us the full result size; stop once we've fetched it all
+    // (or the API returned a short page).
+    const total = data.meta?.total ?? raw.length
+    if (raw.length < PAGE_SIZE || page * PAGE_SIZE >= total) break
   }
 
-  const data = await res.json()
-  const raw = data.events || []
-
-  const events = raw.map((e) => transformSeatgeekEvent(e)).filter(Boolean)
-  return { events, error: null }
+  return { events, error }
 }
 
 function transformSeatgeekEvent(raw) {

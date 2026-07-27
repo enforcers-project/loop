@@ -47,15 +47,23 @@ export async function computeSocialScores(userId, candidates) {
 
   const categoryIds = [...new Set(candidates.map((c) => c.categoryId).filter(Boolean))]
 
-  const [friendRsvps, friendSaves, followedOrgs, orgFollowers, categoryMomentum, repeatAtt] =
-    await Promise.all([
-      queryFriendsGoing(friendIds, eventIds),
-      queryFriendsSaved(friendIds, eventIds),
-      queryFollowedOrganizer(userId, eventIds),
-      queryOrgFollowedByFriends(friendIds, eventIds),
-      querySharedCategoryMomentum(friendIds, categoryIds),
-      queryRepeatAttendees(userId, friendIds, eventIds),
-    ])
+  const [
+    friendRsvps,
+    friendSaves,
+    followedOrgs,
+    orgFollowers,
+    categoryMomentum,
+    repeatAtt,
+    friendProfiles,
+  ] = await Promise.all([
+    queryFriendsGoing(friendIds, eventIds),
+    queryFriendsSaved(friendIds, eventIds),
+    queryFollowedOrganizer(userId, eventIds),
+    queryOrgFollowedByFriends(friendIds, eventIds),
+    querySharedCategoryMomentum(friendIds, categoryIds),
+    queryRepeatAttendees(userId, friendIds, eventIds),
+    queryFriendsGoingProfiles(friendIds, eventIds),
+  ])
 
   const maxFriends = friendIds.length
   const scores = new Map()
@@ -87,7 +95,14 @@ export async function computeSocialScores(userId, candidates) {
       score += weight * normalized[key]
     }
 
-    scores.set(eid, { score, raw, topSignal: pickTopSignal(raw) })
+    scores.set(eid, {
+      score,
+      raw,
+      topSignal: pickTopSignal(raw),
+      // Up to 3 mutuals (people the viewer follows) going to this event, with
+      // avatars — feeds the "Sarah + 2 going" face stack on the For You card.
+      friendsGoingProfiles: friendProfiles.get(eid) ?? [],
+    })
   }
 
   return scores
@@ -115,6 +130,38 @@ async function queryFriendsGoing(friendIds, eventIds) {
     eventIds,
   )
   return new Map(rows.map((r) => [r.event_id, r.cnt]))
+}
+
+// The actual mutuals going to each candidate event, ≤3 per event, so the card
+// can render their avatars (not just a count). DISTINCT ON + row_number keeps
+// the newest-RSVP'd 3 per event; ordering by rsvp created_at desc means the
+// friends who just committed surface first. Only rows with an avatar are worth
+// showing as a face; name still comes back for the "+N going" label upstream.
+async function queryFriendsGoingProfiles(friendIds, eventIds) {
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT event_id, user_id, display_name, avatar_url
+     FROM (
+       SELECT r.event_id, u.id AS user_id, u.display_name, u.avatar_url,
+              row_number() OVER (PARTITION BY r.event_id ORDER BY r.created_at DESC) AS rn
+       FROM rsvps r
+       JOIN users u ON u.id = r.user_id
+       WHERE r.user_id = ANY($1::uuid[]) AND r.event_id = ANY($2::uuid[]) AND r.status = 'going'
+     ) ranked
+     WHERE rn <= 3
+     ORDER BY event_id, rn`,
+    friendIds,
+    eventIds,
+  )
+  const map = new Map()
+  for (const row of rows) {
+    if (!map.has(row.event_id)) map.set(row.event_id, [])
+    map.get(row.event_id).push({
+      id: row.user_id,
+      display_name: row.display_name,
+      avatar_url: row.avatar_url,
+    })
+  }
+  return map
 }
 
 async function queryFriendsSaved(friendIds, eventIds) {

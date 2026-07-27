@@ -123,13 +123,24 @@ export async function generateRecommendations(userId, options = {}) {
   await persistImpressions(userId, results, feedRunId, signalCount)
 
   return {
-    data: results.map((r) => ({
-      ...toEventCard(r.event),
-      score: r.score,
-      rationale: r.rationale,
-      recommendationId: r.impressionId,
-      distanceMiles: r.distanceMiles,
-    })),
+    data: results.map((r) => {
+      // Attach the mutuals-going face stack (people the viewer follows who are
+      // going) so the card can render avatars + a "Sarah + 2 going" label. Count
+      // is the true friends-going total; avatars are capped at 3 by the scorer.
+      const social = socialScores.get(r.event.id)
+      const friends = social?.friendsGoingProfiles ?? []
+      return {
+        ...toEventCard(r.event),
+        score: r.score,
+        rationale: r.rationale,
+        recommendationId: r.impressionId,
+        distanceMiles: r.distanceMiles,
+        going_stack: {
+          count: social?.raw?.friendsGoing ?? friends.length,
+          friends,
+        },
+      }
+    }),
     feedRunId,
     nextCursor: null,
   }

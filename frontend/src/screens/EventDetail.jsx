@@ -25,6 +25,7 @@ import {
   RSVPBtn,
   SaveBtn,
   StickyRsvpBar,
+  TicketBtn,
   VerifiedBadge,
 } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
@@ -151,6 +152,10 @@ export function EventDetail() {
   const following = event.organizer ? followingIds.has(event.organizer.id) : false
   const hasAbout = Boolean(event.description?.trim())
   const isCancelled = event.status === 'cancelled'
+  // Events pulled from a partner API (Ticketmaster / SeatGeek) carry a ticket
+  // page — surface a "Get tickets" link alongside RSVP so the user can buy from
+  // the original seller (Loop can't reserve a partner's seat itself).
+  const ticketUrl = event.source !== 'native' ? event.ticketUrl : null
   const isOrganizer = Boolean(user?.id && event.organizer?.id && user.id === event.organizer.id)
   const canEdit = isOrganizer && !isCancelled && event.status !== 'past'
   const timeStr = formatTime(event.isoDate)
@@ -315,9 +320,12 @@ export function EventDetail() {
                     <Ban size={16} /> Cancelled
                   </span>
                 ) : (
-                  <RSVPBtn variant={going ? 'outline' : 'filled'} onClick={onRsvp}>
-                    {going ? "You're going ✓" : 'RSVP now'}
-                  </RSVPBtn>
+                  <>
+                    <RSVPBtn variant={going || ticketUrl ? 'outline' : 'filled'} onClick={onRsvp}>
+                      {going ? "You're going ✓" : 'RSVP now'}
+                    </RSVPBtn>
+                    {ticketUrl && <TicketBtn href={ticketUrl} />}
+                  </>
                 )}
                 <SaveBtn saved={saved} onToggle={() => toggleSaved(event.id)} />
                 <IconButton onClick={onShare} label="Share event">
@@ -459,6 +467,7 @@ export function EventDetail() {
           onRsvp={onRsvp}
           onSave={() => toggleSaved(event.id)}
           onShare={onShare}
+          ticketUrl={ticketUrl}
           visible={pillVisible}
         />
       )}

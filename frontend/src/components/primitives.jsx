@@ -9,6 +9,8 @@ import {
   Share2,
   Camera,
   Images,
+  Ticket,
+  ExternalLink,
 } from 'lucide-react'
 import { m, AnimatePresence } from 'motion/react'
 import { cn, formatCount, ROLE_STYLE, ROLE_OPTIONS, roleLabelFor } from '../lib/utils'
@@ -339,6 +341,33 @@ export function RSVPBtn({
 }
 
 /* --------------------------------------------------------------------------
+   TicketBtn — "Get tickets" link for events sourced from a partner API
+   (Ticketmaster / SeatGeek). Opens the partner's ticket page in a new tab;
+   rel="noopener" so the opened page can't reach back through window.opener.
+   Rendered instead of / beside RSVPBtn for non-native events.
+-------------------------------------------------------------------------- */
+export function TicketBtn({ href, sm = false, children = 'Get tickets' }) {
+  return (
+    <m.a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      whileTap={{ scale: 0.94 }}
+      transition={springSnappy}
+      className={cn(
+        'inline-flex items-center justify-center gap-1.5 rounded-button font-semibold',
+        sm ? 'h-10 px-4 text-sm' : 'h-11 px-6 text-sm',
+        'bg-accent text-white shadow-sm hover:opacity-90',
+      )}
+    >
+      <Ticket size={sm ? 15 : 16} />
+      {children}
+      <ExternalLink size={sm ? 13 : 14} className="opacity-80" />
+    </m.a>
+  )
+}
+
+/* --------------------------------------------------------------------------
    SaveBtn — bookmark toggle, filled violet when saved
 -------------------------------------------------------------------------- */
 export function SaveBtn({ saved, onToggle, sm = false }) {
@@ -571,6 +600,7 @@ export function StickyRsvpBar({
   onRsvp,
   onSave,
   onShare,
+  ticketUrl,
   visible,
 }) {
   const priceLabel = isFree ? 'Free' : price
@@ -605,9 +635,14 @@ export function StickyRsvpBar({
           </IconButton>
         )}
         <SaveBtn sm saved={saved} onToggle={onSave} />
-        <RSVPBtn sm variant={going ? 'outline' : 'filled'} onClick={onRsvp}>
+        <RSVPBtn sm variant={going || ticketUrl ? 'outline' : 'filled'} onClick={onRsvp}>
           {rsvpLabel}
         </RSVPBtn>
+        {ticketUrl && (
+          <TicketBtn sm href={ticketUrl}>
+            Tickets
+          </TicketBtn>
+        )}
       </div>
     </div>
   )

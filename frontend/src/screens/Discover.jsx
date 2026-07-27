@@ -7,7 +7,7 @@ import { EventGrid } from '../components/EventCard'
 import { EventsMap } from '../components/EventsMap'
 import { NearMeChip } from '../components/NearMeChip'
 import { PageLoader } from '../components/primitives'
-import { cn, pluralize } from '../lib/utils'
+import { cn, isEventPast, pluralize } from '../lib/utils'
 
 const EMPTY_FILTERS = {
   free: false,
@@ -36,6 +36,9 @@ const EMPTY_FILTERS = {
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 function buildRails(events, now = Date.now()) {
+  // Rails only ever show upcoming events — a past event has no business in
+  // "Trending" or "This weekend". Filter once up front so every rail inherits it.
+  events = events.filter((e) => !isEventPast(e, now))
   const used = new Set()
   const take = (list, n) => {
     const out = []
@@ -200,6 +203,7 @@ export function Discover() {
   // are already ranked + constrained server-side, so we render them as-is.
   const filtered = useMemo(() => {
     return (events ?? []).filter((e) => {
+      if (isEventPast(e)) return false // don't surface events that already happened
       if (cat !== 'All' && e.category !== cat) return false
       if (filters.free && !e.isFree) return false
       if (filters.sports && !e.isSports) return false

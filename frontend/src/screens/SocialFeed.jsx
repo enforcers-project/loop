@@ -44,7 +44,11 @@ function SidebarCard({ title, children }) {
 function FollowRow({ user, following, onToggle, onNavigate }) {
   return (
     <div className="flex items-center gap-3">
-      <Link to={`/organizer/${user.id}`} onClick={onNavigate} aria-label={`Open ${user.name}'s profile`}>
+      <Link
+        to={`/organizer/${user.id}`}
+        onClick={onNavigate}
+        aria-label={`Open ${user.name}'s profile`}
+      >
         <img
           src={user.avatar}
           alt=""

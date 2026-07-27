@@ -320,6 +320,28 @@ export function Discover() {
 
           {events === null ? (
             <PageLoader label="Loading events" />
+          ) : view === 'map' ? (
+            <>
+              {/* Map mode short-circuits both the rails and the filtered-grid
+                  paths — the map is the primary view, so we surface the toggle
+                  above it and render pins for whatever's currently filtered
+                  (or every event when no filter is active). */}
+              <div className="mb-4 mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h1 className="font-display text-xl font-bold leading-tight text-ink sm:text-[28px] md:text-3xl">
+                  {filtersActive
+                    ? browseHeading
+                    : `${filtered.length} ${pluralize(filtered.length, 'event')} on the map`}
+                </h1>
+                <ViewToggle value={view} onChange={setView} />
+              </div>
+              <EventsMap
+                events={filtered}
+                viewLat={near?.lat}
+                viewLng={near?.lng}
+                searchLocation={locationOverride}
+                onLocationChange={setLocationOverride}
+              />
+            </>
           ) : filtersActive ? (
             <>
               {/* section heading + list/map toggle */}
@@ -330,15 +352,7 @@ export function Discover() {
                 <ViewToggle value={view} onChange={setView} />
               </div>
 
-              {view === 'map' ? (
-                <EventsMap
-                  events={filtered}
-                  viewLat={near?.lat}
-                  viewLng={near?.lng}
-                  searchLocation={locationOverride}
-                  onLocationChange={setLocationOverride}
-                />
-              ) : filtered.length > 0 ? (
+              {filtered.length > 0 ? (
                 <EventGrid events={filtered} />
               ) : (
                 <p className="py-16 text-center text-sm text-text-muted">
@@ -347,21 +361,26 @@ export function Discover() {
               )}
             </>
           ) : rails.length > 0 ? (
-            <div className="mt-6">
-              {rails.map((r, i) => (
-                <section key={r.title}>
-                  <h2
-                    className={cn(
-                      'mb-4 font-display text-2xl font-bold text-ink',
-                      i === 0 ? '' : 'mt-10',
-                    )}
-                  >
-                    {r.title}
-                  </h2>
-                  <EventGrid events={r.events} />
-                </section>
-              ))}
-            </div>
+            <>
+              <div className="mb-4 mt-6 flex items-center justify-end">
+                <ViewToggle value={view} onChange={setView} />
+              </div>
+              <div>
+                {rails.map((r, i) => (
+                  <section key={r.title}>
+                    <h2
+                      className={cn(
+                        'mb-4 font-display text-2xl font-bold text-ink',
+                        i === 0 ? '' : 'mt-10',
+                      )}
+                    >
+                      {r.title}
+                    </h2>
+                    <EventGrid events={r.events} />
+                  </section>
+                ))}
+              </div>
+            </>
           ) : (
             <p className="py-16 text-center text-sm text-text-muted">No events near you yet.</p>
           )}

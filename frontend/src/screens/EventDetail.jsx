@@ -28,6 +28,7 @@ import {
   VerifiedBadge,
 } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
+import { AttendeeStrip } from '../components/UserSearch'
 import { EventComments } from '../components/EventComments'
 import { EventMap } from '../components/EventMap'
 import { OrganizerFooterCard } from '../components/OrganizerFooterCard'
@@ -389,6 +390,13 @@ export function EventDetail() {
             )}
           </section>
         )}
+
+        {/* Who's going — public attendee face-pile that opens the full list.
+            Renders nothing until the event has at least one attendee. Sports
+            runs surface their roster here too (claimed players). */}
+        <section className="mx-auto max-w-[860px]">
+          <AttendeeStrip eventId={event.id} />
+        </section>
 
         {/* Full-width map — real interactive Google Maps embed, replacing the
             broken static-OSM tile + floating pin fallback. */}

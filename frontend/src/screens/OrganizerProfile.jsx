@@ -61,10 +61,16 @@ export function OrganizerProfile() {
     }
   }, [id])
 
+  // Events this user is going to (public "Going" tab). Lazily loaded the first
+  // time the tab is opened; null until then so we can show a spinner.
+  const [attending, setAttending] = useState(null)
+
   // Refetch this organizer's events when the tab changes (real profiles only —
   // the backend distinguishes upcoming vs past; the mock seed has no such split).
+  // The 'going' tab reads a different source (events the user RSVP'd to), so it's
+  // handled by its own effect below and skipped here.
   useEffect(() => {
-    if (!id || !org?.isBackend) return
+    if (!id || !org?.isBackend || tab === 'going') return
     let cancelled = false
     api.user(id, tab === 'past' ? 'past' : 'upcoming').then((p) => {
       if (!cancelled) setEvents(toOrganizerShape(p)?.events ?? [])
@@ -73,6 +79,18 @@ export function OrganizerProfile() {
       cancelled = true
     }
   }, [id, tab, org?.isBackend])
+
+  // Load the "Going" list once, when its tab is first opened.
+  useEffect(() => {
+    if (tab !== 'going' || !org?.isBackend || attending !== null) return
+    let cancelled = false
+    api.userAttending(id).then((rows) => {
+      if (!cancelled) setAttending(rows)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [tab, id, org?.isBackend, attending])
 
   if (!org) return <PageLoader label="Loading profile" />
   // Follow state: the shared context set is the source of truth once loaded, but
@@ -141,9 +159,10 @@ export function OrganizerProfile() {
         {/* bio */}
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-text-secondary">{org.bio}</p>
 
-        {/* tabs */}
+        {/* tabs — 'going' (events this person RSVP'd to) only shows for real
+            backend profiles; mock organizers have no attendance to surface. */}
         <div className="mt-6 flex gap-6 border-b border-border-light">
-          {['upcoming', 'past'].map((t) => (
+          {(org.isBackend ? ['upcoming', 'past', 'going'] : ['upcoming', 'past']).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -154,14 +173,25 @@ export function OrganizerProfile() {
                   : 'border-transparent text-text-secondary',
               )}
             >
-              {t}
+              {t === 'going' ? 'Going' : t}
             </button>
           ))}
         </div>
 
-        {/* event grid */}
+        {/* event grid — the 'going' tab renders the attending list (with its own
+            loading state); upcoming/past render this organizer's own events. */}
         <div className="mt-6">
-          {events.length > 0 ? (
+          {tab === 'going' ? (
+            attending === null ? (
+              <PageLoader label="Loading events" />
+            ) : attending.length > 0 ? (
+              <EventGrid events={attending} />
+            ) : (
+              <p className="py-16 text-center text-sm text-text-muted">
+                Not going to any upcoming events.
+              </p>
+            )
+          ) : events.length > 0 ? (
             <EventGrid events={events} />
           ) : (
             <p className="py-16 text-center text-sm text-text-muted">No events to show.</p>

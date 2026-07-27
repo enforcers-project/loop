@@ -22,32 +22,67 @@ export const CATEGORIES = [
   { name: 'Campus', color: '#FF7A45' },
 ]
 
-/** 24 interest chips for onboarding (Figma: INTERESTS 24 items) */
+/** Interest chips for onboarding — 52 items across 6 categories.
+ *  Keep in lockstep with backend/prisma/seed.js and frontend/src/data/seed.js. */
 export const INTERESTS = [
+  // Music
   { id: 'afrobeats', label: 'Afrobeats', category: 'Music' },
   { id: 'hiphop', label: 'Hip-Hop', category: 'Music' },
   { id: 'house', label: 'House / EDM', category: 'Music' },
   { id: 'live-bands', label: 'Live Bands', category: 'Music' },
+  { id: 'rnb', label: 'R&B / Soul', category: 'Music' },
+  { id: 'latin', label: 'Latin & Reggaeton', category: 'Music' },
+  { id: 'indie', label: 'Indie & Alt', category: 'Music' },
+  { id: 'jazz', label: 'Jazz & Neo-Soul', category: 'Music' },
+  { id: 'techno', label: 'Techno / Rave', category: 'Music' },
+  { id: 'kpop', label: 'K-Pop', category: 'Music' },
+  // Nightlife
   { id: 'rooftop', label: 'Rooftop Parties', category: 'Nightlife' },
   { id: 'clubbing', label: 'Clubbing', category: 'Nightlife' },
   { id: 'lounges', label: 'Lounges', category: 'Nightlife' },
   { id: 'day-party', label: 'Day Parties', category: 'Nightlife' },
+  { id: 'karaoke', label: 'Karaoke', category: 'Nightlife' },
+  { id: 'silent-disco', label: 'Silent Disco', category: 'Nightlife' },
+  { id: 'bar-crawls', label: 'Bar Crawls', category: 'Nightlife' },
+  { id: 'hookah', label: 'Hookah Lounges', category: 'Nightlife' },
+  // Sports
   { id: 'soccer', label: 'Soccer', category: 'Sports' },
   { id: 'basketball', label: 'Basketball', category: 'Sports' },
   { id: 'volleyball', label: 'Volleyball', category: 'Sports' },
   { id: 'running', label: 'Running Clubs', category: 'Sports' },
+  { id: 'tennis', label: 'Tennis', category: 'Sports' },
+  { id: 'pickleball', label: 'Pickleball', category: 'Sports' },
+  { id: 'yoga', label: 'Yoga & Pilates', category: 'Sports' },
+  { id: 'cycling', label: 'Cycling', category: 'Sports' },
+  { id: 'climbing', label: 'Climbing', category: 'Sports' },
+  { id: 'flag-football', label: 'Flag Football', category: 'Sports' },
+  // Networking
   { id: 'startups', label: 'Startups', category: 'Networking' },
   { id: 'tech', label: 'Tech Meetups', category: 'Networking' },
   { id: 'career', label: 'Career Fairs', category: 'Networking' },
   { id: 'creators', label: 'Creator Mixers', category: 'Networking' },
+  { id: 'finance', label: 'Finance & VC', category: 'Networking' },
+  { id: 'product', label: 'Product & Design', category: 'Networking' },
+  { id: 'marketing', label: 'Marketing', category: 'Networking' },
+  { id: 'alumni', label: 'Alumni Meetups', category: 'Networking' },
+  // Food
   { id: 'foodie', label: 'Food Festivals', category: 'Food' },
   { id: 'brunch', label: 'Brunch', category: 'Food' },
   { id: 'popups', label: 'Pop-ups', category: 'Food' },
   { id: 'tastings', label: 'Tastings', category: 'Food' },
+  { id: 'coffee', label: 'Coffee Culture', category: 'Food' },
+  { id: 'cocktails', label: 'Cocktail Bars', category: 'Food' },
+  { id: 'vegan', label: 'Vegan & Plant-Based', category: 'Food' },
+  { id: 'bbq', label: 'BBQ & Grill', category: 'Food' },
+  // Campus
   { id: 'campus-life', label: 'Campus Life', category: 'Campus' },
   { id: 'greek', label: 'Greek Life', category: 'Campus' },
   { id: 'clubs-orgs', label: 'Clubs & Orgs', category: 'Campus' },
   { id: 'study-jams', label: 'Study Jams', category: 'Campus' },
+  { id: 'hackathons', label: 'Hackathons', category: 'Campus' },
+  { id: 'intramurals', label: 'Intramurals', category: 'Campus' },
+  { id: 'game-nights', label: 'Game Nights', category: 'Campus' },
+  { id: 'film-screenings', label: 'Film Screenings', category: 'Campus' },
 ]
 
 export const AVATARS = [

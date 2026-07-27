@@ -158,8 +158,10 @@ function PeopleSearch() {
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
         aria-hidden="true"
       />
+      {/* type="text", not "search": WebKit adds its own clear (✕) button to
+          search inputs, which would double up with our custom one below. */}
       <input
-        type="search"
+        type="text"
         value={query}
         onChange={onChange}
         onFocus={() => setOpen(true)}

@@ -115,14 +115,21 @@ export function groupThreadId(participantIds) {
 
 // Normalize any of the shapes the app passes around (mock organizer, backend
 // public user, PostCard author, comment author) into what the thread renders.
+// Handles are stored raw (no leading `@`) so every render site uniformly
+// prefixes `@` — the mock seed carries `@lagosnights`, the backend carries
+// `lagosnights`, and we reconcile by stripping the prefix here.
 export function partnerFromAny(person) {
   if (!person) return null
   const id = person.id ?? person.authorId
   if (!id) return null
+  const rawHandle =
+    typeof person.handle === 'string' && person.handle
+      ? person.handle.replace(/^@/, '')
+      : person.handle || ''
   return {
     id,
     name: person.name || person.display_name || person.author || 'Someone',
-    handle: person.handle || (person.display_name ? `@${person.handle ?? ''}` : ''),
+    handle: rawHandle,
     avatar: person.avatar || person.avatar_url || person.authorAvatar || '',
     verified: !!(person.verified ?? person.is_verified),
   }
@@ -149,9 +156,10 @@ export function describeThread(thread) {
     }
   }
   const p = thread.partner
+  const raw = typeof p?.handle === 'string' ? p.handle.replace(/^@/, '') : ''
   return {
     title: p?.name || 'Someone',
-    subtitle: p?.handle || '',
+    subtitle: raw ? `@${raw}` : '',
     avatars: p?.avatar ? [p.avatar] : [],
     verified: !!p?.verified,
     isGroup: false,

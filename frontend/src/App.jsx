@@ -1,6 +1,7 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom'
 import { MotionConfig, LazyMotion, domAnimation } from 'motion/react'
 import { AppProvider, useApp } from './context/AppContext'
+import { MessagesRealtimeProvider } from './context/MessagesRealtime'
 import { ToastProvider } from './context/ToastContext'
 import { ModalProvider } from './context/ModalContext'
 import { ThemeProvider } from './context/ThemeContext'
@@ -163,7 +164,9 @@ export default function App() {
           <ToastProvider>
             <ModalProvider>
               <AppProvider>
-                <Shell />
+                <MessagesRealtimeProvider>
+                  <Shell />
+                </MessagesRealtimeProvider>
               </AppProvider>
             </ModalProvider>
           </ToastProvider>

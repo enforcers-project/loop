@@ -269,32 +269,35 @@ model User {
   createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  oauthAccounts      OauthAccount[]
-  sessions           UserSession[]
-  interests          UserInterest[]
-  events             Event[]                    @relation("EventOrganizer")
-  rsvps              Rsvp[]
-  savedEvents        SavedEvent[]
-  following          Follow[]                   @relation("Follower")
-  followers          Follow[]                   @relation("Followee")
-  interactions       InteractionEvent[]         @relation("InteractionActor")
-  targetedBy         InteractionEvent[]         @relation("InteractionTarget")
-  searchQueries      SearchQuery[]
-  categoryAffinities UserCategoryAffinity[]
-  preferenceVector   UserPreferenceVector?
-  recImpressions     RecommendationImpression[]
-  aiLogs             AiGenerationLog[]
-  aiConversations    AiConversation[]
-  rosterEntries      RosterEntry[]
-  comments           Comment[]
-  posts              Post[]
-  postLikes          PostLike[]
-  stories            Story[]
-  storyViews         StoryView[]
-  notifications      Notification[]             @relation("NotificationRecipient")
-  actedNotifications Notification[]             @relation("NotificationActor")
-  reminders          EventReminder[]
-  feedback           Feedback[]
+  oauthAccounts        OauthAccount[]
+  sessions             UserSession[]
+  interests            UserInterest[]
+  events               Event[]                    @relation("EventOrganizer")
+  rsvps                Rsvp[]
+  savedEvents          SavedEvent[]
+  following            Follow[]                   @relation("Follower")
+  followers            Follow[]                   @relation("Followee")
+  interactions         InteractionEvent[]         @relation("InteractionActor")
+  targetedBy           InteractionEvent[]         @relation("InteractionTarget")
+  searchQueries        SearchQuery[]
+  categoryAffinities   UserCategoryAffinity[]
+  preferenceVector     UserPreferenceVector?
+  recImpressions       RecommendationImpression[]
+  aiLogs               AiGenerationLog[]
+  aiConversations      AiConversation[]
+  rosterEntries        RosterEntry[]
+  comments             Comment[]
+  posts                Post[]
+  postLikes            PostLike[]
+  stories              Story[]
+  storyViews           StoryView[]
+  notifications        Notification[]             @relation("NotificationRecipient")
+  actedNotifications   Notification[]             @relation("NotificationActor")
+  reminders            EventReminder[]
+  feedback             Feedback[]
+  messagesSent         Message[]                  @relation("MessageSender")
+  threadParticipations ThreadParticipant[]
+  messageReactions     MessageReaction[]
 
   @@map("users")
 }
@@ -433,25 +436,25 @@ model Event {
   createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  organizer         User?                      @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
-  category          Category                   @relation(fields: [categoryId], references: [id])
-  tags              EventTag[]
-  sportsDetail      SportsDetail?
-  rosterEntries     RosterEntry[]
-  rsvps             Rsvp[]
-  savedEvents       SavedEvent[]
-  interactions      InteractionEvent[]
-  clickedInSearches SearchQuery[]              @relation("SearchClickedEvent")
-  embedding         EventEmbedding?
-  recImpressions    RecommendationImpression[]
-  aiLogs            AiGenerationLog[]
-  comments          Comment[]
-  posts             Post[]
-  stories           Story[]
-  notifications     Notification[]
-  reminders         EventReminder[]
-  analyticsDaily    EventAnalyticsDaily[]
-  reportedInFeedback Feedback[]                @relation("FeedbackReportedEvent")
+  organizer          User?                      @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  category           Category                   @relation(fields: [categoryId], references: [id])
+  tags               EventTag[]
+  sportsDetail       SportsDetail?
+  rosterEntries      RosterEntry[]
+  rsvps              Rsvp[]
+  savedEvents        SavedEvent[]
+  interactions       InteractionEvent[]
+  clickedInSearches  SearchQuery[]              @relation("SearchClickedEvent")
+  embedding          EventEmbedding?
+  recImpressions     RecommendationImpression[]
+  aiLogs             AiGenerationLog[]
+  comments           Comment[]
+  posts              Post[]
+  stories            Story[]
+  notifications      Notification[]
+  reminders          EventReminder[]
+  analyticsDaily     EventAnalyticsDaily[]
+  reportedInFeedback Feedback[]                 @relation("FeedbackReportedEvent")
 
   @@unique([source, externalId])
   @@index([status, startsAt])
@@ -912,4 +915,71 @@ model Feedback {
   reportedEvent Event? @relation("FeedbackReportedEvent", fields: [reportedEventId], references: [id], onDelete: SetNull)
 
   @@map("feedback")
+}
+
+// ============================================================================
+// 6.9 Direct messaging (§NEW — real-time DMs / group chats)
+// ============================================================================
+//
+// A thread is a container; its "kind" is derived from participant count (2 →
+// DM, 3+ → group), so there's no separate enum. `dmKey` is the sorted pair
+// "<uuidA>:<uuidB>" for DMs — unique so double-tap-create is idempotent — and
+// null for groups. Group threads have no such natural key; the caller creates
+// a fresh one each time.
+model MessageThread {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dmKey         String?  @unique @map("dm_key") @db.VarChar(80)
+  name          String?  @db.VarChar(80)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastMessageAt DateTime @default(now()) @map("last_message_at") @db.Timestamptz(6)
+
+  participants ThreadParticipant[]
+  messages     Message[]
+
+  @@index([lastMessageAt])
+  @@map("message_threads")
+}
+
+model ThreadParticipant {
+  threadId   String    @map("thread_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  lastReadAt DateTime? @map("last_read_at") @db.Timestamptz(6)
+  joinedAt   DateTime  @default(now()) @map("joined_at") @db.Timestamptz(6)
+
+  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([threadId, userId])
+  @@index([userId, threadId])
+  @@map("thread_participants")
+}
+
+model Message {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  threadId      String   @map("thread_id") @db.Uuid
+  senderId      String   @map("sender_id") @db.Uuid
+  text          String?  @db.VarChar(4000)
+  attachedEvent Json?    @map("attached_event")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  thread    MessageThread     @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender    User              @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  reactions MessageReaction[]
+
+  @@index([threadId, createdAt, id])
+  @@map("messages")
+}
+
+model MessageReaction {
+  messageId String   @map("message_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  emoji     String   @db.VarChar(8)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId, emoji])
+  @@index([userId])
+  @@map("message_reactions")
 }

@@ -12,6 +12,7 @@ import interactionsRouter from './interactions/routes.js'
 import authRouter from './auth/routes.js'
 import usersRouter from './users/routes.js'
 import notificationsRouter from './notifications/routes.js'
+import messagesRouter from './messages/routes.js'
 import { attachSession } from './auth/middleware.js'
 import recommendationsRouter from './recommendations/routes.js'
 import embeddingsRouter from './embeddings/routes.js'
@@ -143,6 +144,11 @@ app.use('/api', reminderRouter)
 
 // --- Notifications (followed-organizer bell feed; §7.5, work-plan #27) -------
 app.use('/api/notifications', notificationsRouter)
+
+// --- Direct messaging (Prisma-backed threads + SSE realtime) ----------------
+// Mounts POST /api/threads/*, GET /api/threads*, POST /api/threads/:id/*,
+// and GET /api/messages/stream for the EventSource pipe.
+app.use('/api', messagesRouter)
 
 // NOTE: the real NL-search endpoint (POST /api/ai/search, work-plan #22) lives
 // in ai/routes.js (mounted below at /api/ai) — LLM filter-parse → pgvector

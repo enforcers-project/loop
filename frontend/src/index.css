@@ -334,3 +334,20 @@ a,
     }
   }
 }
+
+/* Message double-tap heart pop — plays over the bubble on every reaction
+   fire (add or remove) so the gesture always has visible feedback. */
+@keyframes loopHeartPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}

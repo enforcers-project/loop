@@ -9,7 +9,6 @@ import { cn } from '../lib/utils'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
 import { NearMeChip } from '../components/NearMeChip'
-import { UserRail, UserResultList } from '../components/UserSearch'
 import {
   AIChip,
   AlmostFullBadge,
@@ -127,14 +126,6 @@ export function ForYouFeed() {
   const [tab, setTab] = useState('For You')
   const [cat, setCat] = useState('All')
   const [query, setQuery] = useState('')
-  // Search mode: 'events' (default — the query filters the events grid and a
-  // People rail peeks above it) or 'people' (a focused vertical list of user
-  // matches). The bar's segmented toggle flips this; "See all →" on the rail
-  // also jumps to 'people'.
-  const [searchMode, setSearchMode] = useState('events')
-  // People matches for the current query. null = not yet searched / query too
-  // short; [] = searched, no matches.
-  const [people, setPeople] = useState(null)
   // null while a fetch is in flight (initial mount + tab change), so we can
   // show the page-level spinner instead of an empty grid.
   const [events, setEvents] = useState(null)
@@ -170,29 +161,6 @@ export function ForYouFeed() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, interests, nearKey])
 
-  // Debounced people search — runs for a 2+ char query in either mode (so the
-  // rail can peek in events mode too). A trailing 250ms debounce keeps us from
-  // firing a request per keystroke; the cancelled flag drops stale responses.
-  const trimmedQuery = query.trim()
-  useEffect(() => {
-    let cancelled = false
-    // Clear (short query) or fetch (2+ chars) — both happen in the async tail so
-    // no setState fires synchronously in the effect body (cascading-render rule).
-    const t = setTimeout(() => {
-      if (trimmedQuery.length < 2) {
-        setPeople(null)
-        return
-      }
-      api.searchUsers(trimmedQuery).then((rows) => {
-        if (!cancelled) setPeople(rows)
-      })
-    }, 250)
-    return () => {
-      cancelled = true
-      clearTimeout(t)
-    }
-  }, [trimmedQuery])
-
   const filtered = (events ?? []).filter((e) => {
     if (cat !== 'All' && e.category !== cat) return false
     if (query.trim()) {
@@ -210,95 +178,64 @@ export function ForYouFeed() {
 
   return (
     <div className="loop-container pb-24 pt-4 md:pb-12">
-      {/* sticky search — pinned flush below the 80px TopNav (top-20). The
-          Events|People toggle flips the query between filtering the feed and
-          searching users. */}
+      {/* sticky search — pinned flush below the 80px TopNav (top-20). Filters
+          the events feed; people search lives on the Social tab. */}
       <div className="sticky top-20 z-20 -mx-4 bg-white/95 px-4 pb-3 pt-2 backdrop-blur-md md:-mx-6 md:px-6">
-        <SearchBar
-          value={query}
-          onChange={setQuery}
-          city={user?.homeCity}
-          mode={searchMode}
-          onModeChange={setSearchMode}
+        <SearchBar value={query} onChange={setQuery} city={user?.homeCity} />
+      </div>
+
+      {/* "Near me" chip — shows the current location + radius that's shaping
+          this feed, and deep-links to Settings to change it. Only appears once
+          the user has a saved home location. */}
+      <div className="mt-3">
+        <NearMeChip />
+      </div>
+
+      {/* filter row — Trending/Following toggles sit attached to the category
+          chips; a selected toggle swaps the feed source, deselecting it (or
+          picking the other) returns to the default For You recommendations. */}
+      <div className="mt-4">
+        <CatRow
+          active={cat}
+          onChange={setCat}
+          leading={FEED_TOGGLES.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab((cur) => (cur === t ? 'For You' : t))}
+              aria-pressed={tab === t}
+              className={cn(pillBase, tab === t ? pillSelected : pillUnselected)}
+            >
+              {t}
+            </button>
+          ))}
         />
       </div>
 
-      {searchMode === 'people' ? (
-        /* ---- People view: focused vertical list of user matches ---------- */
-        trimmedQuery.length < 2 ? (
-          <p className="py-16 text-center text-sm text-text-muted">
-            Start typing a name or @handle to find people.
-          </p>
-        ) : people === null ? (
-          <PageLoader label="Searching people" />
-        ) : (
-          <UserResultList users={people} />
-        )
+      {events === null ? (
+        <PageLoader label="Loading events" />
       ) : (
         <>
-          {/* "Near me" chip — shows the current location + radius that's shaping
-              this feed, and deep-links to Settings to change it. Only appears once
-              the user has a saved home location. */}
-          <div className="mt-3">
-            <NearMeChip />
-          </div>
-
-          {/* filter row — Trending/Following toggles sit attached to the category
-              chips; a selected toggle swaps the feed source, deselecting it (or
-              picking the other) returns to the default For You recommendations. */}
-          <div className="mt-4">
-            <CatRow
-              active={cat}
-              onChange={setCat}
-              leading={FEED_TOGGLES.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab((cur) => (cur === t ? 'For You' : t))}
-                  aria-pressed={tab === t}
-                  className={cn(pillBase, tab === t ? pillSelected : pillUnselected)}
-                >
-                  {t}
-                </button>
-              ))}
-            />
-          </div>
-
-          {/* People rail — peeks above the grid when the query also matches
-              names, so a searcher discovers people without switching modes.
-              "See all →" jumps into the People view. */}
-          {people && people.length > 0 && (
-            <UserRail users={people} onSeeAll={() => setSearchMode('people')} />
+          {/* featured hero — 24px below categories */}
+          {featured && (
+            <div className="mt-6">
+              <FeaturedCard event={featured} />
+            </div>
           )}
 
-          {events === null ? (
-            <PageLoader label="Loading events" />
-          ) : (
-            <>
-              {/* featured hero — 24px below categories */}
-              {featured && (
-                <div className="mt-6">
-                  <FeaturedCard event={featured} />
-                </div>
-              )}
-
-              {/* grid — 24px below hero. Every card carries its own rationale
-                  chip (from the recommendation engine) — "Because you like X",
-                  "Friends going", "Popular near you", etc. — so the feel of
-                  personalization comes from the labels on each card, not from
-                  editorial rails (those live on Discover). */}
-              <div className="mt-6">
-                {rest.length > 0 ? (
-                  <EventGrid events={rest} showRationale />
-                ) : (
-                  !featured && (
-                    <p className="py-16 text-center text-sm text-text-muted">
-                      No events match yet.
-                    </p>
-                  )
-                )}
-              </div>
-            </>
-          )}
+          {/* grid — 24px below hero. Every card carries its own rationale
+              chip (from the recommendation engine) — "Because you like X",
+              "Friends going", "Popular near you", etc. — so the feel of
+              personalization comes from the labels on each card, not from
+              editorial rails (those live on Discover). */}
+          <div className="mt-6">
+            {rest.length > 0 ? (
+              <EventGrid events={rest} showRationale />
+            ) : (
+              !featured && (
+                <p className="py-16 text-center text-sm text-text-muted">No events match yet.</p>
+              )
+            )}
+          </div>
         </>
       )}
     </div>

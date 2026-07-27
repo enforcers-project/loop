@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Search, X } from 'lucide-react'
 import { cityFromGeocode, isGoogleMapsConfigured, loadGoogleMaps } from '../lib/googleMaps'
+import { getMapStyles, MAP_BG } from '../lib/mapStyles'
+import { useTheme } from '../context/ThemeContext'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
 import { EventImage } from './EventImage'
 import { Spinner } from './primitives'
@@ -25,86 +27,8 @@ const FALLBACK_CENTER = { lat: 39.8283, lng: -98.5795 } // continental US centro
 const FALLBACK_ZOOM = 4
 const NEAR_ZOOM = 11
 
-/**
- * Warm-neutral map style — off-white land, calm water, muted roads. Keeps the
- * category-colored pins as the loudest thing on screen (the "Airbnb pattern").
- * Tweak the fills/strokes here to reskin without touching the component.
- */
-const MAP_STYLES = [
-  { elementType: 'geometry', stylers: [{ color: '#f5efe6' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#6b6b76' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#faf6f0' }] },
-  {
-    featureType: 'administrative.land_parcel',
-    elementType: 'labels',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'administrative.neighborhood',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'poi',
-    elementType: 'labels.text',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'poi.business',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'poi.park',
-    elementType: 'geometry',
-    stylers: [{ color: '#dbe7d0' }],
-  },
-  {
-    featureType: 'poi.park',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#6b8f5c' }],
-  },
-  {
-    featureType: 'road',
-    elementType: 'geometry',
-    stylers: [{ color: '#ffffff' }],
-  },
-  {
-    featureType: 'road.arterial',
-    elementType: 'geometry',
-    stylers: [{ color: '#f7ede0' }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'geometry',
-    stylers: [{ color: '#f2d8a8' }],
-  },
-  {
-    featureType: 'road.highway',
-    elementType: 'geometry.stroke',
-    stylers: [{ color: '#e8c68a' }],
-  },
-  {
-    featureType: 'road.highway.controlled_access',
-    elementType: 'geometry',
-    stylers: [{ color: '#f2d8a8' }],
-  },
-  {
-    featureType: 'transit',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'geometry',
-    stylers: [{ color: '#bcd7de' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#5f8791' }],
-  },
-]
-
 export function EventsMap({ events, viewLat, viewLng, searchLocation, onLocationChange, height }) {
+  const { theme } = useTheme()
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef([])
@@ -132,7 +56,7 @@ export function EventsMap({ events, viewLat, viewLng, searchLocation, onLocation
         mapRef.current = new google.maps.Map(containerRef.current, {
           center: initialCenter,
           zoom: initialZoom,
-          styles: MAP_STYLES,
+          styles: getMapStyles(theme),
           disableDefaultUI: false,
           clickableIcons: false,
           mapTypeControl: false,
@@ -150,8 +74,16 @@ export function EventsMap({ events, viewLat, viewLng, searchLocation, onLocation
     }
     // Only run once — the map keeps its own viewport state after init, and we
     // reflect prop changes through the marker effect + a recenter effect below.
+    // Theme changes are handled by the dedicated effect below, not a re-init.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Re-skin the tiles when the app toggles light/dark, without rebuilding the
+  // map (which would lose the current center/zoom and re-run fitBounds).
+  useEffect(() => {
+    if (!ready || !mapRef.current) return
+    mapRef.current.setOptions({ styles: getMapStyles(theme) })
+  }, [ready, theme])
 
   // Recenter when viewLat/viewLng changes (user's location resolves, or the
   // search box picks a new place). Skips no-op writes to avoid re-triggering
@@ -265,7 +197,11 @@ export function EventsMap({ events, viewLat, viewLng, searchLocation, onLocation
         </div>
       ) : (
         <>
-          <div ref={containerRef} className="absolute inset-0 bg-[#f5efe6]" />
+          <div
+            ref={containerRef}
+            className="absolute inset-0"
+            style={{ background: MAP_BG[theme] || MAP_BG.light }}
+          />
           {!ready && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-surface/60">
               <Spinner size="lg" label="Loading map" />

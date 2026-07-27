@@ -31,7 +31,7 @@ Core features:
 - Onboarding: pick interests → those seed the For You recs.
 - Notifications: bell icon shows RSVPs confirmed, new messages, events starting soon.
 - Ask Loop (this assistant): find events in natural language ("free afrobeats party this weekend"), explain how the app works, help troubleshoot.
-- Maps use OpenStreetMap; distance is straight-line ("as the crow flies").
+- Maps use Google Maps; distance is straight-line ("as the crow flies").
 - Sign in with email/password; auth uses standard JWT sessions.
 
 How to answer:

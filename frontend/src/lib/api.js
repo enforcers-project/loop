@@ -18,6 +18,11 @@ import {
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 const apiUrl = (path) => `${API_BASE}/api${path}`
 
+// Distinguishes a real backend UUID from a mock seed id (e.g. `org-*`), so
+// callers can skip a doomed request against the Prisma-backed API for mock rows.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const isUuid = (s) => typeof s === 'string' && UUID_RE.test(s)
+
 // The default profile picture shown when a user has no avatar_url. New accounts
 // get this seeded on the backend (DEFAULT_AVATAR_URL) so this is just a safety
 // net for older rows / mocks. Set VITE_DEFAULT_AVATAR_URL to the same S3
@@ -122,7 +127,18 @@ export function toEventCardShape(e) {
         : null,
     rsvpCount: e.rsvp_count ?? 0,
     goingCount: e.rsvp_count ?? 0,
-    goingAvatars: [],
+    // Mutuals going — people the viewer follows who RSVP'd (from the rec
+    // engine's social scorer via going_stack.friends). Their avatars render as
+    // the face stack on the card; `mutualsGoing` (name + count) drives the
+    // "Sarah + 2 going" label. Empty for events with no followed attendee, so
+    // the card falls back to the plain "N going" count.
+    goingAvatars: (e.going_stack?.friends ?? [])
+      .map((f) => f.avatar_url || DEFAULT_AVATAR)
+      .filter(Boolean),
+    mutualsGoing: {
+      count: e.going_stack?.count ?? 0,
+      names: (e.going_stack?.friends ?? []).map((f) => f.display_name).filter(Boolean),
+    },
     saveCount: e.save_count ?? 0,
     capacity: e.capacity ?? null,
     ageRestriction: e.age_label ?? null,
@@ -853,6 +869,46 @@ export const api = {
     })
     if (!put.ok) throw new Error(`Upload failed (${put.status})`)
     return request(`/users/${userId}/avatar`, { method: 'PUT', body: { avatar_url: public_url } })
+  },
+
+  // Search people by name / handle (GET /api/users?q=). Trigram fuzzy match,
+  // ranked by similarity. Returns PublicUser rows with a viewer-relative
+  // `is_following` (null when logged out). [] on any failure or a <2-char query
+  // so the search UI degrades to "no people" rather than throwing.
+  searchUsers: (q) => get(`/users?q=${encodeURIComponent(q)}`, () => []).then((rows) => rows ?? []),
+
+  // Who's going to an event (GET /api/events/:id/attendees). Public. Returns
+  // { users: PublicUser[], nextCursor, total } — total is the true going count
+  // (rides the raw envelope), users is one page (viewer-relative is_following).
+  // Falls back to an empty page so the attendee strip degrades to nothing rather
+  // than throwing. Reads the envelope directly since getPage() drops `total`.
+  eventAttendees: async (eventId, cursor) => {
+    const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+    try {
+      const res = await fetch(apiUrl(`/events/${eventId}/attendees${suffix}`), {
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      const json = await res.json()
+      return {
+        users: json.data ?? [],
+        nextCursor: json.nextCursor ?? null,
+        total: json.total ?? json.data?.length ?? 0,
+      }
+    } catch {
+      return { users: [], nextCursor: null, total: 0 }
+    }
+  },
+
+  // A user's public upcoming events they're going to (GET /users/:id/attending).
+  // Public — the "Attending" tab on someone else's profile. Returns EventCards
+  // (mapped to the UI shape); [] on failure. Skips mock `org-*` ids (no backend
+  // row) so a mock organizer profile doesn't fire a doomed request.
+  userAttending: async (id, cursor) => {
+    if (!isUuid(id)) return []
+    const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+    const rows = await get(`/users/${id}/attending${suffix}`, () => [])
+    return (rows ?? []).map(toEventCardShape)
   },
 
   // Follow / unfollow an organizer (no mock fallback — a follow must genuinely

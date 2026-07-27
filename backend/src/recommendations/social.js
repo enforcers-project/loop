@@ -36,6 +36,43 @@ async function getFriendIds(userId) {
   return ids
 }
 
+/**
+ * True bidirectional mutuals: users who follow `userId` AND whom `userId`
+ * follows. Distinct from getFriendIds (one-directional — people you follow).
+ * Used by posses' `mutuals` visibility so only reciprocal follows can discover
+ * a posse. Uncached — callers are low-frequency (a discovery/eligibility check),
+ * and follow state must be current. Returns a string[] of user ids.
+ */
+export async function getMutualIds(userId) {
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT f1.followee_id AS id
+       FROM follows f1
+       JOIN follows f2
+         ON f2.follower_id = f1.followee_id
+        AND f2.followee_id = f1.follower_id
+      WHERE f1.follower_id = $1::uuid`,
+    userId,
+  )
+  return rows.map((r) => r.id)
+}
+
+/** Does `viewerId` have a reciprocal follow with `otherId`? */
+export async function isMutual(viewerId, otherId) {
+  if (!viewerId || !otherId || viewerId === otherId) return false
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT 1
+       FROM follows f1
+       JOIN follows f2
+         ON f2.follower_id = f1.followee_id
+        AND f2.followee_id = f1.follower_id
+      WHERE f1.follower_id = $1::uuid AND f1.followee_id = $2::uuid
+      LIMIT 1`,
+    viewerId,
+    otherId,
+  )
+  return rows.length > 0
+}
+
 export async function computeSocialScores(userId, candidates) {
   const friendIds = await getFriendIds(userId)
   if (friendIds.length === 0) {

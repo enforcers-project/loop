@@ -298,6 +298,8 @@ model User {
   messagesSent         Message[]                  @relation("MessageSender")
   threadParticipations ThreadParticipant[]
   messageReactions     MessageReaction[]
+  possesCreated        Posse[]                    @relation("PosseCreator")
+  posseMemberships     PosseMember[]
 
   @@map("users")
 }
@@ -455,6 +457,7 @@ model Event {
   reminders          EventReminder[]
   analyticsDaily     EventAnalyticsDaily[]
   reportedInFeedback Feedback[]                 @relation("FeedbackReportedEvent")
+  posses             Posse[]
 
   @@unique([source, externalId])
   @@index([status, startsAt])
@@ -938,6 +941,7 @@ model MessageThread {
 
   participants ThreadParticipant[]
   messages     Message[]
+  posse        Posse?
 
   @@index([lastMessageAt])
   @@map("message_threads")
@@ -986,4 +990,75 @@ model MessageReaction {
   @@id([messageId, userId, emoji])
   @@index([userId])
   @@map("message_reactions")
+}
+
+// --- Posses (planning/posses_feature.md) ------------------------------------
+// A posse is an event-scoped, named group thread + a membership policy. Its
+// group chat IS a MessageThread (threadId, unique); active members are mirrored
+// into ThreadParticipant so chat access rides the existing requireParticipant
+// gate, and pending requesters (join-policy = ask) are deliberately NOT thread
+// participants until approved.
+
+enum PosseVisibility {
+  private // invite-only; not discoverable
+  mutuals // discoverable by reciprocal follows (A follows B AND B follows A)
+  public  // discoverable by anyone who can see the event
+
+  @@map("posse_visibility")
+}
+
+enum PosseJoinPolicy {
+  open // discoverers join instantly
+  ask  // discoverers request; captain approves
+
+  @@map("posse_join_policy")
+}
+
+enum PosseRole {
+  captain
+  member
+
+  @@map("posse_role")
+}
+
+enum PosseMemberStatus {
+  active  // in the posse + in the thread
+  pending // requested to join; NOT in the thread yet
+
+  @@map("posse_member_status")
+}
+
+model Posse {
+  id         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventId    String          @map("event_id") @db.Uuid
+  threadId   String          @unique @map("thread_id") @db.Uuid
+  creatorId  String          @map("creator_id") @db.Uuid
+  name       String          @db.VarChar(80)
+  note       String?         @db.VarChar(280)
+  visibility PosseVisibility @default(private)
+  joinPolicy PosseJoinPolicy @default(ask) @map("join_policy")
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  event   Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  thread  MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  creator User          @relation("PosseCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  members PosseMember[]
+
+  @@index([eventId, visibility])
+  @@map("posses")
+}
+
+model PosseMember {
+  posseId   String            @map("posse_id") @db.Uuid
+  userId    String            @map("user_id") @db.Uuid
+  role      PosseRole         @default(member)
+  status    PosseMemberStatus @default(active)
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  posse Posse @relation(fields: [posseId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([posseId, userId])
+  @@index([userId, status])
+  @@map("posse_members")
 }

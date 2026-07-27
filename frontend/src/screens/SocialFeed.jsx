@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence } from 'motion/react'
-import { PenSquare, Search } from 'lucide-react'
+import { PenSquare, Search, X } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { StoriesRow, StoryViewer, PostCard, Composer } from '../components/social'
@@ -64,26 +64,34 @@ function FollowRow({ user, following, onToggle }) {
   )
 }
 
-// Debounced people-search input. Empty query → parent renders the default
-// suggested list. TODO: if a dedicated "browse people" endpoint is ever added,
-// swap `api.searchUsers` for it; the underlying user shape is the same.
-function PeopleSearch({ onResults }) {
+// How many result rows the dropdown shows before "See more" is tapped.
+const PEOPLE_PREVIEW_COUNT = 3
+
+// Debounced people-search with an inline results dropdown. Results appear in a
+// panel *below* the input (absolutely positioned, so the feed underneath stays
+// put) rather than replacing the page. The dropdown previews the first few
+// matches; "See more" expands it to the full list. TODO: if a dedicated
+// "browse people" endpoint is ever added, swap `api.searchUsers` for it; the
+// underlying user shape is the same.
+function PeopleSearch() {
   const [query, setQuery] = useState('')
+  const [results, setResults] = useState(null) // null = no active query
   const [loading, setLoading] = useState(false)
+  const [showAll, setShowAll] = useState(false)
+  const [open, setOpen] = useState(false) // panel visible (has focus / results)
+  const wrapRef = useRef(null)
+
+  const term = query.trim()
 
   useEffect(() => {
-    const term = query.trim()
-    if (!term) {
-      onResults(null)
-      return
-    }
+    if (!term) return // empty query is handled in onChange, not here
     let cancelled = false
     const t = setTimeout(() => {
       setLoading(true)
       api.searchUsers(term).then(
         (list) => {
           if (cancelled) return
-          onResults(list ?? [])
+          setResults(list ?? [])
           setLoading(false)
         },
         () => {
@@ -94,16 +102,48 @@ function PeopleSearch({ onResults }) {
     return () => {
       cancelled = true
       clearTimeout(t)
-      // Clear any lingering spinner if the input was cleared mid-fetch;
-      // same-value setState is a no-op so this is safe on every cleanup.
+    }
+  }, [term])
+
+  const onChange = (e) => {
+    const next = e.target.value
+    setQuery(next)
+    setShowAll(false) // a new query collapses back to the preview
+    if (!next.trim()) {
+      // Clearing the box drops results immediately, without waiting on a fetch.
+      setResults(null)
       setLoading(false)
     }
-    // onResults is a stable setter from the parent
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query])
+  }
+
+  // Dismiss the dropdown on an outside click or Escape — it's an overlay, so it
+  // shouldn't linger once the user's attention moves elsewhere.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
+    }
+    const onKey = (e) => e.key === 'Escape' && setOpen(false)
+    window.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousedown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const clear = () => {
+    setQuery('')
+    setResults(null)
+    setShowAll(false)
+  }
+
+  const showPanel = open && term.length > 0
+  const visible = results ? (showAll ? results : results.slice(0, PEOPLE_PREVIEW_COUNT)) : []
+  const hiddenCount = results ? results.length - visible.length : 0
 
   return (
-    <div className="relative mb-3.5">
+    <div ref={wrapRef} className="relative z-30 mb-3.5">
       <Search
         size={14}
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
@@ -112,16 +152,91 @@ function PeopleSearch({ onResults }) {
       <input
         type="search"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={onChange}
+        onFocus={() => setOpen(true)}
         placeholder="Search people"
         aria-label="Search people"
         className="h-9 w-full rounded-pill border border-border-light bg-surface pl-8 pr-8 text-[13px] text-ink placeholder:text-text-muted focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
       />
-      {loading && (
+      {loading ? (
         <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
           <Spinner size="sm" label="Searching people" />
         </div>
+      ) : (
+        query && (
+          <button
+            type="button"
+            onClick={clear}
+            aria-label="Clear search"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-text-muted transition-colors hover:bg-surface hover:text-ink"
+          >
+            <X size={14} />
+          </button>
+        )
       )}
+
+      {showPanel && results !== null && (
+        <div className="absolute left-0 right-0 top-full z-30 mt-1.5 overflow-hidden rounded-card border border-border-light bg-white py-1 shadow-hero">
+          {results.length === 0 ? (
+            <p className="px-4 py-6 text-center text-sm text-text-muted">No people found</p>
+          ) : (
+            <>
+              <div className="max-h-[60vh] overflow-y-auto">
+                {visible.map((o) => (
+                  <div key={o.id} className="px-3 py-2 transition-colors hover:bg-surface">
+                    <PeopleResultRow user={o} onNavigate={() => setOpen(false)} />
+                  </div>
+                ))}
+              </div>
+              {hiddenCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(true)}
+                  className="mt-0.5 w-full border-t border-border-light py-2.5 text-center text-[13px] font-semibold text-primary transition-colors hover:bg-surface"
+                >
+                  See more ({hiddenCount})
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// One result row inside the people-search dropdown: tappable identity (→ profile)
+// with an inline Follow button. Mirrors the sidebar FollowRow but calls back on
+// navigate so the dropdown can close itself.
+function PeopleResultRow({ user, onNavigate }) {
+  const { followingIds, toggleFollow } = useApp()
+  return (
+    <div className="flex items-center gap-3">
+      <Link
+        to={`/organizer/${user.id}`}
+        onClick={onNavigate}
+        aria-label={`Open ${user.name}'s profile`}
+      >
+        <img
+          src={user.avatar}
+          alt=""
+          className="h-10 w-10 flex-shrink-0 rounded-full bg-surface object-cover transition-transform hover:scale-[1.03]"
+        />
+      </Link>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <Link
+            to={`/organizer/${user.id}`}
+            onClick={onNavigate}
+            className="truncate text-[13px] font-semibold text-ink transition-colors hover:text-primary"
+          >
+            {user.name}
+          </Link>
+          {user.verified && <VerifiedBadge size={12} />}
+        </div>
+        {user.handle && <p className="truncate text-xs text-text-muted">@{user.handle}</p>}
+      </div>
+      <FollowBtn following={followingIds.has(user.id)} onToggle={() => toggleFollow(user.id)} sm />
     </div>
   )
 }
@@ -148,9 +263,6 @@ export function SocialFeed() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [composer, setComposer] = useState(null) // 'post' | 'story' | null
   const [viewerIndex, setViewerIndex] = useState(null) // group index being viewed, or null
-  // People-search results in the left rail. null = no active query; render the
-  // default "Suggested follows" list. Array (possibly empty) = a query is active.
-  const [peopleResults, setPeopleResults] = useState(null)
   const loading = posts === null || events === null
 
   const near = nearForUser(user)
@@ -334,71 +446,51 @@ export function SocialFeed() {
 
         {/* center column */}
         <div className="w-full max-w-[600px] flex-1">
-          {/* people search — pinned at the top of the feed. An active query
-              swaps the whole feed for a people-results list; clearing it
-              restores the feed. This is the tab's primary way to find people. */}
-          <PeopleSearch onResults={setPeopleResults} />
+          {/* people search — pinned at the top of the feed. Matches surface in a
+              dropdown below the input (preview of a few, "See more" to expand),
+              leaving the feed underneath untouched. */}
+          <PeopleSearch />
 
-          {peopleResults !== null ? (
-            /* ---- People results replace the feed while searching ---------- */
-            <div className="mt-4 space-y-3.5">
-              {peopleResults.length === 0 ? (
-                <p className="py-16 text-center text-sm text-text-muted">No people found</p>
-              ) : (
-                peopleResults.map((o) => (
-                  <FollowRow
-                    key={o.id}
-                    user={o}
-                    following={followingIds.has(o.id)}
-                    onToggle={() => toggleFollow(o.id)}
-                  />
-                ))
-              )}
+          {/* stories scroll horizontally *inside* this column */}
+          <div className="mt-4 rounded-card border border-border-light bg-white p-4 shadow-card">
+            <StoriesRow
+              stories={stories}
+              onOpen={openStory}
+              onAddStory={() => openComposer('story')}
+            />
+          </div>
+
+          {/* create-post prompt */}
+          <button
+            type="button"
+            onClick={() => openComposer('post')}
+            className="mt-6 flex w-full items-center gap-3 rounded-card border border-border-light bg-white px-4 py-3.5 text-left shadow-card transition-colors hover:border-primary"
+          >
+            <img
+              src={user?.avatar ?? 'https://i.pravatar.cc/150?img=1'}
+              alt=""
+              className="h-10 w-10 flex-shrink-0 rounded-full bg-surface object-cover"
+            />
+            <span className="flex-1 text-sm text-text-muted">
+              {isLoggedIn ? 'Share a flyer, recap or update…' : 'Sign in to post…'}
+            </span>
+            <PenSquare size={20} className="flex-shrink-0 text-primary" />
+          </button>
+
+          <div className="mt-6 space-y-6">
+            {postList.map((p) => (
+              <PostCard key={p.id} post={p} />
+            ))}
+          </div>
+
+          {/* infinite-scroll sentinel + spinner */}
+          {cursor && (
+            <div ref={sentinelRef} className="flex justify-center py-8">
+              {loadingMore && <Spinner label="Loading more posts" />}
             </div>
-          ) : (
-            <>
-              {/* stories scroll horizontally *inside* this column */}
-              <div className="mt-4 rounded-card border border-border-light bg-white p-4 shadow-card">
-                <StoriesRow
-                  stories={stories}
-                  onOpen={openStory}
-                  onAddStory={() => openComposer('story')}
-                />
-              </div>
-
-              {/* create-post prompt */}
-              <button
-                type="button"
-                onClick={() => openComposer('post')}
-                className="mt-6 flex w-full items-center gap-3 rounded-card border border-border-light bg-white px-4 py-3.5 text-left shadow-card transition-colors hover:border-primary"
-              >
-                <img
-                  src={user?.avatar ?? 'https://i.pravatar.cc/150?img=1'}
-                  alt=""
-                  className="h-10 w-10 flex-shrink-0 rounded-full bg-surface object-cover"
-                />
-                <span className="flex-1 text-sm text-text-muted">
-                  {isLoggedIn ? 'Share a flyer, recap or update…' : 'Sign in to post…'}
-                </span>
-                <PenSquare size={20} className="flex-shrink-0 text-primary" />
-              </button>
-
-              <div className="mt-6 space-y-6">
-                {postList.map((p) => (
-                  <PostCard key={p.id} post={p} />
-                ))}
-              </div>
-
-              {/* infinite-scroll sentinel + spinner */}
-              {cursor && (
-                <div ref={sentinelRef} className="flex justify-center py-8">
-                  {loadingMore && <Spinner label="Loading more posts" />}
-                </div>
-              )}
-              {!cursor && postList.length > 0 && (
-                <p className="py-8 text-center text-sm text-text-muted">You're all caught up ✨</p>
-              )}
-            </>
+          )}
+          {!cursor && postList.length > 0 && (
+            <p className="py-8 text-center text-sm text-text-muted">You're all caught up ✨</p>
           )}
         </div>
 

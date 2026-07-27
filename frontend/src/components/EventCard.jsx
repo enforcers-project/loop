@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Calendar, MapPin } from 'lucide-react'
 import { m } from 'motion/react'
-import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
+import { CATEGORY_COLOR, isEventPast, recommendationLabel } from '../lib/utils'
 import { fadeUp, staggerParent } from '../lib/motion'
 import { useApp } from '../context/AppContext'
 import { EventImage } from './EventImage'
@@ -25,6 +25,10 @@ export function EventCard({ event, showRationale = false, onClick }) {
   const { savedIds, goingIds, toggleSaved, toggleGoing } = useApp()
   const saved = savedIds.has(event.id)
   const going = goingIds.has(event.id)
+  // Past events read as de-emphasized: the poster dims, a "Passed" pill replaces
+  // the price, and RSVP is disabled (you can't join something that's over). The
+  // card still navigates so you can revisit details / photos.
+  const passed = isEventPast(event)
   // Local "going" count so the footer updates immediately on RSVP; seeded from
   // the event's denormalized rsvp_count. Sports cards read the roster count
   // (players_signed_up), which the RSVP flow doesn't touch, so they're left as-is.
@@ -76,6 +80,8 @@ export function EventCard({ event, showRationale = false, onClick }) {
           />
         </div>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/10" />
+        {/* Extra scrim on past events so the poster reads as inactive. */}
+        {passed && <div className="pointer-events-none absolute inset-0 bg-black/45" />}
 
         {/* top row: AIChip|CategoryBadge (left) + AlmostFullBadge (right) */}
         <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
@@ -84,13 +90,20 @@ export function EventCard({ event, showRationale = false, onClick }) {
           ) : (
             <CategoryBadge category={event.category} />
           )}
-          {event.almostFull && <AlmostFullBadge />}
+          {/* A past event can't fill up, so the "almost full" nudge is moot. */}
+          {!passed && event.almostFull && <AlmostFullBadge />}
         </div>
 
-        {/* price bottom-left */}
-        <span className="absolute bottom-3 left-3 rounded-pill bg-white/95 px-2.5 py-1 text-xs font-bold text-ink shadow-sm">
-          {event.isFree ? 'Free' : event.price}
-        </span>
+        {/* bottom-left: "Passed" pill on past events, otherwise the price */}
+        {passed ? (
+          <span className="absolute bottom-3 left-3 rounded-pill bg-black/70 px-2.5 py-1 text-xs font-bold text-white shadow-sm backdrop-blur-sm">
+            Passed
+          </span>
+        ) : (
+          <span className="absolute bottom-3 left-3 rounded-pill bg-white/95 px-2.5 py-1 text-xs font-bold text-ink shadow-sm">
+            {event.isFree ? 'Free' : event.price}
+          </span>
+        )}
       </button>
 
       {/* Info */}
@@ -142,8 +155,13 @@ export function EventCard({ event, showRationale = false, onClick }) {
           />
           <div className="flex flex-shrink-0 items-center gap-2">
             <SaveBtn sm saved={saved} onToggle={() => toggleSaved(event.id)} />
-            <RSVPBtn sm variant={going ? 'outline' : 'filled'} onClick={onRsvp}>
-              {going ? 'Going' : event.isSports ? 'Join' : 'RSVP'}
+            <RSVPBtn
+              sm
+              variant={going ? 'outline' : 'filled'}
+              disabled={passed}
+              onClick={passed ? undefined : onRsvp}
+            >
+              {passed ? 'Ended' : going ? 'Going' : event.isSports ? 'Join' : 'RSVP'}
             </RSVPBtn>
           </div>
         </div>

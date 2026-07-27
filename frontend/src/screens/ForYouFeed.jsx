@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Calendar, MapPin } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
-import { CATEGORY_COLOR, recommendationLabel } from '../lib/utils'
+import { CATEGORY_COLOR, isEventPast, recommendationLabel } from '../lib/utils'
 import { CatRow, SearchBar, pillBase, pillSelected, pillUnselected } from '../components/rows'
 import { cn } from '../lib/utils'
 import { EventGrid } from '../components/EventCard'
@@ -162,6 +162,7 @@ export function ForYouFeed() {
   }, [tab, interests, nearKey])
 
   const filtered = (events ?? []).filter((e) => {
+    if (isEventPast(e)) return false // keep the feed forward-looking
     if (cat !== 'All' && e.category !== cat) return false
     if (query.trim()) {
       const n = query.toLowerCase()

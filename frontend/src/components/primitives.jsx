@@ -309,19 +309,28 @@ export function RoleSelector({ user, onSelect, busy }) {
 /* --------------------------------------------------------------------------
    RSVPBtn — hot-pink CTA button
 -------------------------------------------------------------------------- */
-export function RSVPBtn({ variant = 'filled', sm = false, children = 'RSVP', onClick }) {
+export function RSVPBtn({
+  variant = 'filled',
+  sm = false,
+  disabled = false,
+  children = 'RSVP',
+  onClick,
+}) {
   return (
     <m.button
       onClick={onClick}
-      whileTap={{ scale: 0.94 }}
+      disabled={disabled}
+      whileTap={disabled ? undefined : { scale: 0.94 }}
       transition={springSnappy}
       className={cn(
         'inline-flex items-center justify-center rounded-button font-semibold',
         // consistent control height: 44px standard, 40px compact (card footers)
         sm ? 'h-10 px-4 text-sm' : 'h-11 px-6 text-sm',
-        variant === 'filled'
-          ? 'bg-accent text-white shadow-sm hover:opacity-90'
-          : 'border border-accent bg-white text-accent hover:bg-accent/5',
+        disabled
+          ? 'cursor-not-allowed border border-border-light bg-surface text-text-muted'
+          : variant === 'filled'
+            ? 'bg-accent text-white shadow-sm hover:opacity-90'
+            : 'border border-accent bg-white text-accent hover:bg-accent/5',
       )}
     >
       {children}

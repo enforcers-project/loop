@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
-import { cn, formatCount, pluralize } from '../lib/utils'
+import { cn, formatCount, isEventPast, pluralize } from '../lib/utils'
 import { FollowBtn, PageLoader, RoleBadge, VerifiedBadge } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { FollowListModal } from '../components/UserSearch'
@@ -108,6 +108,12 @@ export function OrganizerProfile() {
     // Keep the header count in step with the action we just took.
     setFollowerCount((c) => Math.max(0, c + (result ? 1 : -1)))
   }
+
+  // Split by date on the upcoming/past tabs. Real backend profiles already come
+  // pre-split from the API, but mock organizers return one flat list and ignore
+  // the tab — this keeps a passed event out of "upcoming" (and vice versa) for
+  // both. The 'going' tab renders `attending` separately, so it's untouched.
+  const visibleEvents = events.filter((e) => (tab === 'past' ? isEventPast(e) : !isEventPast(e)))
 
   return (
     <div className="pb-24 md:pb-10">
@@ -217,8 +223,8 @@ export function OrganizerProfile() {
                 Not going to any upcoming events.
               </p>
             )
-          ) : events.length > 0 ? (
-            <EventGrid events={events} />
+          ) : visibleEvents.length > 0 ? (
+            <EventGrid events={visibleEvents} />
           ) : (
             <p className="py-16 text-center text-sm text-text-muted">No events to show.</p>
           )}

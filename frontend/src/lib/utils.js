@@ -112,6 +112,27 @@ export function timeAgo(iso) {
 }
 
 /**
+ * Has an event already happened? True once its end time (or start, when there's
+ * no explicit end) is in the past. We prefer `endsAt` so an event that's
+ * currently underway isn't prematurely marked "passed"; a backend `status` of
+ * 'past' short-circuits to true even if the dates are missing/odd. Returns
+ * false for anything unparseable so a bad date never hides a live event.
+ *
+ * Client-side guard: the backend already splits upcoming/past for real profile
+ * feeds, but mock organizers and the Discover/For-You lists don't, so cards
+ * everywhere lean on this to stay consistent.
+ */
+export function isEventPast(event, now = Date.now()) {
+  if (!event) return false
+  if (event.status === 'past') return true
+  const end = event.endsAt || event.isoDate
+  if (!end) return false
+  const t = Date.parse(end)
+  if (isNaN(t)) return false
+  return t < now
+}
+
+/**
  * Normalize a raw recommendation rationale into a short, intentional badge
  * label — never long enough to truncate or overflow. Falls back to the
  * event category so "Because you like …" stays specific but concise.

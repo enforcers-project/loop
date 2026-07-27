@@ -14,7 +14,7 @@ import { m, AnimatePresence } from 'motion/react'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { cn, formatCount, formatJoinDate, pluralize, roleLabelFor } from '../lib/utils'
+import { cn, formatCount, formatJoinDate, isEventPast, pluralize, roleLabelFor } from '../lib/utils'
 import { backdrop, sheet, dialog } from '../lib/motion'
 import {
   ImageSourcePicker,
@@ -608,9 +608,16 @@ export function UserProfile() {
   // immediately, before a refetch — the fetched list is the source of truth,
   // the Set is the just-now override.
   const saved = (savedEvents ?? []).filter((e) => savedIds.has(e.id))
-  const going = (goingEvents ?? []).filter((e) => goingIds.has(e.id))
+  // "Going" is a forward-looking plans list — drop events that already happened
+  // so a past RSVP doesn't linger under "upcoming plans".
+  const going = (goingEvents ?? []).filter((e) => goingIds.has(e.id) && !isEventPast(e))
   const myInterests = (allInterests ?? []).filter((i) => interests.includes(i.id))
-  const myEventsList = myEvents[eventStatus] ?? []
+  // Defensive date guard on the "upcoming" sub-tab: the backend already splits
+  // upcoming/past, but this keeps a just-passed event from lingering until the
+  // next refetch.
+  const myEventsList = (myEvents[eventStatus] ?? []).filter(
+    (e) => eventStatus === 'past' || !isEventPast(e),
+  )
   const displayName = user?.name?.trim() || 'Your profile'
   const tabLoading =
     (tab === 'Events' && myEvents[eventStatus] === null) ||

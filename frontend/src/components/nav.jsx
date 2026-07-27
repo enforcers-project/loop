@@ -18,7 +18,7 @@ import { useApp } from '../context/AppContext'
 import { useTheme } from '../context/ThemeContext'
 import { NotificationBell } from './NotificationBell'
 
-const LOGO = <img src="/logo.png" alt="Loop" className="h-11 w-auto" />
+const LOGO = <img src="/logo.png" alt="Loop" className="h-16 w-auto md:h-20" />
 
 const NAV_LINKS = [
   { label: 'For You', to: '/feed' },
@@ -48,7 +48,7 @@ export function TopNav() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-border-light bg-white/95 backdrop-blur-md">
-      <div className="loop-container flex h-16 items-center justify-between gap-4 md:h-20">
+      <div className="loop-container flex h-20 items-center justify-between gap-4 md:h-24">
         <Link to={isLoggedIn ? '/feed' : '/'} className="flex-shrink-0">
           {LOGO}
         </Link>

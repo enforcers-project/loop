@@ -98,59 +98,84 @@ function PreviewCardSkeleton() {
 }
 
 /* --------------------------------------------------------------------------
-   Marquee — the "Happening near you" row auto-scrolls horizontally forever,
-   pausing when hovered or keyboard-focused. Built with useAnimationFrame on a
-   motion value (not CSS) so speed is frame-rate independent and the pause is
-   instant. We render the list twice and wrap x at half the track width, so the
-   loop is seamless. Reduced-motion users get the original manual scroll row.
+   Marquee — the "Happening near you" row auto-scrolls horizontally forever
+   AND accepts manual input: wheel, touch/drag, keyboard arrows, or the on-
+   screen chevrons. Auto-scroll pauses whenever the user is driving, and
+   resumes shortly after they stop. Native scrollLeft keeps trackpad, touch,
+   and a11y focus behavior all working for free. We render the list twice and
+   wrap scrollLeft at half the track width, so the loop is seamless.
+   Reduced-motion users still get a purely manual row.
 -------------------------------------------------------------------------- */
 function Marquee({ events }) {
   const reduce = useReducedMotion()
-  const x = useMotionValue(0)
-  const trackRef = useRef(null)
+  const scrollerRef = useRef(null)
   const halfRef = useRef(0)
   const pausedRef = useRef(false)
+  const resumeTimerRef = useRef(0)
 
-  // Half the track = exactly one copy of the list; scroll by that, then wrap.
   useEffect(() => {
     const measure = () => {
-      if (trackRef.current) halfRef.current = trackRef.current.scrollWidth / 2
+      if (scrollerRef.current) halfRef.current = scrollerRef.current.scrollWidth / 2
     }
     measure()
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
   }, [events])
 
+  // Nudge the auto-scroll to sleep briefly when the user interacts, so the
+  // track never fights their input — but resume after a short idle beat.
+  const pauseAutoscroll = () => {
+    pausedRef.current = true
+    if (resumeTimerRef.current) window.clearTimeout(resumeTimerRef.current)
+    resumeTimerRef.current = window.setTimeout(() => {
+      pausedRef.current = false
+    }, 1200)
+  }
+
+  // Seamless wrap on manual scroll too — jump silently when the user drags
+  // past the half-point in either direction, so the loop feels endless.
+  const onScroll = () => {
+    const el = scrollerRef.current
+    if (!el || !halfRef.current) return
+    if (el.scrollLeft >= halfRef.current) el.scrollLeft -= halfRef.current
+    else if (el.scrollLeft <= 0) el.scrollLeft += halfRef.current
+  }
+
   useAnimationFrame((_, delta) => {
-    if (reduce || pausedRef.current || !halfRef.current) return
+    if (reduce || pausedRef.current) return
+    const el = scrollerRef.current
+    if (!el || !halfRef.current) return
     const speed = 40 // px per second — slow enough to read each card
-    let next = x.get() - (speed * delta) / 1000
-    if (next <= -halfRef.current) next += halfRef.current // seamless wrap
-    x.set(next)
+    let next = el.scrollLeft + (speed * delta) / 1000
+    if (next >= halfRef.current) next -= halfRef.current
+    el.scrollLeft = next
   })
 
-  if (reduce) {
-    return (
-      <div className="scrollbar-hide flex snap-x snap-proximity gap-4 overflow-x-auto pb-2">
-        {events.map((e) => (
-          <div key={e.id} className="w-64 flex-shrink-0 snap-start">
-            <PreviewCard event={e} />
-          </div>
-        ))}
-      </div>
-    )
+  const nudge = (dir) => {
+    const el = scrollerRef.current
+    if (!el) return
+    pauseAutoscroll()
+    el.scrollBy({ left: dir * 320, behavior: 'smooth' })
   }
 
   const doubled = [...events, ...events]
   return (
-    <div
-      className="overflow-hidden"
-      onMouseEnter={() => (pausedRef.current = true)}
-      onMouseLeave={() => (pausedRef.current = false)}
-      onFocusCapture={() => (pausedRef.current = true)}
-      onBlurCapture={() => (pausedRef.current = false)}
-    >
-      <m.div ref={trackRef} style={{ x }} className="flex w-max gap-4 pb-2">
+    <div className="relative">
+      <div
+        ref={scrollerRef}
+        onScroll={onScroll}
+        onWheel={pauseAutoscroll}
+        onPointerDown={pauseAutoscroll}
+        onTouchStart={pauseAutoscroll}
+        onMouseEnter={() => (pausedRef.current = true)}
+        onMouseLeave={() => {
+          if (!resumeTimerRef.current) pausedRef.current = false
+        }}
+        onFocusCapture={() => (pausedRef.current = true)}
+        onBlurCapture={() => (pausedRef.current = false)}
+        className="scrollbar-hide flex gap-4 overflow-x-auto pb-2"
+        style={{ scrollBehavior: 'auto' }}
+      >
         {doubled.map((e, i) => (
           // Second copy is decorative/duplicated, so it's hidden from the a11y
           // tree — a screen reader shouldn't hear every event twice.
@@ -158,7 +183,46 @@ function Marquee({ events }) {
             <PreviewCard event={e} />
           </div>
         ))}
-      </m.div>
+      </div>
+
+      <button
+        type="button"
+        aria-label="Scroll left"
+        onClick={() => nudge(-1)}
+        className="absolute left-1 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-black/55 p-2 text-white backdrop-blur-sm transition hover:bg-black/75 md:inline-flex"
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        aria-label="Scroll right"
+        onClick={() => nudge(1)}
+        className="absolute right-1 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-black/55 p-2 text-white backdrop-blur-sm transition hover:bg-black/75 md:inline-flex"
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </button>
     </div>
   )
 }
@@ -535,9 +599,9 @@ function LandingNav() {
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       className="border-b border-white/10"
     >
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-5">
+      <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between px-5 md:h-24">
         <Link to="/" className="flex items-center">
-          <img src="/logo.png" alt="Loop" className="h-7 w-auto" />
+          <img src="/logo.png" alt="Loop" className="h-14 w-auto md:h-16" />
         </Link>
         <div className="flex items-center gap-3">
           <MotionLink

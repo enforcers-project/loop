@@ -330,6 +330,9 @@ export function toClientUser(u) {
     bio: u.bio ?? '',
     avatar: u.avatar_url || DEFAULT_AVATAR,
     role: u.role,
+    // Organizer flavor ('organizer' | 'promoter' | null) — distinguishes a
+    // Promoter from a plain Organizer for the profile role pill + selector.
+    organizerKind: u.organizer_kind ?? null,
     isHost: u.is_host,
     isVerified: u.is_verified,
     // Denormalized social counts (0 for a brand-new user); the profile header
@@ -685,6 +688,14 @@ export const api = {
   // genuinely persist. Throws with .status so the caller can surface a 409
   // (handle taken) or validation message.
   updateProfile: (userId, fields) => request(`/users/${userId}`, { method: 'PATCH', body: fields }),
+
+  // Change the user's self-defined role (PUT /users/:id/role). `preset` is one
+  // of 'attendee' | 'organizer' | 'promoter' | 'sports_host' — the backend
+  // resolves it to the valid { role, organizer_kind, is_host } triple and
+  // returns the refreshed SelfUser. No mock fallback — a role change must
+  // genuinely persist (it gates event creation).
+  saveRole: (userId, preset) =>
+    request(`/users/${userId}/role`, { method: 'PUT', body: { preset } }),
 
   // Update notification toggles (PUT /users/:id/notification-prefs). Send only
   // the keys that changed — the backend merges over the stored prefs. Returns

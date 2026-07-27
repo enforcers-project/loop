@@ -45,6 +45,19 @@ const BIO_MAX = 500
 const NOTIFICATION_KEYS = ['rsvps', 'messages', 'event_reminders', 'follows']
 const DEFAULT_NOTIFICATION_PREFS = Object.fromEntries(NOTIFICATION_KEYS.map((k) => [k, true]))
 
+// The four self-defined roles a user may switch between, each a valid triple of
+// {role, organizer_kind, is_host}. Mirrors ROLE_OPTIONS in the frontend
+// lib/utils.js — the client sends one of these labels and we resolve it here so
+// an arbitrary combination (e.g. attendee + is_host) can never be persisted.
+// Switching to attendee only changes the role flag; the user's existing events
+// stay in the DB untouched, so flipping back restores their organizer surface.
+const ROLE_PRESETS = {
+  attendee: { role: 'attendee', organizerKind: null, isHost: false },
+  organizer: { role: 'organizer', organizerKind: 'organizer', isHost: false },
+  promoter: { role: 'organizer', organizerKind: 'promoter', isHost: false },
+  sports_host: { role: 'organizer', organizerKind: 'organizer', isHost: true },
+}
+
 /** Resolve which of `targetIds` the viewer follows → Set. Empty when logged out. */
 async function resolveFollowedSet(viewerId, targetIds) {
   if (!viewerId || targetIds.length === 0) return new Set()
@@ -530,6 +543,40 @@ router.put('/:id/notification-prefs', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('PUT /api/users/:id/notification-prefs error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not save preferences')
+  }
+})
+
+// --- PUT /api/users/:id/role ------------------------------------------------
+// Owner-only. Body: { preset: 'attendee' | 'organizer' | 'promoter' |
+// 'sports_host' }. Lets a user redefine themselves and toggle between attendee
+// and organizer seamlessly. We accept a named preset (not raw role/kind/host
+// fields) so only the four valid combinations can ever be stored. Returns the
+// refreshed SelfUser so the client can adopt the new role/kind/host at once.
+router.put('/:id/role', requireAuth, async (req, res) => {
+  if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only change your own role')
+  }
+
+  const preset = req.body?.preset
+  if (typeof preset !== 'string' || !Object.prototype.hasOwnProperty.call(ROLE_PRESETS, preset)) {
+    return fail(
+      res,
+      422,
+      'VALIDATION_ERROR',
+      'preset must be one of: attendee, organizer, promoter, sports_host',
+    )
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: ROLE_PRESETS[preset],
+    })
+    return res.json({ data: toSelfUser(updated) })
+  } catch (err) {
+    console.error('PUT /api/users/:id/role error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not update role')
   }
 })
 

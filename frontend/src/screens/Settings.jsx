@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext'
 import { useToast } from '../context/ToastContext'
 import { cn } from '../lib/utils'
 import { AddressPicker } from '../components/AddressPicker'
-import { InlineAlert } from '../components/primitives'
+import { InlineAlert, RoleSelector } from '../components/primitives'
 
 // Loop's minimum age is 13 (COPPA) — mirrors the backend validator in
 // PUT /users/:id/birthdate and the onboarding DOB slide.
@@ -463,6 +463,31 @@ function NotificationPrefs({ user }) {
   )
 }
 
+/* Role card. The same RoleSelector shown in the edit-profile modal, wired to
+   updateRole — switching here instantly flips the nav "Create" link, the
+   profile pill, and organizer-only tabs (context's adopt re-derives role +
+   isHost). The parent owns the busy state; a no-op reselect is a no-op. */
+function RolePrefs({ user }) {
+  const { updateRole } = useApp()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+
+  const onSelect = async (preset) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await updateRole(preset)
+      toast.success('Role updated.')
+    } catch (err) {
+      toast.error(err?.message || 'Could not update role. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <RoleSelector user={user} onSelect={onSelect} busy={busy} />
+}
+
 export function Settings() {
   const navigate = useNavigate()
   const { user, logout } = useApp()
@@ -529,6 +554,17 @@ export function Settings() {
             description="Used to verify your age for age-restricted events. Only you can see this."
           >
             <BirthdateEditor user={user} />
+          </StackedRow>
+        </section>
+      )}
+
+      {user && (
+        <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-white">
+          <StackedRow
+            title="I'm here as"
+            description="Switch between attending and organizing anytime. This sets the badge on your profile and unlocks event creation."
+          >
+            <RolePrefs user={user} />
           </StackedRow>
         </section>
       )}

@@ -14,9 +14,15 @@ import { m, AnimatePresence } from 'motion/react'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { cn, formatCount, formatJoinDate, pluralize } from '../lib/utils'
+import { cn, formatCount, formatJoinDate, pluralize, roleLabelFor } from '../lib/utils'
 import { backdrop, sheet, dialog } from '../lib/motion'
-import { ImageSourcePicker, inputClass, RoleBadge, Spinner } from '../components/primitives'
+import {
+  ImageSourcePicker,
+  inputClass,
+  RoleBadge,
+  RoleSelector,
+  Spinner,
+} from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
 import { InterestBlobs } from '../components/InterestBlobs'
@@ -87,7 +93,16 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
    The avatar row reuses the parent's S3 upload flow (onUpload/uploading) — the
    same path as the full-screen AvatarModal — and persists immediately on pick,
    independent of the Save button (which only commits the text fields). */
-function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSave }) {
+function EditProfileModal({
+  user,
+  avatarSrc,
+  onUpload,
+  uploading,
+  onClose,
+  onSave,
+  onSelectRole,
+  roleBusy,
+}) {
   const [name, setName] = useState(user?.name ?? '')
   // handleRaw is the stored handle (no @, may be null); fall back to empty.
   const [handle, setHandle] = useState(user?.handleRaw ?? '')
@@ -242,6 +257,15 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
               {bio.length}/{BIO_MAX}
             </div>
           </div>
+
+          {/* role — persists immediately on pick (independent of Save, like the
+              avatar), so switching attendee ⇄ organizer takes effect at once */}
+          <div>
+            <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
+              I'm here as
+            </span>
+            <RoleSelector user={user} onSelect={onSelectRole} busy={roleBusy} />
+          </div>
         </div>
 
         {/* footer */}
@@ -394,13 +418,13 @@ export function UserProfile() {
   const {
     user,
     role,
-    isHost,
     interests,
     savedIds,
     goingIds,
     updateAvatar,
     updateCover,
     updateProfile,
+    updateRole,
     updateInterests,
   } = useApp()
   const toast = useToast()
@@ -409,6 +433,7 @@ export function UserProfile() {
   const [interestsOpen, setInterestsOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [coverUploading, setCoverUploading] = useState(false)
+  const [roleBusy, setRoleBusy] = useState(false)
   const avatarSrc = user?.avatar || DEFAULT_AVATAR
   const coverSrc = user?.cover || DEFAULT_COVER
 
@@ -435,6 +460,22 @@ export function UserProfile() {
         toast.error(err.message || 'Could not save profile. Please try again.')
       }
       throw err
+    }
+  }
+
+  // Switch the self-defined role. Persists immediately (like the avatar) so the
+  // pill, nav "Create" link, and organizer tabs update at once. Context's adopt
+  // re-derives role/isHost from the refreshed user.
+  const onSelectRole = async (preset) => {
+    if (roleBusy) return
+    setRoleBusy(true)
+    try {
+      await updateRole(preset)
+      toast.success('Role updated.')
+    } catch (err) {
+      toast.error(err.message || 'Could not update role. Please try again.')
+    } finally {
+      setRoleBusy(false)
     }
   }
 
@@ -486,7 +527,13 @@ export function UserProfile() {
   // Two logic roles + the host capability drive the display RoleBadge:
   // an organizer-host shows the green "Sports Host" tint (per planning §5).
   const isOrganizer = role === 'organizer'
-  const roleLabel = isOrganizer ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
+  // roleLabelFor resolves the pill copy from role + organizerKind + isHost, so a
+  // Promoter reads "Promoter" (not the generic "Organizer") on the badge.
+  const roleLabel = roleLabelFor({
+    role: user?.role,
+    organizerKind: user?.organizerKind,
+    isHost: user?.isHost,
+  })
   // Organizers get an extra "Events" tab (their own published events) before
   // Saved. Attendees never see it — they can't create events.
   const tabs = isOrganizer
@@ -812,6 +859,8 @@ export function UserProfile() {
             onUpload={onUpload}
             uploading={uploading}
             onSave={onSaveProfile}
+            onSelectRole={onSelectRole}
+            roleBusy={roleBusy}
             onClose={() => setEditOpen(false)}
           />
         )}

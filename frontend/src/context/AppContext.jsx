@@ -308,6 +308,21 @@ export function AppProvider({ children }) {
     [user?.id],
   )
 
+  // Change the user's self-defined role (attendee ⇄ organizer/promoter/sports
+  // host) and adopt the refreshed user so `adopt` re-derives role + isHost —
+  // which instantly flips the nav "Create" link, the profile pill, and the
+  // organizer-only tabs/routes. `preset` is one of attendee | organizer |
+  // promoter | sports_host. Throws on failure so the caller can toast.
+  const updateRole = useCallback(
+    async (preset) => {
+      const self = await api.saveRole(user?.id, preset)
+      const clientUser = toClientUser(self)
+      adopt(clientUser)
+      return clientUser
+    },
+    [user?.id, adopt],
+  )
+
   // Persist notification toggles and adopt the refreshed user so Settings reads
   // the merged prefs back without a /me round-trip. `prefs` is a partial map of
   // the changed toggles; the backend merges it over the stored value.
@@ -490,6 +505,7 @@ export function AppProvider({ children }) {
         updateAvatar,
         updateCover,
         updateProfile,
+        updateRole,
         saveBirthDate,
         saveLocation,
         saveNotificationPrefs,

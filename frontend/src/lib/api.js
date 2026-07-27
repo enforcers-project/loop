@@ -1255,6 +1255,54 @@ export const api = {
     streamUrl: () => apiUrl('/messages/stream'),
   },
 
+  // Posses (event group coordination). Real endpoints; mutations use request()
+  // so a failure throws (with .status/.code) and the caller can surface it —
+  // a posse action must genuinely persist. Reads return [] / null on failure so
+  // a screen degrades rather than crashing.
+  posses: {
+    // My posses (any membership status), newest first.
+    mine: async () => {
+      try {
+        return (await request('/posses')) ?? []
+      } catch {
+        return []
+      }
+    },
+    // One posse with its full roster + my viewer state. Throws on 404/403 so the
+    // detail screen can show a "not found / no access" state.
+    get: (id) => request(`/posses/${id}`),
+    // Discoverable posses for an event (public + eligible mutuals + mine).
+    forEvent: async (eventId) => {
+      try {
+        return (await request(`/events/${eventId}/posses`)) ?? []
+      } catch {
+        return []
+      }
+    },
+    create: ({ eventId, name, note, visibility, joinPolicy }) =>
+      request('/posses', {
+        method: 'POST',
+        body: {
+          event_id: eventId,
+          name,
+          note: note || null,
+          visibility,
+          join_policy: joinPolicy,
+        },
+      }),
+    update: (id, fields) => request(`/posses/${id}`, { method: 'PATCH', body: fields }),
+    // Join (open policy) or request (ask policy). Server returns 201 (active) or
+    // 202 (pending) — both parse to the envelope's data here.
+    join: (id) => request(`/posses/${id}/join`, { method: 'POST' }),
+    invite: (id, userId) =>
+      request(`/posses/${id}/invite`, { method: 'POST', body: { user_id: userId } }),
+    approve: (id, userId) => request(`/posses/${id}/members/${userId}/approve`, { method: 'POST' }),
+    // Remove someone (captain) or leave (self) — same route, server decides by
+    // whether uid === caller.
+    removeMember: (id, userId) => request(`/posses/${id}/members/${userId}`, { method: 'DELETE' }),
+    dissolve: (id) => request(`/posses/${id}`, { method: 'DELETE' }),
+  },
+
   // Pre-event reminders (planning §7.5, work-plan #28). No mock fallback — a
   // reminder must genuinely persist, so the caller shows a real success/error.
   reminders: {

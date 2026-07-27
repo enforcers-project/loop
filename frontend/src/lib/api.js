@@ -727,43 +727,35 @@ export const api = {
   // with both lat + lng the backend does an earth_distance radius query
   // (radiusKm defaults to 40 to match the recommender), else falls back to
   // city equality. Missing near → no geo filter (pre-onboarding sessions).
-  // Empty-near-you fallback: if a geo-filtered request returns 0 events, retry
-  // without geo so the user always sees something. Matters because the seed
-  // catalog only covers a handful of cities — a user whose saved location is
-  // elsewhere would otherwise see "No events match yet" forever.
+  //
+  // We do NOT retry without the geo filter on an empty result. This is a
+  // location-based app: if nothing is within the user's radius, the honest
+  // answer is the "No events near you yet" empty state — not a silent refetch
+  // that dumps events from other cities/states (which is exactly the far-away-
+  // events bug). Widening the search is the radius slider's job, and the
+  // offline path (mockFilter) has no geo filter anyway, so this only tightens
+  // real backend responses.
   events: async (filters = {}) => {
-    const buildQs = (includeGeo) => {
-      const qs = new URLSearchParams()
-      if (filters.category && filters.category !== 'All') qs.set('category', filters.category)
-      if (filters.isFree) qs.set('isFree', 'true')
-      if (filters.isSports) qs.set('isSports', 'true')
-      if (filters.q) qs.set('q', filters.q)
-      if (filters.sort) qs.set('sort', filters.sort)
-      if (includeGeo) {
-        const near = filters.near
-        if (near?.lat != null && near?.lng != null) {
-          qs.set('nearLat', String(near.lat))
-          qs.set('nearLng', String(near.lng))
-          qs.set('radiusKm', String(near.radiusKm ?? 40))
-          // Also send city so the backend can include events created without
-          // pinned coordinates (organizer skipped Places autocomplete); the
-          // backend ORs it with the radius filter instead of hard-excluding
-          // null-coord rows.
-          if (near.city) qs.set('city', near.city)
-        } else if (near?.city) {
-          qs.set('city', near.city)
-        }
-      }
-      return qs.toString() ? `?${qs}` : ''
+    const qs = new URLSearchParams()
+    if (filters.category && filters.category !== 'All') qs.set('category', filters.category)
+    if (filters.isFree) qs.set('isFree', 'true')
+    if (filters.isSports) qs.set('isSports', 'true')
+    if (filters.q) qs.set('q', filters.q)
+    if (filters.sort) qs.set('sort', filters.sort)
+    const near = filters.near
+    if (near?.lat != null && near?.lng != null) {
+      qs.set('nearLat', String(near.lat))
+      qs.set('nearLng', String(near.lng))
+      qs.set('radiusKm', String(near.radiusKm ?? 40))
+      // Also send city so the backend can include events created without pinned
+      // coordinates (organizer skipped Places autocomplete); the backend ORs it
+      // with the radius filter instead of hard-excluding null-coord rows.
+      if (near.city) qs.set('city', near.city)
+    } else if (near?.city) {
+      qs.set('city', near.city)
     }
-    const hasGeo = !!(
-      (filters.near?.lat != null && filters.near?.lng != null) ||
-      filters.near?.city
-    )
-    let list = (await get(`/events${buildQs(true)}`, () => mockFilter(filters))) ?? []
-    if (list.length === 0 && hasGeo) {
-      list = (await get(`/events${buildQs(false)}`, () => mockFilter(filters))) ?? []
-    }
+    const suffix = qs.toString() ? `?${qs}` : ''
+    const list = (await get(`/events${suffix}`, () => mockFilter(filters))) ?? []
     return list.map(toEventCardShape)
   },
 

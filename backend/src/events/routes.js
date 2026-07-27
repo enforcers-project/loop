@@ -91,9 +91,23 @@ async function fetchEventsList(query) {
   // equals here — the geo block below folds `city` into an OR (radius-match
   // OR city-match) so events created without pinned coordinates still
   // surface to users with a home coordinate saved.
+  //
+  // City-only (no coords): match on the token before the first comma so the
+  // bare "San Francisco" a user saves matches the "San Francisco, CA" every
+  // event is stored as. A plain equals misses all of them — which is what sent
+  // city-only users into an empty/far-away feed. Prisma can't express
+  // split_part, so resolve the ids in raw SQL and fold into where.id.
   const hasGeoParams = nearLat && nearLng && radiusKm
   if (city && !hasGeoParams) {
-    where.city = { equals: city, mode: 'insensitive' }
+    const cityRows = await prisma.$queryRawUnsafe(
+      `SELECT id FROM events
+         WHERE lower(trim(split_part(city, ',', 1))) = lower(trim(split_part($1, ',', 1)))`,
+      city,
+    )
+    if (cityRows.length === 0) {
+      return { data: [], nextCursor: null }
+    }
+    where.id = { ...(where.id || {}), in: cityRows.map((r) => r.id) }
   }
 
   // Date range filter. When the caller doesn't pass an explicit range we
@@ -149,7 +163,11 @@ async function fetchEventsList(query) {
     let cityClause = ''
     if (city) {
       params.push(city)
-      cityClause = `OR (lat IS NULL AND lng IS NULL AND city ILIKE $4)`
+      // City-token match (before the comma) so a null-coord event in
+      // "San Francisco, CA" still surfaces for a user whose city is
+      // "San Francisco". Matches the equality used in the city-only branch.
+      cityClause = `OR (lat IS NULL AND lng IS NULL
+        AND lower(trim(split_part(city, ',', 1))) = lower(trim(split_part($4, ',', 1))))`
     }
 
     const geoRows = await prisma.$queryRawUnsafe(

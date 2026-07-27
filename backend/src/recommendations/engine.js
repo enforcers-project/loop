@@ -12,6 +12,15 @@ const DEFAULT_RADIUS_KM = 40
 const CHURN_GUARD_DAYS = 3
 const COLD_START_THRESHOLD = 5
 
+// SQL fragment: case-insensitively compare two city expressions on the token
+// before the first comma, so "San Francisco" matches "San Francisco, CA" (and
+// vice-versa). Event cities are stored "City, ST"; a user's saved homeCity is
+// frequently the bare city, so a plain equals/ILIKE silently misses. `col` and
+// `param` are raw SQL expressions (a column ref and a placeholder like `$3`) —
+// never user input — so this is injection-safe. TRIM guards "City , ST".
+const cityTokenMatch = (col, param) =>
+  `lower(trim(split_part(${col}, ',', 1))) = lower(trim(split_part(${param}, ',', 1)))`
+
 const WEIGHTS = {
   normal: {
     cosSim: 0.43,
@@ -185,7 +194,13 @@ async function preFilter(userId, user, context) {
     params.push(lat, lng, radiusKm)
     paramIdx += 3
   } else if (user?.homeCity) {
-    geoClause = `AND e.city ILIKE $${paramIdx}`
+    // City-name match for users with no pinned coords. Event cities are stored
+    // "City, ST" (Ticketmaster/SeatGeek + Places), but a user's homeCity is
+    // often the bare "City" — so an exact/ILIKE compare misses everything and
+    // pushes them into the location-less fallback (the far-away-events bug).
+    // Compare the city token before the first comma on BOTH sides so
+    // "San Francisco" ↔ "San Francisco, CA" matches. See cityTokenMatch().
+    geoClause = `AND ${cityTokenMatch('e.city', `$${paramIdx}`)}`
     params.push(user.homeCity)
     paramIdx += 1
   }
@@ -544,10 +559,45 @@ function escapeLiteral(str) {
 }
 
 async function fallbackPopularityFeed(userId, user, context, limit) {
-  const cityFilter = user?.homeCity ? `AND e.city ILIKE '${user.homeCity.replace(/'/g, "''")}'` : ''
-  const categoryClause = context?.category
-    ? `AND c.slug = '${context.category.replace(/'/g, "''")}'`
-    : ''
+  // Geo filter MUST match preFilter()'s: this fallback runs for cold-start users
+  // (no vector + no affinities) and whenever the radius pre-filter returns zero,
+  // so it's the "For You" path most brand-new users actually see. Historically
+  // it filtered on homeCity string-equality only — and on NOTHING when homeCity
+  // was null (e.g. a location pinned via map with no city resolved) — which let
+  // nationwide synced events (Ticketmaster/SeatGeek, often other states) leak
+  // in. Prefer the lat/lng radius; fall back to city ILIKE only when there are
+  // no coords. Parameterized (no string interpolation) so a city like
+  // "O'Fallon" can't break or inject the query.
+  const lat = user?.homeLat ? Number(user.homeLat) : null
+  const lng = user?.homeLng ? Number(user.homeLng) : null
+  const radiusKm = user?.locationRadiusKm ?? DEFAULT_RADIUS_KM
+
+  const params = []
+  let paramIdx = 1
+  let geoClause = ''
+  if (lat && lng) {
+    geoClause = `AND e.lat IS NOT NULL
+      AND e.lng IS NOT NULL
+      AND earth_distance(
+        ll_to_earth(e.lat, e.lng),
+        ll_to_earth($${paramIdx}::float, $${paramIdx + 1}::float)
+      ) <= $${paramIdx + 2}::float * 1000`
+    params.push(lat, lng, radiusKm)
+    paramIdx += 3
+  } else if (user?.homeCity) {
+    // Same city-token match as preFilter() — "San Francisco" ↔
+    // "San Francisco, CA". See cityTokenMatch().
+    geoClause = `AND ${cityTokenMatch('e.city', `$${paramIdx}`)}`
+    params.push(user.homeCity)
+    paramIdx += 1
+  }
+
+  let categoryClause = ''
+  if (context?.category) {
+    categoryClause = `AND c.slug = $${paramIdx}`
+    params.push(context.category)
+    paramIdx += 1
+  }
 
   const query = `
     SELECT e.id, e.title, e.slug, e.flyer_url, e.starts_at, e.ends_at, e.timezone,
@@ -562,13 +612,13 @@ async function fallbackPopularityFeed(userId, user, context, limit) {
     LEFT JOIN sports_details sd ON sd.event_id = e.id
     WHERE e.status = 'published'
       AND e.starts_at > now()
-      ${cityFilter}
+      ${geoClause}
       ${categoryClause}
     ORDER BY (e.rsvp_count + 2 * e.save_count) DESC, e.starts_at ASC
     LIMIT ${limit}
   `
 
-  const rows = await prisma.$queryRawUnsafe(query)
+  const rows = await prisma.$queryRawUnsafe(query, ...params)
   const events = rows.map(rowToCandidate)
 
   const feedRunId = randomUUID()

@@ -101,6 +101,12 @@ export function toEventCardShape(e) {
     priceMax: e.price_max ?? null,
     ageMin: e.age_min ?? null,
     categorySlug: e.category?.slug ?? null,
+    // Provenance for events pulled from partner APIs. `source` is one of
+    // 'native' | 'ticketmaster' | 'seatgeek'; `ticketUrl` is the partner's
+    // ticket page (external_url). Non-native events surface a "Get tickets"
+    // link so the user can buy through the original seller.
+    source: e.source ?? 'native',
+    ticketUrl: e.external_url ?? null,
     distanceKm: e.distance_km ?? null,
     organizerId: e.organizer?.id ?? null,
     organizer: e.organizer

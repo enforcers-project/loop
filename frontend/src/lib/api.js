@@ -871,11 +871,36 @@ export const api = {
     return request(`/users/${userId}/avatar`, { method: 'PUT', body: { avatar_url: public_url } })
   },
 
-  // Search people by name / handle (GET /api/users?q=). Trigram fuzzy match,
-  // ranked by similarity. Returns PublicUser rows with a viewer-relative
-  // `is_following` (null when logged out). [] on any failure or a <2-char query
-  // so the search UI degrades to "no people" rather than throwing.
-  searchUsers: (q) => get(`/users?q=${encodeURIComponent(q)}`, () => []).then((rows) => rows ?? []),
+  // People search (GET /api/users?q=…) — trigram fuzzy match, ranked by
+  // similarity. Feeds the SocialFeed sidebar, ForYouFeed People rail, and the
+  // new-message / group-chat picker. Backend rows carry snake_case fields
+  // (display_name / avatar_url / is_verified) — we spread those through so
+  // UserSearch keeps working, and also attach { name, avatar, verified }
+  // aliases so the messaging picker and older FollowRow surfaces render
+  // without knowing the field spelling. Mock fallback scans MOCK_ORGANIZERS
+  // (already in client shape) so the picker still returns something when the
+  // backend is offline. [] on empty query.
+  searchUsers: async (q) => {
+    const term = String(q ?? '').trim()
+    if (!term) return []
+    const list = await get(`/users?q=${encodeURIComponent(term)}`, () => {
+      const n = term.toLowerCase()
+      return MOCK_ORGANIZERS.filter(
+        (o) => o.name.toLowerCase().includes(n) || (o.handle ?? '').toLowerCase().includes(n),
+      ).slice(0, 20)
+    })
+    return (list ?? []).map((u) => {
+      if (u.display_name !== undefined || u.avatar_url !== undefined) {
+        return {
+          ...u,
+          name: u.display_name || u.handle || 'Someone',
+          avatar: u.avatar_url || DEFAULT_AVATAR,
+          verified: !!u.is_verified,
+        }
+      }
+      return u
+    })
+  },
 
   // Who's going to an event (GET /api/events/:id/attendees). Public. Returns
   // { users: PublicUser[], nextCursor, total } — total is the true going count

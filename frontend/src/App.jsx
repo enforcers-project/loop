@@ -6,6 +6,7 @@ import { ModalProvider } from './context/ModalContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { TopNav, BottomBar } from './components/nav'
 import { AIAssistant } from './components/AIAssistant'
+import { MessagesWidget } from './components/MessagesWidget'
 import { Landing } from './screens/Landing'
 import { Auth } from './screens/Auth'
 import { Onboarding } from './screens/Onboarding'
@@ -18,6 +19,7 @@ import { EditEvent } from './screens/EditEvent'
 import { SportsPickupDetail } from './screens/SportsPickupDetail'
 import { OrganizerProfile } from './screens/OrganizerProfile'
 import { UserProfile } from './screens/UserProfile'
+import { MessagesPage } from './screens/MessagesPage'
 import { Settings } from './screens/Settings'
 import { OrganizerAnalytics } from './screens/OrganizerAnalytics'
 import { EventAnalytics } from './screens/EventAnalytics'
@@ -84,6 +86,22 @@ function Shell() {
             }
           />
           <Route
+            path="/messages"
+            element={
+              <ProtectedRoute>
+                <MessagesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/messages/:id"
+            element={
+              <ProtectedRoute>
+                <MessagesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/settings"
             element={
               <ProtectedRoute>
@@ -120,9 +138,11 @@ function Shell() {
       </main>
 
       {/* Mobile bottom bar shows on every in-app route (logged-out phones need
-          it to reach Feed/Discover/Social); the AI assistant stays login-only. */}
+          it to reach Feed/Discover/Social); the AI assistant and messages
+          widget stay login-only. */}
       {!bare && <BottomBar />}
       {!bare && isLoggedIn && <AIAssistant />}
+      {!bare && isLoggedIn && <MessagesWidget />}
     </div>
   )
 }

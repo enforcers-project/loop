@@ -318,29 +318,15 @@ export function SocialFeed() {
             </SidebarCard>
 
             <SidebarCard title="Suggested follows">
-              <PeopleSearch onResults={setPeopleResults} />
               <div className="space-y-3.5">
-                {peopleResults === null ? (
-                  suggested.map((o) => (
-                    <FollowRow
-                      key={o.id}
-                      user={o}
-                      following={followingIds.has(o.id)}
-                      onToggle={() => toggleFollow(o.id)}
-                    />
-                  ))
-                ) : peopleResults.length === 0 ? (
-                  <p className="py-2 text-xs text-text-muted">No people found</p>
-                ) : (
-                  peopleResults.map((o) => (
-                    <FollowRow
-                      key={o.id}
-                      user={o}
-                      following={followingIds.has(o.id)}
-                      onToggle={() => toggleFollow(o.id)}
-                    />
-                  ))
-                )}
+                {suggested.map((o) => (
+                  <FollowRow
+                    key={o.id}
+                    user={o}
+                    following={followingIds.has(o.id)}
+                    onToggle={() => toggleFollow(o.id)}
+                  />
+                ))}
               </div>
             </SidebarCard>
           </div>
@@ -348,46 +334,71 @@ export function SocialFeed() {
 
         {/* center column */}
         <div className="w-full max-w-[600px] flex-1">
-          {/* stories scroll horizontally *inside* this column */}
-          <div className="rounded-card border border-border-light bg-white p-4 shadow-card">
-            <StoriesRow
-              stories={stories}
-              onOpen={openStory}
-              onAddStory={() => openComposer('story')}
-            />
-          </div>
+          {/* people search — pinned at the top of the feed. An active query
+              swaps the whole feed for a people-results list; clearing it
+              restores the feed. This is the tab's primary way to find people. */}
+          <PeopleSearch onResults={setPeopleResults} />
 
-          {/* create-post prompt */}
-          <button
-            type="button"
-            onClick={() => openComposer('post')}
-            className="mt-6 flex w-full items-center gap-3 rounded-card border border-border-light bg-white px-4 py-3.5 text-left shadow-card transition-colors hover:border-primary"
-          >
-            <img
-              src={user?.avatar ?? 'https://i.pravatar.cc/150?img=1'}
-              alt=""
-              className="h-10 w-10 flex-shrink-0 rounded-full bg-surface object-cover"
-            />
-            <span className="flex-1 text-sm text-text-muted">
-              {isLoggedIn ? 'Share a flyer, recap or update…' : 'Sign in to post…'}
-            </span>
-            <PenSquare size={20} className="flex-shrink-0 text-primary" />
-          </button>
-
-          <div className="mt-6 space-y-6">
-            {postList.map((p) => (
-              <PostCard key={p.id} post={p} />
-            ))}
-          </div>
-
-          {/* infinite-scroll sentinel + spinner */}
-          {cursor && (
-            <div ref={sentinelRef} className="flex justify-center py-8">
-              {loadingMore && <Spinner label="Loading more posts" />}
+          {peopleResults !== null ? (
+            /* ---- People results replace the feed while searching ---------- */
+            <div className="mt-4 space-y-3.5">
+              {peopleResults.length === 0 ? (
+                <p className="py-16 text-center text-sm text-text-muted">No people found</p>
+              ) : (
+                peopleResults.map((o) => (
+                  <FollowRow
+                    key={o.id}
+                    user={o}
+                    following={followingIds.has(o.id)}
+                    onToggle={() => toggleFollow(o.id)}
+                  />
+                ))
+              )}
             </div>
-          )}
-          {!cursor && postList.length > 0 && (
-            <p className="py-8 text-center text-sm text-text-muted">You're all caught up ✨</p>
+          ) : (
+            <>
+              {/* stories scroll horizontally *inside* this column */}
+              <div className="mt-4 rounded-card border border-border-light bg-white p-4 shadow-card">
+                <StoriesRow
+                  stories={stories}
+                  onOpen={openStory}
+                  onAddStory={() => openComposer('story')}
+                />
+              </div>
+
+              {/* create-post prompt */}
+              <button
+                type="button"
+                onClick={() => openComposer('post')}
+                className="mt-6 flex w-full items-center gap-3 rounded-card border border-border-light bg-white px-4 py-3.5 text-left shadow-card transition-colors hover:border-primary"
+              >
+                <img
+                  src={user?.avatar ?? 'https://i.pravatar.cc/150?img=1'}
+                  alt=""
+                  className="h-10 w-10 flex-shrink-0 rounded-full bg-surface object-cover"
+                />
+                <span className="flex-1 text-sm text-text-muted">
+                  {isLoggedIn ? 'Share a flyer, recap or update…' : 'Sign in to post…'}
+                </span>
+                <PenSquare size={20} className="flex-shrink-0 text-primary" />
+              </button>
+
+              <div className="mt-6 space-y-6">
+                {postList.map((p) => (
+                  <PostCard key={p.id} post={p} />
+                ))}
+              </div>
+
+              {/* infinite-scroll sentinel + spinner */}
+              {cursor && (
+                <div ref={sentinelRef} className="flex justify-center py-8">
+                  {loadingMore && <Spinner label="Loading more posts" />}
+                </div>
+              )}
+              {!cursor && postList.length > 0 && (
+                <p className="py-8 text-center text-sm text-text-muted">You're all caught up ✨</p>
+              )}
+            </>
           )}
         </div>
 

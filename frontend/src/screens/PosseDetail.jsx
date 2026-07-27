@@ -6,6 +6,7 @@ import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { useModal } from '../context/ModalContext'
 import { hydrateThreads } from '../lib/messages'
+import { subscribePosseEvents } from '../lib/posseEvents'
 import { ThreadView } from '../components/messages'
 import { InvitePosseModal, PosseMemberRow } from '../components/PosseControls'
 import { PageLoader } from '../components/primitives'
@@ -21,8 +22,8 @@ function shortDate(iso) {
 /* PosseDetail (/posse/:id) — event header + roster + the group chat. The chat
    reuses ThreadView from the messaging system by handing it the posse's
    threadId; we hydrate the thread store on mount so ThreadView can render it.
-   Roster changes here are fetch-on-action (live roster SSE is PR 3); the chat
-   itself is already realtime because it's a normal thread. */
+   The roster updates live off posse_* SSE frames (see subscribePosseEvents),
+   and the chat is realtime because it's a normal thread. */
 export function PosseDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -54,6 +55,22 @@ export function PosseDetail() {
   useEffect(() => {
     if (user?.id) hydrateThreads(user.id).catch(() => {})
   }, [user?.id, posse?.thread_id])
+
+  // Live roster: the messages SSE stream carries posse_* frames for this posse
+  // (someone joined / requested / left, or it was dissolved). Refetch the roster
+  // when one lands for this posse; on dissolve, bounce out.
+  useEffect(() => {
+    if (!posse?.id) return
+    return subscribePosseEvents((frame) => {
+      if (frame.posseId !== posse.id) return
+      if (frame.type === 'posse_dissolved') {
+        toast.error('This posse was dissolved')
+        navigate('/social')
+        return
+      }
+      load()
+    })
+  }, [posse?.id, load, navigate, toast])
 
   if (notFound) {
     return (

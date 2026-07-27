@@ -5,6 +5,8 @@
 > **Stack:** React + HTML/CSS/JS (plain JavaScript / JSX) · PostgreSQL + Prisma · External event APIs: Ticketmaster Discovery + SeatGeek · Google Maps (location / "near me") · Responsive mobile web.
 >
 > **Sections:** (1) Team & Pod Members · (2) Problem Statement & Solution · (3) User Roles & Personas · (4) User Stories · (5) Wireframes · (6) Data Model · (7) API Contracts · (8) State Architecture · (9) AI Feature Specification · (10) Decisions Log.
+>
+> **Feature design docs** (post-MVP features that get their own plan): [`posses_feature.md`](posses_feature.md) — event group coordination (group chat + DM invites + discovery).
 
 ---
 

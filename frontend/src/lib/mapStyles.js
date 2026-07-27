@@ -14,7 +14,11 @@ const LIGHT = [
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#6b6b76' }] }, // --color-text-muted
   { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'administrative.land_parcel', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  {
+    featureType: 'administrative.land_parcel',
+    elementType: 'labels',
+    stylers: [{ visibility: 'off' }],
+  },
   { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.business', stylers: [{ visibility: 'off' }] },
@@ -24,7 +28,11 @@ const LIGHT = [
   { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#fbe4ee' }] }, // pale pink (~ --color-accent wash)
   { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#fcc9dc' }] }, // brand pink
   { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#f7b0cb' }] },
-  { featureType: 'road.highway.controlled_access', elementType: 'geometry', stylers: [{ color: '#fcc9dc' }] },
+  {
+    featureType: 'road.highway.controlled_access',
+    elementType: 'geometry',
+    stylers: [{ color: '#fcc9dc' }],
+  },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#e5e2f6' }] }, // ~ --color-primary-light
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#8a83c4' }] },
@@ -37,7 +45,11 @@ const DARK = [
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#8a8a94' }] }, // --color-text-muted (dark)
   { elementType: 'labels.text.stroke', stylers: [{ color: '#0b0b0f' }] },
-  { featureType: 'administrative.land_parcel', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  {
+    featureType: 'administrative.land_parcel',
+    elementType: 'labels',
+    stylers: [{ visibility: 'off' }],
+  },
   { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
   { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#2a2a33' }] }, // --color-border-light (dark)
   { featureType: 'poi', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
@@ -49,7 +61,11 @@ const DARK = [
   { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#2c2230' }] }, // faint pink-tinted grey
   { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#40213a' }] }, // deep raspberry (~ --color-loop, dark)
   { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#5a2e4d' }] },
-  { featureType: 'road.highway.controlled_access', elementType: 'geometry', stylers: [{ color: '#40213a' }] },
+  {
+    featureType: 'road.highway.controlled_access',
+    elementType: 'geometry',
+    stylers: [{ color: '#40213a' }],
+  },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#141221' }] }, // deep violet
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4a4470' }] },

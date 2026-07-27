@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
+import { useToast } from '../context/ToastContext'
 import {
   describeThread,
   ensureGroupThread,
@@ -226,6 +227,7 @@ function previewOf(thread) {
 export function ThreadView({ threadId, onBack, showBack = false, compact = false }) {
   const navigate = useNavigate()
   const { user } = useApp()
+  const toast = useToast()
   const thread = useThread(user?.id, threadId)
   const typingList = useTyping(threadId)
   const [draft, setDraft] = useState('')
@@ -255,7 +257,9 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
   const send = () => {
     const text = draft.trim()
     if (!text || !user?.id || !threadId) return
-    sendMessage(user.id, threadId, text)
+    sendMessage(user.id, threadId, text, {
+      onError: (err) => toast.error(err.message),
+    })
     setDraft('')
   }
 

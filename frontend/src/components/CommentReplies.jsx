@@ -64,8 +64,12 @@ export function CommentReplies({ comment, api, canDelete }) {
         setOpen(true)
         setLoaded(true)
       }
-    } catch {
-      toast.error('Could not post your reply. Try again.')
+    } catch (err) {
+      if (err?.code === 'PROFANITY_BLOCKED' || err?.code === 'RATE_LIMITED') {
+        toast.error(err.message)
+      } else {
+        toast.error('Could not post your reply. Try again.')
+      }
     } finally {
       setPosting(false)
     }

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { toEventCard, toEventDetail, EVENT_DETAIL_INCLUDE } from './serialize.js'
 import { requireAuth, fail } from '../auth/middleware.js'
+import { enforceProfanity } from '../lib/profanity.js'
 import { runJob } from '../jobs/index.js'
 import {
   notifyFollowersOfNewEvent,
@@ -588,6 +589,21 @@ router.post('/', requireAuth, async (req, res) => {
     sports = sd
   }
 
+  // Organizer-authored text is high-visibility; hard-block only. A "flagged"
+  // event title would still show up on the discover feed for everyone.
+  if (
+    enforceProfanity(req, res, [
+      b.title,
+      b.description,
+      b.venue_name,
+      b.address,
+      b.city,
+      b.age_label,
+      sports?.notes,
+    ]).blocked
+  )
+    return
+
   try {
     const created = await prisma.$transaction(async (tx) => {
       const event = await tx.event.create({
@@ -737,6 +753,20 @@ router.patch('/:id', requireAuth, async (req, res) => {
     if (b.starts_at !== undefined) data.startsAt = new Date(b.starts_at)
     if (b.ends_at !== undefined) data.endsAt = b.ends_at ? new Date(b.ends_at) : null
 
+    // Hard-block on organizer-authored text edits (same policy as create).
+    if (
+      enforceProfanity(req, res, [
+        data.title,
+        data.description,
+        data.venueName,
+        data.address,
+        data.city,
+        data.ageLabel,
+        b.sports_details?.notes,
+      ]).blocked
+    )
+      return
+
     // Nested sports_details update (scalars only; positions edited via /positions later).
     let sportsUpdate = null
     if (b.sports_details && existing.isSports && existing.sportsDetail) {
@@ -876,6 +906,7 @@ router.post('/:id/cancel', requireAuth, async (req, res) => {
     if (rawReason.length > 500) {
       return fail(res, 422, 'VALIDATION_ERROR', 'reason must be 500 characters or fewer')
     }
+    if (rawReason && enforceProfanity(req, res, [rawReason]).blocked) return
     const reason = rawReason || null
 
     await prisma.event.update({

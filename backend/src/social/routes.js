@@ -18,6 +18,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, fail } from '../auth/middleware.js'
+import { enforceProfanity } from '../lib/profanity.js'
 import { notifySelf } from '../notifications/publish.js'
 import {
   presignPutUrl,
@@ -207,6 +208,9 @@ router.post('/posts', requireAuth, async (req, res) => {
     return fail(res, 422, 'VALIDATION_ERROR', 'event_id must be a valid id')
   }
 
+  const check = enforceProfanity(req, res, [caption])
+  if (check.blocked) return
+
   try {
     // A linked event must exist (FK is SetNull, so we validate up front to give
     // a real 404 instead of silently dropping the link).
@@ -222,6 +226,7 @@ router.post('/posts', requireAuth, async (req, res) => {
         imageUrl: image_url,
         caption: caption?.trim() || null,
         eventId: event_id ?? null,
+        flagged: check.flagged,
       },
       select: POST_SELECT,
     })
@@ -389,6 +394,9 @@ router.post('/posts/:id/comments', requireAuth, async (req, res) => {
     return fail(res, 422, 'VALIDATION_ERROR', 'parent_comment_id must be a valid id')
   }
 
+  const check = enforceProfanity(req, res, [body])
+  if (check.blocked) return
+
   try {
     const post = await prisma.post.findUnique({
       where: { id },
@@ -414,6 +422,7 @@ router.post('/posts/:id/comments', requireAuth, async (req, res) => {
           postId: id,
           parentCommentId: parent_comment_id ?? null,
           body: body.trim(),
+          flagged: check.flagged,
         },
         select: COMMENT_SELECT,
       })
@@ -530,6 +539,9 @@ router.post('/stories', requireAuth, async (req, res) => {
     return fail(res, 422, 'VALIDATION_ERROR', 'event_id must be a valid id')
   }
 
+  const check = enforceProfanity(req, res, [caption])
+  if (check.blocked) return
+
   try {
     if (event_id) {
       const event = await prisma.event.findUnique({ where: { id: event_id }, select: { id: true } })
@@ -543,6 +555,7 @@ router.post('/stories', requireAuth, async (req, res) => {
         caption: caption?.trim() || null,
         eventId: event_id ?? null,
         expiresAt: new Date(Date.now() + STORY_TTL_MS),
+        flagged: check.flagged,
       },
       select: {
         id: true,
@@ -660,6 +673,9 @@ router.post('/events/:id/comments', requireAuth, async (req, res) => {
     return fail(res, 422, 'VALIDATION_ERROR', 'parent_comment_id must be a valid id')
   }
 
+  const check = enforceProfanity(req, res, [body])
+  if (check.blocked) return
+
   try {
     const event = await prisma.event.findUnique({
       where: { id },
@@ -685,6 +701,7 @@ router.post('/events/:id/comments', requireAuth, async (req, res) => {
           eventId: id,
           parentCommentId: parent_comment_id ?? null,
           body: body.trim(),
+          flagged: check.flagged,
         },
         select: COMMENT_SELECT,
       })

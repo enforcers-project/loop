@@ -674,22 +674,32 @@ function reconcileThread(tempId, serverRow, meId) {
 /** Send text. Returns { id, clientId } synchronously so callers can pin an
  *  optimistic bubble; the SSE echo reconciles it later. Idempotent-ish: two
  *  quick calls will produce two messages, because the composer clears between
- *  sends. */
-export function sendMessage(userId, threadIdRaw, text) {
+ *  sends.
+ *
+ *  `opts.onError(err)` is called when the send is rejected — used by the
+ *  composer to surface a filter-block toast (PROFANITY_BLOCKED) that would
+ *  otherwise be silent behind the "failed" bubble state.
+ */
+export function sendMessage(userId, threadIdRaw, text, opts = {}) {
   const trimmed = String(text ?? '').trim()
   if (!trimmed || !userId || !threadIdRaw) return null
-  return appendOptimistic(userId, threadIdRaw, { text: trimmed, event: null })
+  return appendOptimistic(userId, threadIdRaw, { text: trimmed, event: null }, opts)
 }
 
 /** Send an event share (optional note + slim event card). */
-export function sendEventShare(userId, threadIdRaw, event, note) {
+export function sendEventShare(userId, threadIdRaw, event, note, opts = {}) {
   const slim = slimEvent(event)
   if (!slim || !userId || !threadIdRaw) return null
   const trimmedNote = typeof note === 'string' ? note.trim() : ''
-  return appendOptimistic(userId, threadIdRaw, {
-    text: trimmedNote || null,
-    event: slim,
-  })
+  return appendOptimistic(
+    userId,
+    threadIdRaw,
+    {
+      text: trimmedNote || null,
+      event: slim,
+    },
+    opts,
+  )
 }
 
 function slimEvent(event) {
@@ -707,7 +717,7 @@ function slimEvent(event) {
   }
 }
 
-function appendOptimistic(userId, threadIdRaw, payload) {
+function appendOptimistic(userId, threadIdRaw, payload, opts = {}) {
   const id = resolveId(threadIdRaw)
   const t = state.threads.get(id)
   if (!t) return null
@@ -731,11 +741,11 @@ function appendOptimistic(userId, threadIdRaw, payload) {
   if (!t.lastReadByUser) t.lastReadByUser = {}
   t.lastReadByUser[userId] = at
   emit()
-  doSend(t, message, payload).catch(() => {})
+  doSend(t, message, payload, opts).catch(() => {})
   return message
 }
 
-async function doSend(thread, message, payload) {
+async function doSend(thread, message, payload, opts = {}) {
   // Wait for the server thread if we're still optimistically stubbed.
   let serverId = thread.serverId
   if (!serverId) {
@@ -755,16 +765,33 @@ async function doSend(thread, message, payload) {
     }
   }
   const eventId = payload.event?.id ?? null
-  const res = await api.messages
-    .sendMessage(serverId, {
+  let res = null
+  let sendErr = null
+  try {
+    res = await api.messages.sendMessage(serverId, {
       text: payload.text,
       eventId,
       clientId: message.clientId,
     })
-    .catch(() => null)
+  } catch (err) {
+    sendErr = err
+  }
   if (!res) {
     message.status = 'failed'
     emit()
+    // Filter blocks (and their rate-limit escalation) need a user-visible
+    // toast — the "failed" tail alone would give the sender no idea why.
+    if (
+      sendErr &&
+      (sendErr.code === 'PROFANITY_BLOCKED' || sendErr.code === 'RATE_LIMITED') &&
+      typeof opts.onError === 'function'
+    ) {
+      try {
+        opts.onError(sendErr)
+      } catch {
+        /* callback errors shouldn't wedge the send path */
+      }
+    }
     return
   }
   // Adopt server-issued id + timestamp; SSE echo may or may not arrive

@@ -24,6 +24,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { fail, requireAuth } from '../auth/middleware.js'
+import { enforceProfanity } from '../lib/profanity.js'
 import { publish, subscribe } from './bus.js'
 import { PARTICIPANT_SELECT, toMessage, toThread } from './serialize.js'
 
@@ -153,6 +154,8 @@ router.post('/threads/group', requireAuth, async (req, res) => {
   if (uniq.length > MAX_GROUP) {
     return fail(res, 422, 'VALIDATION_ERROR', `Groups are capped at ${MAX_GROUP} people`)
   }
+
+  if (name && enforceProfanity(req, res, [name]).blocked) return
 
   try {
     // Verify every participant exists — silently drops nothing so the caller
@@ -302,6 +305,9 @@ router.post('/threads/:id/messages', requireAuth, async (req, res) => {
     return fail(res, 422, 'VALIDATION_ERROR', 'Message must have text or an event')
   }
 
+  const check = enforceProfanity(req, res, [text])
+  if (check.blocked) return
+
   try {
     let attachedEvent = null
     if (eventId) {
@@ -317,7 +323,14 @@ router.post('/threads/:id/messages', requireAuth, async (req, res) => {
     const now = new Date()
     const [message] = await prisma.$transaction([
       prisma.message.create({
-        data: { threadId, senderId: me, text: text || null, attachedEvent, createdAt: now },
+        data: {
+          threadId,
+          senderId: me,
+          text: text || null,
+          attachedEvent,
+          createdAt: now,
+          flagged: check.flagged,
+        },
       }),
       prisma.messageThread.update({ where: { id: threadId }, data: { lastMessageAt: now } }),
       prisma.threadParticipant.update({

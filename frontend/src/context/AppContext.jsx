@@ -247,6 +247,19 @@ export function AppProvider({ children }) {
     [user?.id, adopt],
   )
 
+  // Upload a new cover/banner image and adopt the refreshed user so the profile
+  // banner updates immediately. Mirrors updateAvatar. Throws on failure so the
+  // caller can surface a toast and stop its spinner.
+  const updateCover = useCallback(
+    async (file) => {
+      const self = await api.uploadCover(user?.id, file)
+      const clientUser = toClientUser(self)
+      adopt(clientUser)
+      return clientUser
+    },
+    [user?.id, adopt],
+  )
+
   // Edit name / handle / bio and adopt the refreshed user so the profile header
   // and nav update immediately. Throws on failure (e.g. 409 handle taken) so the
   // caller can surface a toast and keep the form open.
@@ -293,6 +306,19 @@ export function AppProvider({ children }) {
       return res
     },
     [user?.id],
+  )
+
+  // Persist notification toggles and adopt the refreshed user so Settings reads
+  // the merged prefs back without a /me round-trip. `prefs` is a partial map of
+  // the changed toggles; the backend merges it over the stored value.
+  const saveNotificationPrefs = useCallback(
+    async (prefs) => {
+      const self = await api.saveNotificationPrefs(user?.id, prefs)
+      const clientUser = toClientUser(self)
+      adopt(clientUser)
+      return clientUser
+    },
+    [user?.id, adopt],
   )
 
   // Gate a logged-out user before a member-only action (save/RSVP/follow):
@@ -462,9 +488,11 @@ export function AppProvider({ children }) {
         setInterests,
         updateInterests,
         updateAvatar,
+        updateCover,
         updateProfile,
         saveBirthDate,
         saveLocation,
+        saveNotificationPrefs,
         toggleSaved,
         toggleGoing,
         toggleFollow,

@@ -37,6 +37,14 @@ const HANDLE_RE = /^[a-zA-Z0-9_]{3,30}$/
 const DISPLAY_NAME_MAX = 120
 const BIO_MAX = 500
 
+// Known notification-preference toggles. The column is a free-form Json?, so
+// we pin an allowlist here: only these keys are accepted, each a boolean. A key
+// left out of a request keeps its stored value (partial update), and unknown
+// keys are rejected so the shape can't drift. Defaults are "on" — a user who
+// has never touched prefs (null column) is treated as fully opted in.
+const NOTIFICATION_KEYS = ['rsvps', 'messages', 'event_reminders', 'follows']
+const DEFAULT_NOTIFICATION_PREFS = Object.fromEntries(NOTIFICATION_KEYS.map((k) => [k, true]))
+
 /** Resolve which of `targetIds` the viewer follows → Set. Empty when logged out. */
 async function resolveFollowedSet(viewerId, targetIds) {
   if (!viewerId || targetIds.length === 0) return new Set()
@@ -398,6 +406,130 @@ router.put('/:id/avatar', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('PUT /api/users/:id/avatar error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not save picture')
+  }
+})
+
+// --- POST /api/users/:id/cover-upload-url -----------------------------------
+// Owner-only. Body: { content_type: 'image/png' | 'image/jpeg' | ... }.
+// Same presigned-PUT flow as the avatar, but stores under the 'covers/' folder
+// so cover images don't collide with avatars in the bucket. Returns the upload
+// URL + the stable public URL the client PUTs back to /cover on success.
+router.post('/:id/cover-upload-url', requireAuth, async (req, res) => {
+  if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only change your own cover image')
+  }
+  if (!s3Configured()) {
+    return fail(res, 503, 'NOT_CONFIGURED', 'Image uploads are not configured')
+  }
+
+  const contentType = req.body?.content_type
+  if (!isAllowedContentType(contentType)) {
+    return fail(
+      res,
+      422,
+      'VALIDATION_ERROR',
+      'content_type must be a JPEG, PNG, WebP, or GIF image',
+    )
+  }
+
+  try {
+    const { uploadUrl, publicUrl, key } = await presignPutUrl({
+      userId: req.user.id,
+      contentType,
+      stamp: Date.now(),
+      folder: 'covers',
+    })
+    return res.json({
+      data: { upload_url: uploadUrl, public_url: publicUrl, key, content_type: contentType },
+    })
+  } catch (err) {
+    console.error('POST /api/users/:id/cover-upload-url error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not start upload')
+  }
+})
+
+// --- PUT /api/users/:id/cover ------------------------------------------------
+// Owner-only. Body: { cover_image_url }. Persists the final public S3 URL after
+// the browser's direct upload succeeds. Like the avatar, the URL must point at
+// our own bucket so a caller can't set their cover to an arbitrary external link.
+router.put('/:id/cover', requireAuth, async (req, res) => {
+  if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only change your own cover image')
+  }
+
+  const coverUrl = req.body?.cover_image_url
+  if (typeof coverUrl !== 'string' || !coverUrl) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'cover_image_url is required')
+  }
+  const prefix = bucketPublicPrefix()
+  if (!prefix || !coverUrl.startsWith(prefix)) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'cover_image_url must point at the image bucket')
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { coverImageUrl: coverUrl },
+    })
+    return res.json({ data: toSelfUser(updated) })
+  } catch (err) {
+    console.error('PUT /api/users/:id/cover error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not save cover image')
+  }
+})
+
+// --- PUT /api/users/:id/notification-prefs ----------------------------------
+// Owner-only. Body: a partial map of { rsvps?, messages?, event_reminders?,
+// follows? } booleans. Merges over the stored prefs (defaulting a null column
+// to all-on) so the client can send just the toggle that changed. Unknown keys
+// or non-boolean values are rejected so the JSON shape stays consistent.
+router.put('/:id/notification-prefs', requireAuth, async (req, res) => {
+  if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
+  if (req.user.id !== req.params.id) {
+    return fail(res, 403, 'FORBIDDEN', 'You can only edit your own preferences')
+  }
+
+  const body = req.body ?? {}
+  if (typeof body !== 'object' || Array.isArray(body)) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'Body must be an object of preference toggles')
+  }
+
+  const patch = {}
+  for (const [key, value] of Object.entries(body)) {
+    if (!NOTIFICATION_KEYS.includes(key)) {
+      return fail(res, 422, 'VALIDATION_ERROR', `Unknown preference: ${key}`)
+    }
+    if (typeof value !== 'boolean') {
+      return fail(res, 422, 'VALIDATION_ERROR', `${key} must be a boolean`)
+    }
+    patch[key] = value
+  }
+  if (Object.keys(patch).length === 0) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'No preferences provided')
+  }
+
+  try {
+    const current = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { notificationPrefs: true },
+    })
+    // Merge over defaults so a previously-null column becomes a full, explicit
+    // map — the client always gets every key back regardless of what it sent.
+    const merged = {
+      ...DEFAULT_NOTIFICATION_PREFS,
+      ...(current?.notificationPrefs ?? {}),
+      ...patch,
+    }
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { notificationPrefs: merged },
+    })
+    return res.json({ data: toSelfUser(updated) })
+  } catch (err) {
+    console.error('PUT /api/users/:id/notification-prefs error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not save preferences')
   }
 })
 

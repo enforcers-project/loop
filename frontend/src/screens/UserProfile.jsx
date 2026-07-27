@@ -29,6 +29,10 @@ const HANDLE_RE = /^[a-zA-Z0-9_]{3,30}$/
 // Max upload size — S3 accepts anything, but a profile picture shouldn't be
 // huge, and rejecting client-side gives a friendlier error than a failed PUT.
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024
+// Cover images are full-width, so allow a little more headroom than the avatar.
+const MAX_COVER_BYTES = 8 * 1024 * 1024
+// Default banner shown until the user uploads their own cover image.
+const DEFAULT_COVER = 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=1600&q=80'
 
 /* Full-screen avatar viewer with a "Change picture" action. Clicking the profile
    photo opens this; the button opens the OS file picker, uploads to S3 via the
@@ -395,6 +399,7 @@ export function UserProfile() {
     savedIds,
     goingIds,
     updateAvatar,
+    updateCover,
     updateProfile,
     updateInterests,
   } = useApp()
@@ -403,7 +408,9 @@ export function UserProfile() {
   const [editOpen, setEditOpen] = useState(false)
   const [interestsOpen, setInterestsOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [coverUploading, setCoverUploading] = useState(false)
   const avatarSrc = user?.avatar || DEFAULT_AVATAR
+  const coverSrc = user?.cover || DEFAULT_COVER
 
   // Persist an interest-list edit. Rethrows so the modal can keep itself open
   // and surface an inline error; success closes the modal and toasts.
@@ -451,6 +458,29 @@ export function UserProfile() {
       toast.error(err.message || 'Could not update picture. Please try again.')
     } finally {
       setUploading(false)
+    }
+  }
+
+  // Upload a picked cover image (same presigned-URL flow as the avatar, via
+  // api.uploadCover), then let context adopt the refreshed user so the banner
+  // updates everywhere.
+  const onUploadCover = async (file) => {
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Please choose an image file.')
+      return
+    }
+    if (file.size > MAX_COVER_BYTES) {
+      toast.error('Image is too large (max 8MB).')
+      return
+    }
+    setCoverUploading(true)
+    try {
+      await updateCover(file)
+      toast.success('Cover image updated.')
+    } catch (err) {
+      toast.error(err.message || 'Could not update cover image. Please try again.')
+    } finally {
+      setCoverUploading(false)
     }
   }
   // Two logic roles + the host capability drive the display RoleBadge:
@@ -531,7 +561,7 @@ export function UserProfile() {
   const going = (goingEvents ?? []).filter((e) => goingIds.has(e.id))
   const myInterests = (allInterests ?? []).filter((i) => interests.includes(i.id))
   const myEventsList = myEvents[eventStatus] ?? []
-  const displayName = user?.name?.trim() || 'Alex Carter'
+  const displayName = user?.name?.trim() || 'Your profile'
   const tabLoading =
     (tab === 'Events' && myEvents[eventStatus] === null) ||
     (tab === 'Saved' && savedEvents === null) ||
@@ -542,15 +572,20 @@ export function UserProfile() {
     <div className="pb-24 md:pb-12">
       {/* cover banner — controlled height, doesn't overpower the content */}
       <div className="relative h-[200px] md:h-[240px]">
-        <EventImage
-          src={
-            user?.cover ||
-            'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=1600&q=80'
-          }
-          alt=""
-          showLabel={false}
-        />
+        <EventImage src={coverSrc} alt="" showLabel={false} />
         <div className="absolute inset-0 bg-gradient-to-r from-primary/55 to-accent/55" />
+        {/* edit-cover control — mirrors the avatar's presigned S3 upload */}
+        <div className="absolute right-4 top-4">
+          <ImageSourcePicker
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onFile={onUploadCover}
+            disabled={coverUploading}
+            className="inline-flex h-9 items-center gap-2 rounded-button bg-black/45 px-3.5 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-black/60 disabled:opacity-60"
+          >
+            <Camera size={16} />
+            {coverUploading ? 'Uploading…' : 'Edit cover'}
+          </ImageSourcePicker>
+        </div>
       </div>
 
       <div className="loop-container relative z-10 max-w-[1100px]">
@@ -585,9 +620,9 @@ export function UserProfile() {
                 </h1>
                 <RoleBadge role={roleLabel} />
               </div>
-              <p className="mt-1 text-sm font-medium text-text-secondary">
-                {user?.handle ?? '@you'}
-              </p>
+              {user?.handle && (
+                <p className="mt-1 text-sm font-medium text-text-secondary">{user.handle}</p>
+              )}
               <div className="mt-3 flex items-center gap-5 text-sm text-text-secondary">
                 <span>
                   <strong className="font-semibold text-ink">

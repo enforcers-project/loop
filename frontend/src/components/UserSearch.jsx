@@ -15,9 +15,14 @@ function profilePath(u) {
   return `/organizer/${u.id}`
 }
 
-/* Shared identity block (avatar + name + handle + verified) for a people
-   result row. */
+/* Shared identity block (avatar + username + display name + verified) for a
+   people result row. Instagram-style: the @username sits on top in ink weight
+   as the primary handle, and the display name goes muted underneath. A user
+   without a display name falls back to their follower count so the row still
+   has a secondary line to read. Legacy rows with no handle fall back to
+   showing the display name as the primary line. */
 function Identity({ user }) {
+  const primary = user.handle ? `@${user.handle}` : (user.display_name ?? 'Loop member')
   return (
     <div className="flex min-w-0 items-center gap-3">
       <img
@@ -27,13 +32,11 @@ function Identity({ user }) {
       />
       <div className="min-w-0">
         <div className="flex items-center gap-1">
-          <span className="truncate font-semibold text-ink">
-            {user.display_name || 'Loop member'}
-          </span>
+          <span className="truncate font-semibold text-ink">{primary}</span>
           {user.is_verified && <VerifiedBadge size={14} />}
         </div>
-        {user.handle ? (
-          <p className="truncate text-[13px] text-text-secondary">@{user.handle}</p>
+        {user.handle && user.display_name ? (
+          <p className="truncate text-[13px] text-text-secondary">{user.display_name}</p>
         ) : (
           <p className="truncate text-[13px] text-text-muted">
             {formatCount(user.follower_count ?? 0)}{' '}

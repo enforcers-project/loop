@@ -293,6 +293,13 @@ async function request(path, { method = 'GET', body } = {}) {
     // Machine-readable code from the { error: { code, message } } envelope, so
     // callers can branch (e.g. age gate: BIRTHDATE_REQUIRED vs AGE_RESTRICTED).
     err.code = json?.error?.code ?? null
+    // Extra fields the backend attaches to the envelope (e.g. field name for a
+    // 409 CONFLICT, retry_after_ms for a 429 RATE_LIMITED). Surface everything
+    // beyond code/message so screens can branch on them without re-parsing.
+    if (json?.error && typeof json.error === 'object') {
+      const { code: _c, message: _m, ...rest } = json.error
+      err.details = rest
+    }
     throw err
   }
   return json?.data
@@ -352,6 +359,10 @@ export function toClientUser(u) {
     // Raw stored handle (no leading @, may be null) — the edit form needs the
     // real value to prefill, distinct from the always-present display `handle`.
     handleRaw: u.handle ?? null,
+    // When the username (handle) was last changed on the backend. The profile
+    // edit form uses this to compute the 7-day cooldown locally and disable
+    // the input before the caller sees a 429. Display name has no cooldown.
+    handleChangedAt: u.handle_changed_at ?? null,
     bio: u.bio ?? '',
     avatar: u.avatar_url || DEFAULT_AVATAR,
     role: u.role,
@@ -1230,6 +1241,10 @@ export const api = {
         },
       }),
     markRead: (threadId) => request(`/threads/${threadId}/read`, { method: 'POST' }),
+    deleteMessage: (threadId, messageId) =>
+      request(`/threads/${threadId}/messages/${messageId}`, { method: 'DELETE' }),
+    renameThread: (threadId, name) =>
+      request(`/threads/${threadId}`, { method: 'PATCH', body: { name: name ?? null } }),
     // Toggle a reaction on a message — server flips insert/delete on the
     // composite key and echoes { op: 'added' | 'removed' } so the client can
     // roll back a mispredicted optimistic tap.

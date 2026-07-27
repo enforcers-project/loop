@@ -926,11 +926,13 @@ export function NewMessagePicker({ onPick, onClose }) {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="truncate text-sm font-semibold text-ink">{p.name}</span>
+                        <span className="truncate text-sm font-semibold text-ink">
+                          {p.handle ? `@${p.handle}` : p.name}
+                        </span>
                         {p.verified && <VerifiedBadge size={13} />}
                       </div>
-                      {p.handle && (
-                        <p className="mt-0.5 truncate text-xs text-text-muted">@{p.handle}</p>
+                      {p.handle && p.name && (
+                        <p className="mt-0.5 truncate text-xs text-text-secondary">{p.name}</p>
                       )}
                     </div>
                   </button>
@@ -1208,12 +1210,14 @@ export function ShareEventSheet({ event, onClose, onSent }) {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <span className="truncate text-sm font-semibold text-ink">
-                                {p.name}
+                                {p.handle ? `@${p.handle}` : p.name}
                               </span>
                               {p.verified && <VerifiedBadge size={13} />}
                             </div>
-                            {p.handle && (
-                              <p className="mt-0.5 truncate text-xs text-text-muted">@{p.handle}</p>
+                            {p.handle && p.name && (
+                              <p className="mt-0.5 truncate text-xs text-text-secondary">
+                                {p.name}
+                              </p>
                             )}
                           </div>
                           <SelectDot on={on} />

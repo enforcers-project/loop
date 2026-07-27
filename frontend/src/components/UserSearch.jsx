@@ -230,3 +230,123 @@ function AttendeeModal({ eventId, open, onClose, initialPage, total }) {
     </AnimatePresence>
   )
 }
+
+/* --------------------------------------------------------------------------
+   FollowListModal — a centered dialog listing a user's followers OR the people
+   they follow, chosen by `edge` ('followers' | 'following'). Fetches its own
+   first page when opened (so the parent only tracks which list is open), then
+   paginates on demand via the cursor. Reuses UserResultList so each row looks
+   identical to search results — avatar, name, and a live Follow button.
+-------------------------------------------------------------------------- */
+export function FollowListModal({ userId, edge, open, onClose }) {
+  const [users, setUsers] = useState(null) // null = loading the first page
+  const [cursor, setCursor] = useState(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  const title = edge === 'followers' ? 'Followers' : 'Following'
+  const emptyLabel = edge === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'
+  const fetchPage = edge === 'followers' ? api.followerList : api.followingList
+
+  // Render-time reset (the app's setState-on-prop-change pattern): when the open
+  // list changes — opened, closed, or switched between followers/following —
+  // blank the page so the spinner shows before the new fetch lands, instead of
+  // flashing the previous list. Keyed so the fetch effect below only runs once
+  // per (open, user, edge).
+  const listKey = open ? `${userId}|${edge}` : ''
+  const [loadedKey, setLoadedKey] = useState('')
+  if (loadedKey !== listKey) {
+    setLoadedKey(listKey)
+    setUsers(null)
+    setCursor(null)
+  }
+
+  // Fetch the first page whenever an open list is selected. State is only set in
+  // the async tail, so no cascading render on mount.
+  useEffect(() => {
+    if (!open || !userId) return
+    let cancelled = false
+    fetchPage(userId).then((res) => {
+      if (cancelled) return
+      setUsers(res.users)
+      setCursor(res.nextCursor)
+    })
+    return () => {
+      cancelled = true
+    }
+    // fetchPage is derived from edge; listing both keeps it honest.
+  }, [open, userId, edge]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close on Escape while open — matches the app's other dismissible overlays.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  const loadMore = async () => {
+    if (!cursor || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const res = await fetchPage(userId, cursor)
+      setUsers((prev) => [...(prev ?? []), ...res.users])
+      setCursor(res.nextCursor)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <m.div
+          variants={backdrop}
+          initial="hidden"
+          animate="show"
+          exit="hidden"
+          onClick={onClose}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+        >
+          <m.div
+            variants={dialog}
+            onClick={(e) => e.stopPropagation()}
+            className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-card bg-white shadow-hero"
+          >
+            <div className="flex items-center justify-between border-b border-border-light px-5 py-4">
+              <h2 className="font-display text-lg font-bold text-ink">{title}</h2>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="rounded-full p-1 text-text-muted transition-colors hover:bg-surface hover:text-ink"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+              {users === null ? (
+                <div className="flex justify-center py-16">
+                  <Spinner label={`Loading ${title.toLowerCase()}`} />
+                </div>
+              ) : (
+                <>
+                  <UserResultList users={users} emptyLabel={emptyLabel} />
+                  {cursor && (
+                    <button
+                      type="button"
+                      onClick={loadMore}
+                      disabled={loadingMore}
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-button border border-border-light py-2.5 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted disabled:opacity-60"
+                    >
+                      {loadingMore ? <Spinner size="sm" /> : 'Show more'}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </m.div>
+        </m.div>
+      )}
+    </AnimatePresence>
+  )
+}

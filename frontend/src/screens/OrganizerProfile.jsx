@@ -6,6 +6,7 @@ import { useApp } from '../context/AppContext'
 import { cn, formatCount, pluralize } from '../lib/utils'
 import { FollowBtn, PageLoader, RoleBadge, VerifiedBadge } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
+import { FollowListModal } from '../components/UserSearch'
 
 // Normalize either shape into what the screen renders: a real backend profile
 // (snake_case from GET /api/users/:id) or a mock organizer (camelCase seed).
@@ -26,6 +27,7 @@ function toOrganizerShape(p) {
     verified: p.is_verified,
     role: p.organizer_kind || p.role,
     followers: p.follower_count ?? 0,
+    followingCount: p.following_count ?? 0,
     isFollowing: p.is_following ?? false,
     bio: p.bio || '',
     events: p.events ?? [],
@@ -43,6 +45,9 @@ export function OrganizerProfile() {
   // Local follower count so the header updates immediately on follow/unfollow;
   // seeded from the backend's denormalized follower_count.
   const [followerCount, setFollowerCount] = useState(0)
+  // Which follow list is open in the modal: 'followers' | 'following' | null.
+  // Only real backend profiles expose these lists (mock organizers have none).
+  const [followList, setFollowList] = useState(null)
 
   // Load the profile (+ the current tab's events) once per id. Real backend
   // profiles reload events on tab change (below); the mock path ignores tabs.
@@ -140,10 +145,31 @@ export function OrganizerProfile() {
                 <RoleBadge role={org.role} />
               </div>
               <div className="mt-1 flex items-center gap-4 text-sm text-text-secondary">
-                <span>
-                  <strong className="text-ink">{formatCount(followerCount)}</strong>{' '}
-                  {pluralize(followerCount, 'follower')}
-                </span>
+                {org.isBackend ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setFollowList('followers')}
+                      className="transition-colors hover:text-ink"
+                    >
+                      <strong className="text-ink">{formatCount(followerCount)}</strong>{' '}
+                      {pluralize(followerCount, 'follower')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFollowList('following')}
+                      className="transition-colors hover:text-ink"
+                    >
+                      <strong className="text-ink">{formatCount(org.followingCount)}</strong>{' '}
+                      following
+                    </button>
+                  </>
+                ) : (
+                  <span>
+                    <strong className="text-ink">{formatCount(followerCount)}</strong>{' '}
+                    {pluralize(followerCount, 'follower')}
+                  </span>
+                )}
                 <span>
                   <strong className="text-ink">{events.length}</strong>{' '}
                   {pluralize(events.length, 'event')}
@@ -198,6 +224,13 @@ export function OrganizerProfile() {
           )}
         </div>
       </div>
+
+      <FollowListModal
+        userId={org.id}
+        edge={followList ?? 'followers'}
+        open={followList !== null}
+        onClose={() => setFollowList(null)}
+      />
     </div>
   )
 }

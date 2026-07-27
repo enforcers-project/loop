@@ -26,6 +26,7 @@ import {
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
 import { InterestBlobs } from '../components/InterestBlobs'
+import { FollowListModal } from '../components/UserSearch'
 
 const NAME_MAX = 120
 const BIO_MAX = 500
@@ -434,6 +435,8 @@ export function UserProfile() {
   const [uploading, setUploading] = useState(false)
   const [coverUploading, setCoverUploading] = useState(false)
   const [roleBusy, setRoleBusy] = useState(false)
+  // Which follow list is open in the modal: 'followers' | 'following' | null.
+  const [followList, setFollowList] = useState(null)
   const avatarSrc = user?.avatar || DEFAULT_AVATAR
   const coverSrc = user?.cover || DEFAULT_COVER
 
@@ -671,18 +674,26 @@ export function UserProfile() {
                 <p className="mt-1 text-sm font-medium text-text-secondary">{user.handle}</p>
               )}
               <div className="mt-3 flex items-center gap-5 text-sm text-text-secondary">
-                <span>
+                <button
+                  type="button"
+                  onClick={() => setFollowList('following')}
+                  className="transition-colors hover:text-ink"
+                >
                   <strong className="font-semibold text-ink">
                     {formatCount(user?.following ?? 0)}
                   </strong>{' '}
                   following
-                </span>
-                <span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFollowList('followers')}
+                  className="transition-colors hover:text-ink"
+                >
                   <strong className="font-semibold text-ink">
                     {formatCount(user?.followers ?? 0)}
                   </strong>{' '}
                   {pluralize(user?.followers ?? 0, 'follower')}
-                </span>
+                </button>
               </div>
               {(user?.homeCity || user?.joinedAt) && (
                 <div className="mt-2 flex flex-col gap-1 text-sm text-text-secondary">
@@ -874,6 +885,13 @@ export function UserProfile() {
           />
         )}
       </AnimatePresence>
+
+      <FollowListModal
+        userId={user?.id}
+        edge={followList ?? 'followers'}
+        open={followList !== null}
+        onClose={() => setFollowList(null)}
+      />
     </div>
   )
 }

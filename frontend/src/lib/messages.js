@@ -1,147 +1,183 @@
-// Local, client-only direct-message store. Persists to localStorage, keyed by
-// the current user's id, so two browser profiles (or two logged-in demo
-// accounts on the same browser) don't share threads. No backend calls — this
-// is a demo layer that pairs with the mock-fallback pattern the rest of the
-// app already uses for social data.
+// Real messaging client — backed by /api/threads/* + an SSE stream (see
+// `frontend/src/context/MessagesRealtime.jsx`). Message rows and thread state
+// live in an in-memory store; useSyncExternalStore hooks bridge that store to
+// React. Every previously-exported name is preserved so existing importers
+// (MessagesPage, MessagesWidget, messages.jsx, ShareEventSheet) keep working.
 //
-// Two thread kinds:
-//   'dm'    — 1:1. threadId is deterministic across both sides (see threadIdFor).
-//             thread.partner is the single other person.
-//   'group' — 3+. threadId is deterministic from the sorted participant ids.
-//             thread.participants is the full member list (excluding "me").
-//             thread.name is an optional group title; if absent, the UI
-//             derives one from the first few names.
-// A group message carries `senderId` (the participant who sent it) alongside
-// the same `from: 'me' | 'them'` marker used by DMs, so the view can attribute
-// each bubble to the right avatar/name.
+// Thread shape after normalization (what UIs see):
+//   {
+//     id,                                // whichever id we've heard for it
+//     kind: 'dm' | 'group',              // derived from participants.length
+//     partner: {id,name,handle,avatar,verified}?  // dm only, computed
+//     participants: [...same shape]?     // group only, computed (excludes me)
+//     name: string|null,
+//     messages: [{id, from, senderId, text?, event?, at, status?, clientId?}]
+//     updatedAt,
+//     lastReadByUser: { [userId]: ISO|null },  // per-participant lastReadAt
+//     unread: bool,                      // for the current viewer
+//     serverId: uuid|null,               // real server id once we know it
+//   }
 //
-// Shape stored under `loop.messages.<userId>`:
-//   { threads: { [threadId]: {
-//       id, kind: 'dm'|'group',
-//       partner?: {id,name,handle,avatar,verified},    // dm
-//       participants?: [{...same shape}],              // group
-//       name?: string,                                 // group (optional)
-//       messages: [{id, from, senderId?, text?, event?, at}], updatedAt } } }
-// `from` is 'me' | 'them' so we don't have to remember the caller's id.
-// `event`, when present, is a slim snapshot of an event
-// ({id, title, poster, date, venueName, city, price, isFree, isSports}) that
-// the bubble renders as a mini-card — Instagram's "share to DM" flow.
+// A message's `status` is only meaningful for outbound (mine) rows:
+//   - 'sending'   : we've POSTed and haven't heard back yet
+//   - 'delivered' : the POST succeeded (or the SSE echo landed)
+//   - 'failed'    : the POST rejected
+//   - 'read'      : any *other* participant's lastReadAt ≥ message.at
+// The `statusFor()` selector derives 'read' at read time from lastReadByUser,
+// so we don't have to store 'read' on the message itself.
 
 import { useCallback, useSyncExternalStore } from 'react'
-import { ORGANIZERS as MOCK_ORGANIZERS, POSTS as MOCK_POSTS } from '../data/seed'
+import { api } from './api'
 
-const STORAGE_PREFIX = 'loop.messages.'
+// --- store ------------------------------------------------------------------
+
+const state = {
+  // Threads keyed by whichever id the caller / server first told us. When a
+  // temporary optimistic id reconciles to the real server uuid, both keys point
+  // at the same thread object until the temp id is cleaned up.
+  threads: new Map(),
+  // Per-thread typing markers: threadId → { [userId]: { at, name } }.
+  typing: new Map(),
+}
+const aliasToReal = new Map() // temp/optimistic id → real server id
+// Messages that arrived via SSE before we knew the thread; replayed after the
+// next hydrate lands the thread row.
+const pendingMessagesByThread = new Map()
+
 const listeners = new Set()
-
-function keyFor(userId) {
-  return `${STORAGE_PREFIX}${userId || 'anon'}`
-}
-
-// Read the whole store for one user. Returns a fresh object even on first
-// read so callers can mutate a copy safely.
-function readStore(userId) {
-  try {
-    const raw = localStorage.getItem(keyFor(userId))
-    if (!raw) return { threads: {} }
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.threads !== 'object') {
-      return { threads: {} }
-    }
-    return parsed
-  } catch {
-    return { threads: {} }
-  }
-}
-
-function writeStore(userId, store) {
-  try {
-    localStorage.setItem(keyFor(userId), JSON.stringify(store))
-  } catch {
-    // Quota/private-mode failures — silently drop; the UI still has in-memory state.
-  }
-  // Invalidate the snapshot caches for this user so useSyncExternalStore
-  // observes a new reference on the next getSnapshot call.
-  snapshotCache.delete(userId ?? '__anon__')
-  for (const k of threadCache.keys()) {
-    if (k.startsWith(`${userId}::`)) threadCache.delete(k)
-  }
-  emit(userId)
-}
-
-// Cached snapshots per user, so useSyncExternalStore-style hooks can call
-// listThreads() every render without generating a new array (which would loop
-// React). Cleared on every write via writeStore().
-const snapshotCache = new Map()
-
-function emit(userId) {
+function emit() {
   for (const fn of listeners) {
     try {
-      fn(userId)
+      fn()
     } catch {
-      // Never let a subscriber failure break another subscriber.
+      /* never let one subscriber break another */
     }
   }
 }
-
-/** Subscribe to store changes for any user. Returns an unsubscribe fn. */
 export function subscribe(fn) {
   listeners.add(fn)
   return () => listeners.delete(fn)
 }
 
-// A tiny counter+timestamp id so two messages typed in the same millisecond
-// still get distinct ids (Date.now alone can collide on paste-of-many).
+// A counter-suffixed id so messages typed in the same ms still get unique ids.
 let idCounter = 0
 function newId(prefix) {
   idCounter = (idCounter + 1) % 1000000
   return `${prefix}-${Date.now().toString(36)}-${idCounter}`
 }
 
-// Deterministic thread id from the pair of participant ids so opening a
-// thread twice always finds the same row (no matter who initiated).
+// Deterministic ids used ONLY as placeholders until the server hands back the
+// real uuid. Kept for compatibility with ShareEventSheet / callers that need
+// an id synchronously.
 export function threadIdFor(myId, partnerId) {
   const a = String(myId ?? '')
   const b = String(partnerId ?? '')
-  return a < b ? `${a}::${b}` : `${b}::${a}`
+  return a < b ? `tmp::${a}::${b}` : `tmp::${b}::${a}`
 }
-
-// Deterministic group thread id from a sorted list of participant ids so
-// re-opening a group composed of the same people lands on the same thread.
-// Prefixed with `g::` so it can't collide with a DM id.
 export function groupThreadId(participantIds) {
   const sorted = [...new Set(participantIds.map((id) => String(id ?? '')))].filter(Boolean).sort()
-  return `g::${sorted.join('::')}`
+  return `tmpg::${sorted.join('::')}`
 }
 
-// Normalize any of the shapes the app passes around (mock organizer, backend
-// public user, PostCard author, comment author) into what the thread renders.
-// Handles are stored raw (no leading `@`) so every render site uniformly
-// prefixes `@` — the mock seed carries `@lagosnights`, the backend carries
-// `lagosnights`, and we reconcile by stripping the prefix here.
+// Resolve any thread id (real or an old alias) to the current server id if we
+// know one — otherwise return the id itself so the store lookup still works.
+function resolveId(id) {
+  return aliasToReal.get(id) ?? id
+}
+
+// Normalize a person shape from any of the picker/organizer/backend rows.
 export function partnerFromAny(person) {
   if (!person) return null
-  const id = person.id ?? person.authorId
+  const id = person.id ?? person.user?.id ?? person.authorId
   if (!id) return null
   const rawHandle =
     typeof person.handle === 'string' && person.handle
       ? person.handle.replace(/^@/, '')
-      : person.handle || ''
+      : person.handle || person.user?.handle || ''
   return {
     id,
-    name: person.name || person.display_name || person.author || 'Someone',
+    name:
+      person.name ||
+      person.display_name ||
+      person.user?.display_name ||
+      person.author ||
+      rawHandle ||
+      'Someone',
     handle: rawHandle,
-    avatar: person.avatar || person.avatar_url || person.authorAvatar || '',
-    verified: !!(person.verified ?? person.is_verified),
+    avatar:
+      person.avatar || person.avatar_url || person.user?.avatar_url || person.authorAvatar || '',
+    verified: !!(person.verified ?? person.is_verified ?? person.user?.is_verified),
   }
 }
 
-// Present a thread as { title, subtitle, avatars, verified } regardless of
-// whether it's a DM or a group — the two rendering surfaces (list row, view
-// header) can then share code and not care which kind they're looking at.
-// - DM:    title = partner name, one avatar.
-// - Group: title = the group's saved name if set, else the participant names
-//          comma-joined (truncated in CSS by the caller). Avatars = up to 3
-//          stacked. Verified only meaningful for DMs.
+// --- normalization ----------------------------------------------------------
+
+// The store keeps threads in a shape the UI has always spoken. Server rows
+// carry `participants` as {user_id, user:{...}, last_read_at}; we split those
+// into DM `partner` vs group `participants[]` + a `lastReadByUser` map.
+function normalizeServerThread(row, meId) {
+  const participants = row.participants ?? []
+  const others = participants
+    .filter((p) => p.user_id !== meId)
+    .map((p) => partnerFromAny(p.user))
+    .filter(Boolean)
+  const kind = participants.length >= 3 ? 'group' : 'dm'
+  const lastReadByUser = Object.fromEntries(
+    participants.map((p) => [p.user_id, p.last_read_at ?? null]),
+  )
+  return {
+    id: row.id,
+    serverId: row.id,
+    kind,
+    ...(kind === 'dm' ? { partner: others[0] ?? null } : { participants: others }),
+    name: row.name ?? null,
+    messages: [], // fetched separately via getMessages / SSE
+    updatedAt: row.last_message_at || row.created_at || new Date().toISOString(),
+    lastReadByUser,
+    readAtLocal: lastReadByUser[meId] ?? null,
+  }
+}
+
+function normalizeServerMessage(row, meId) {
+  const senderId = row.sender_id
+  // Reactions arrive as [{user_id, emoji}] — normalize to [{userId, emoji}].
+  const reactions = Array.isArray(row.reactions)
+    ? row.reactions.map((r) => ({ userId: r.user_id ?? r.userId, emoji: r.emoji }))
+    : []
+  return {
+    id: row.id,
+    clientId: row.client_id ?? null,
+    from: senderId === meId ? 'me' : 'them',
+    senderId,
+    text: row.text ?? null,
+    event: row.attached_event ?? null,
+    at: row.created_at,
+    status: senderId === meId ? 'delivered' : undefined,
+    reactions,
+  }
+}
+
+function threadIsUnread(thread, meId) {
+  if (!thread) return false
+  const lastRead = thread.lastReadByUser?.[meId] ?? thread.readAtLocal ?? null
+  const readAt = lastRead ? Date.parse(lastRead) : 0
+  // Fresh partner message → unread.
+  const last = thread.messages?.[thread.messages.length - 1]
+  if (last && last.from === 'them') {
+    if (!readAt) return true
+    if (Date.parse(last.at) > readAt) return true
+  }
+  // Someone hearted my message → unread until I open the thread. lastReactionAt
+  // is bumped in ingestReaction whenever another user adds a reaction to one of
+  // my outbound bubbles.
+  if (thread.lastReactionAt) {
+    if (Date.parse(thread.lastReactionAt) > readAt) return true
+  }
+  return false
+}
+
+// --- describe / participant lookup (shape-compatible with old exports) -----
+
 export function describeThread(thread) {
   if (!thread) return { title: '', subtitle: '', avatars: [], verified: false }
   if (thread.kind === 'group' && Array.isArray(thread.participants)) {
@@ -166,9 +202,6 @@ export function describeThread(thread) {
   }
 }
 
-// Look up a participant on a group thread by id. Falls back to null so the UI
-// can render an "Unknown" bubble without crashing when a message references a
-// participant that has been removed (future-proofing).
 export function participantOf(thread, senderId) {
   if (!thread || !senderId) return null
   if (thread.kind === 'group') {
@@ -178,135 +211,487 @@ export function participantOf(thread, senderId) {
   return null
 }
 
-// Unread means: latest message is FROM the partner AND arrived after readAt.
-// Seed scripts end on a `them` line without a readAt, which is exactly the
-// state we want for the demo — the blob shows a badge on first load.
-function threadIsUnread(thread) {
-  const last = thread?.messages?.[thread.messages.length - 1]
-  if (!last || last.from !== 'them') return false
-  if (!thread.readAt) return true
-  return Date.parse(last.at) > Date.parse(thread.readAt)
-}
+// --- store mutations (called by the SSE bridge, API helpers, wrappers) -----
 
-/** All threads for a user, most-recent first. Cached until the next write.
- *  Each thread is decorated with a derived `unread` boolean so consumers
- *  (widget blob, inbox row) can render badges without recomputing. */
-export function listThreads(userId) {
-  if (!userId) return EMPTY
-  const cacheKey = userId
-  const cached = snapshotCache.get(cacheKey)
-  if (cached) return cached
-  const store = readStore(userId)
-  ensureSeeded(userId, store)
-  const list = Object.values(store.threads)
-    .map((t) => ({ ...t, unread: threadIsUnread(t) }))
-    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-  snapshotCache.set(cacheKey, list)
-  return list
-}
-
-// Frozen empty array so useSyncExternalStore-style hooks see a stable
-// reference when the caller has no user (logged out).
-const EMPTY = Object.freeze([])
-
-/** One thread by id. Cached until the next write for identity stability. */
-export function getThread(userId, threadId) {
-  if (!userId || !threadId) return null
-  const cacheKey = `${userId}::${threadId}`
-  const cached = threadCache.get(cacheKey)
-  if (cached) return cached
-  const store = readStore(userId)
-  ensureSeeded(userId, store)
-  const thread = store.threads[threadId] ?? null
-  if (thread) threadCache.set(cacheKey, thread)
-  return thread
-}
-
-const threadCache = new Map()
-
-// Ensure a thread exists for (me, partner) and return its id. If it's new,
-// the caller sees an empty message list they can immediately type into.
-export function ensureThread(userId, partner) {
-  if (!userId || !partner?.id) return null
-  const store = readStore(userId)
-  ensureSeeded(userId, store)
-  const id = threadIdFor(userId, partner.id)
-  if (!store.threads[id]) {
-    store.threads[id] = {
-      id,
-      kind: 'dm',
-      partner: partnerFromAny(partner),
-      messages: [],
-      updatedAt: new Date().toISOString(),
+/** Merge a hydration response into the current thread map. NEVER clears state —
+ *  a reconnect-triggered rehydrate must not wipe an open thread's message
+ *  history or destroy an object the UI is holding a reference to. Rows we
+ *  already know about are mutated in place; brand new rows are inserted. */
+export function replaceThreads(rows, meId) {
+  const serverIdsSeen = new Set()
+  for (const row of rows) {
+    const norm = normalizeServerThread(row, meId)
+    serverIdsSeen.add(norm.id)
+    const existing = state.threads.get(norm.id)
+    if (existing) {
+      // Mutate in place — the UI (useThread, ThreadView) is holding this ref.
+      existing.id = norm.id
+      existing.serverId = norm.id
+      existing.kind = norm.kind
+      if (norm.kind === 'dm') {
+        existing.partner = norm.partner ?? existing.partner
+        delete existing.participants
+      } else {
+        existing.participants = norm.participants ?? existing.participants
+        delete existing.partner
+      }
+      existing.name = norm.name ?? existing.name
+      existing.lastReadByUser = { ...(existing.lastReadByUser ?? {}), ...norm.lastReadByUser }
+      existing.readAtLocal = norm.readAtLocal ?? existing.readAtLocal
+      existing.updatedAt = norm.updatedAt || existing.updatedAt
+      // Seed message list only if we haven't loaded any yet — a hydrate should
+      // never blow away messages we've already received via getMessages/SSE.
+      if ((!existing.messages || existing.messages.length === 0) && row.last_message) {
+        existing.messages = [normalizeServerMessage(row.last_message, meId)]
+      }
+    } else {
+      const fresh = norm
+      if (row.last_message) fresh.messages = [normalizeServerMessage(row.last_message, meId)]
+      state.threads.set(fresh.id, fresh)
     }
-    writeStore(userId, store)
-  } else {
-    // Refresh partner metadata in case the caller has newer info (name/avatar).
-    const fresh = partnerFromAny(partner)
-    if (fresh) {
-      store.threads[id].partner = { ...store.threads[id].partner, ...fresh }
-      store.threads[id].kind = store.threads[id].kind || 'dm'
-      writeStore(userId, store)
+    // Bind the deterministic temp id → real server id for DMs, and if a temp
+    // stub with that id is still in the map, fold it into the real thread.
+    if (norm.kind === 'dm' && norm.partner?.id) {
+      const tempId = threadIdFor(meId, norm.partner.id)
+      aliasToReal.set(tempId, norm.id)
+      const stub = state.threads.get(tempId)
+      const real = state.threads.get(norm.id)
+      if (stub && stub !== real) {
+        // Preserve any optimistic messages the stub was holding.
+        if (stub.messages?.length && (!real.messages || real.messages.length === 0)) {
+          real.messages = stub.messages
+        }
+        state.threads.delete(tempId)
+      }
     }
   }
-  return id
+  emit()
 }
 
-// Ensure a group thread exists with the given partners (2+ people beyond the
-// caller). Returns its id, or null if fewer than two partners were supplied
-// (that's a DM — the caller should use ensureThread). `name` is optional; when
-// absent the UI derives one from the participants.
-export function ensureGroupThread(userId, partners, name) {
-  if (!userId || !Array.isArray(partners)) return null
-  const normalized = partners
-    .map((p) => partnerFromAny(p))
-    .filter((p) => p && p.id && p.id !== userId)
-  // De-dupe by id so the same person selected twice doesn't inflate the group.
+/** Merge a paginated message page (or a single server message) into the
+ *  thread's message list. Reconciles optimistic-by-clientId rows and dedupes
+ *  by server id, then sorts chronologically. IMPORTANT: never mutate the
+ *  existing messages array in place — React's useMemo compares by reference,
+ *  and mutating would leave the message list stale in the UI. Always assign a
+ *  fresh array. */
+export function mergeMessages(threadIdRaw, rows, meId) {
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t) return
+  const incoming = rows.map((r) => normalizeServerMessage(r, meId))
+  const byId = new Map(t.messages.map((m) => [m.id, m]))
+  const byClient = new Map(t.messages.filter((m) => m.clientId).map((m) => [m.clientId, m]))
+  const additions = []
+  for (const m of incoming) {
+    if (m.id && byId.has(m.id)) continue
+    if (m.clientId && byClient.has(m.clientId)) {
+      const existing = byClient.get(m.clientId)
+      existing.id = m.id
+      existing.at = m.at
+      existing.status = 'delivered'
+      byId.set(m.id, existing)
+      continue
+    }
+    additions.push(m)
+    byId.set(m.id, m)
+  }
+  if (additions.length > 0 || incoming.some((m) => byClient.has(m.clientId))) {
+    const merged = [...t.messages, ...additions].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
+    t.messages = merged
+    t.updatedAt = merged[merged.length - 1]?.at ?? t.updatedAt
+  }
+  emit()
+}
+
+/** Handle a live `message` SSE frame. */
+export function ingestMessage(threadIdRaw, row, meId) {
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t) {
+    // Message arrived for a thread we don't know yet (e.g. someone DMed us
+    // before we hydrated). Kick a hydrate so the widget gets the row, then
+    // replay this message once the thread lands.
+    pendingMessagesByThread.set(id, [...(pendingMessagesByThread.get(id) ?? []), row])
+    kickHydrate(meId).then(() => {
+      const pending = pendingMessagesByThread.get(id)
+      if (!pending) return
+      pendingMessagesByThread.delete(id)
+      for (const r of pending) ingestMessage(id, r, meId)
+    })
+    return
+  }
+  const incoming = normalizeServerMessage(row, meId)
+  // If we sent this optimistically, reconcile by clientId. Mutating the
+  // existing bubble is fine (React only diffs the message array reference,
+  // and we replace it below to force a re-render).
+  if (incoming.from === 'me' && incoming.clientId) {
+    const existing = t.messages.find((m) => m.clientId === incoming.clientId)
+    if (existing) {
+      existing.id = incoming.id
+      existing.at = incoming.at
+      existing.status = 'delivered'
+      t.messages = [...t.messages]
+      t.updatedAt = incoming.at
+      emit()
+      return
+    }
+  }
+  // Otherwise append if we don't already have it (dedup by server id).
+  if (!t.messages.some((m) => m.id === incoming.id)) {
+    t.messages = [...t.messages, incoming]
+    t.updatedAt = incoming.at
+  }
+  emit()
+}
+
+/** Handle a live `read` SSE frame. */
+export function ingestRead(threadIdRaw, userId, lastReadAt, meId) {
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t) return
+  if (!t.lastReadByUser) t.lastReadByUser = {}
+  t.lastReadByUser[userId] = lastReadAt
+  if (userId === meId) t.readAtLocal = lastReadAt
+  emit()
+}
+
+/** Handle a live `reaction` SSE frame. op ∈ {'added', 'removed'}. */
+export function ingestReaction(threadIdRaw, messageId, userId, emoji, op) {
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t) return
+  const idx = t.messages.findIndex((m) => m.id === messageId)
+  if (idx < 0) return
+  const target = t.messages[idx]
+  const cur = Array.isArray(target.reactions) ? target.reactions : []
+  const has = cur.some((r) => r.userId === userId && r.emoji === emoji)
+  let next
+  if (op === 'added' && !has) next = [...cur, { userId, emoji }]
+  else if (op === 'removed' && has)
+    next = cur.filter((r) => !(r.userId === userId && r.emoji === emoji))
+  else return // already in the state the frame describes
+  // Replace both the message object and the messages array so useMemo sees a
+  // fresh reference on the render side.
+  const nextMsg = { ...target, reactions: next }
+  t.messages = [...t.messages.slice(0, idx), nextMsg, ...t.messages.slice(idx + 1)]
+  // If someone else just hearted one of MY messages, treat it as a fresh
+  // notification: bump updatedAt and clear my readAtLocal so the widget's
+  // unread badge + ThreadList row light up. Removals never re-open the notif.
+  if (op === 'added' && target.from === 'me' && userId !== target.senderId) {
+    const stamp = new Date().toISOString()
+    t.updatedAt = stamp
+    t.lastReactionAt = stamp
+  }
+  emit()
+}
+
+/** Handle a live `typing` SSE frame. */
+export function ingestTyping(threadIdRaw, userId, meId) {
+  const id = resolveId(threadIdRaw)
+  if (userId === meId) return
+  const t = state.threads.get(id)
+  if (!t) return
+  const name = participantOf(t, userId)?.name || 'Someone'
+  const now = new Date().toISOString()
+  const map = state.typing.get(id) ?? {}
+  map[userId] = { at: now, name }
+  state.typing.set(id, map)
+  emit()
+  // Auto-expire after 3s.
+  setTimeout(() => {
+    const cur = state.typing.get(id)
+    if (!cur) return
+    const entry = cur[userId]
+    if (!entry) return
+    if (entry.at !== now) return // superseded by a fresher event
+    delete cur[userId]
+    if (Object.keys(cur).length === 0) state.typing.delete(id)
+    else state.typing.set(id, cur)
+    emit()
+  }, 3200)
+}
+
+let hydrateInFlight = null
+function kickHydrate(meId) {
+  if (hydrateInFlight) return hydrateInFlight
+  hydrateInFlight = api.messages
+    .listThreads()
+    .then((rows) => replaceThreads(rows ?? [], meId))
+    .finally(() => {
+      hydrateInFlight = null
+    })
+  return hydrateInFlight
+}
+
+/** External entry point for MessagesRealtime after SSE connects. */
+export async function hydrateThreads(meId) {
+  return kickHydrate(meId)
+}
+
+/** External entry point for ThreadView on open — fetches messages if missing. */
+export async function ensureMessagesLoaded(meId, threadIdRaw) {
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t || !t.serverId) return // temp thread with no server row yet — nothing to fetch
+  if (t.messagesLoaded) return
+  t.messagesLoaded = true
+  const page = await api.messages.getMessages(t.serverId)
+  mergeMessages(t.serverId, page.data ?? [], meId)
+}
+
+// --- selectors used by hooks ------------------------------------------------
+
+let threadsSnapshotKey = 0
+let threadsSnapshot = []
+let threadsSnapshotFor = null
+let threadsSnapshotVersion = -1
+let storeVersion = 0
+function bumpStoreVersion() {
+  storeVersion += 1
+}
+// Every mutator emits, so wire a subscriber that bumps the version too — the
+// snapshot cache uses it to know when to rebuild.
+listeners.add(bumpStoreVersion)
+
+export function listThreads(userId) {
+  if (!userId) return EMPTY
+  if (threadsSnapshotFor === userId && threadsSnapshotVersion === storeVersion) {
+    return threadsSnapshot
+  }
+  // Dedup: alias entries can be present when a temp id + real id both live in
+  // the map; only include unique thread objects.
   const seen = new Set()
   const uniq = []
-  for (const p of normalized) {
+  for (const t of state.threads.values()) {
+    if (seen.has(t)) continue
+    seen.add(t)
+    uniq.push(t)
+  }
+  const decorated = uniq
+    .map((t) => ({ ...t, unread: threadIsUnread(t, userId) }))
+    .sort((a, b) => Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0))
+  threadsSnapshot = decorated
+  threadsSnapshotFor = userId
+  threadsSnapshotVersion = storeVersion
+  threadsSnapshotKey += 1
+  return decorated
+}
+
+const EMPTY = Object.freeze([])
+
+const threadRefCache = new Map()
+let threadRefCacheVersion = -1
+export function getThread(userId, threadIdRaw) {
+  if (!userId || !threadIdRaw) return null
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t) return null
+  if (threadRefCacheVersion !== storeVersion) {
+    threadRefCache.clear()
+    threadRefCacheVersion = storeVersion
+  }
+  const cached = threadRefCache.get(id)
+  // Track the messages array reference (not just length) so an in-place
+  // reconciliation that keeps length constant but swaps the reference (see
+  // ingestMessage / doSend) still yields a fresh decorated object — otherwise
+  // useThread returns a stale ref and useMemo([thread.messages]) never updates.
+  if (cached && cached.__source === t && cached.__mRef === t.messages) {
+    return cached
+  }
+  const decorated = {
+    ...t,
+    unread: threadIsUnread(t, userId),
+    __source: t,
+    __mRef: t.messages,
+  }
+  threadRefCache.set(id, decorated)
+  return decorated
+}
+
+export function unreadCount(userId) {
+  if (!userId) return 0
+  return listThreads(userId).filter((t) => t.unread).length
+}
+
+export function threadCount(userId) {
+  if (!userId) return 0
+  return state.threads.size
+}
+
+/** Typing markers for a thread, keyed as an array — used by useTyping.
+ *  MUST return a stable reference when nothing has changed: useSyncExternalStore
+ *  loops (and freezes the UI) if two consecutive getSnapshot() calls return
+ *  arrays that fail Object.is. Cache per-thread and invalidate on the store's
+ *  monotonic version. */
+const typingSnapshotByThread = new Map() // id → { version, list }
+export function typingFor(threadIdRaw) {
+  const id = resolveId(threadIdRaw)
+  const map = state.typing.get(id)
+  if (!map || Object.keys(map).length === 0) return EMPTY_TYPING
+  const cached = typingSnapshotByThread.get(id)
+  if (cached && cached.version === storeVersion) return cached.list
+  const list = Object.entries(map).map(([userId, v]) => ({ userId, name: v.name }))
+  typingSnapshotByThread.set(id, { version: storeVersion, list })
+  return list
+}
+const EMPTY_TYPING = Object.freeze([])
+
+/** Derive the visible status tail for one message. Returns null when we
+ *  shouldn't show a tail (message from other side, or older mine bubbles).
+ *  Callers pass `isLatestMine` because they know the message list ordering. */
+export function statusFor(message, thread, meId, { isLatestMine = false } = {}) {
+  if (!message || message.from !== 'me') return null
+  if (!isLatestMine) return null
+  if (message.status === 'sending') return 'sending'
+  if (message.status === 'failed') return 'failed'
+  const at = message.at ? Date.parse(message.at) : 0
+  if (thread?.lastReadByUser) {
+    for (const [uid, iso] of Object.entries(thread.lastReadByUser)) {
+      if (uid === meId) continue
+      const stamp = iso ? Date.parse(iso) : 0
+      if (stamp && stamp >= at) return 'read'
+    }
+  }
+  return 'delivered'
+}
+
+// --- wrappers preserving the original signatures --------------------------
+
+/** Ensure a DM thread exists locally + kick a background create. Returns an id
+ *  the caller can immediately navigate to (may be a temp id until the server
+ *  hands back the real uuid; both lookups resolve to the same thread). */
+export function ensureThread(userId, partner) {
+  if (!userId || !partner?.id) return null
+  const partnerNorm = partnerFromAny(partner)
+  const tempId = threadIdFor(userId, partnerNorm.id)
+  // If we already have a resolved thread for this pair, return its real id.
+  const realId = aliasToReal.get(tempId)
+  if (realId && state.threads.has(realId)) {
+    // Refresh partner metadata in case the caller has newer info.
+    const t = state.threads.get(realId)
+    if (t.kind === 'dm') t.partner = { ...t.partner, ...partnerNorm }
+    return realId
+  }
+  // Otherwise place a stub so useThread() renders an empty conversation while
+  // the create resolves.
+  if (!state.threads.has(tempId)) {
+    state.threads.set(tempId, {
+      id: tempId,
+      serverId: null,
+      kind: 'dm',
+      partner: partnerNorm,
+      name: null,
+      messages: [],
+      updatedAt: new Date().toISOString(),
+      lastReadByUser: { [userId]: new Date().toISOString() },
+      readAtLocal: new Date().toISOString(),
+    })
+    emit()
+  }
+  // Kick the real create so the server row exists before the first send.
+  api.messages
+    .createDm(partnerNorm.id)
+    .then((serverThread) => {
+      if (!serverThread) return
+      reconcileThread(tempId, serverThread, userId)
+    })
+    .catch(() => {
+      /* leave the temp thread; sendMessage will surface the failure */
+    })
+  return tempId
+}
+
+/** Ensure a group thread. Returns null if <2 partners were provided. */
+export function ensureGroupThread(userId, partners, name) {
+  if (!userId || !Array.isArray(partners)) return null
+  const norm = partners.map((p) => partnerFromAny(p)).filter((p) => p && p.id && p.id !== userId)
+  const seen = new Set()
+  const uniq = []
+  for (const p of norm) {
     if (seen.has(p.id)) continue
     seen.add(p.id)
     uniq.push(p)
   }
   if (uniq.length < 2) return null
-  const store = readStore(userId)
-  ensureSeeded(userId, store)
-  const id = groupThreadId([userId, ...uniq.map((p) => p.id)])
-  const trimmedName = typeof name === 'string' ? name.trim() : ''
-  if (!store.threads[id]) {
-    store.threads[id] = {
-      id,
+  const tempId = groupThreadId([userId, ...uniq.map((p) => p.id)])
+  if (!state.threads.has(tempId)) {
+    state.threads.set(tempId, {
+      id: tempId,
+      serverId: null,
       kind: 'group',
       participants: uniq,
-      name: trimmedName || null,
+      name: name?.trim() || null,
       messages: [],
       updatedAt: new Date().toISOString(),
-    }
-    writeStore(userId, store)
-  } else {
-    // Refresh participant metadata; if the caller supplied a name and the
-    // group had none, adopt it. Existing names stick.
-    store.threads[id].participants = uniq
-    store.threads[id].kind = 'group'
-    if (trimmedName && !store.threads[id].name) {
-      store.threads[id].name = trimmedName
-    }
-    writeStore(userId, store)
+      lastReadByUser: { [userId]: new Date().toISOString() },
+      readAtLocal: new Date().toISOString(),
+    })
+    emit()
   }
-  return id
+  api.messages
+    .createGroup(
+      uniq.map((p) => p.id),
+      name,
+    )
+    .then((serverThread) => {
+      if (!serverThread) return
+      reconcileThread(tempId, serverThread, userId)
+    })
+    .catch(() => {})
+  return tempId
 }
 
-/** Send a message from `me` in `threadId`; returns the created message. */
-export function sendMessage(userId, threadId, text) {
+function reconcileThread(tempId, serverRow, meId) {
+  const real = normalizeServerThread(serverRow, meId)
+  const existing = state.threads.get(tempId)
+  if (existing) {
+    // Mutate the existing thread object in place so any in-flight sender that
+    // captured a reference to it observes the new serverId (doSend polls the
+    // captured object). Copy every field the server row carries.
+    existing.id = real.id
+    existing.serverId = real.id
+    existing.kind = real.kind
+    if (real.kind === 'dm') {
+      existing.partner = real.partner ?? existing.partner
+      delete existing.participants
+    } else {
+      existing.participants = real.participants ?? existing.participants
+      delete existing.partner
+    }
+    existing.name = real.name ?? existing.name
+    existing.lastReadByUser = { ...(existing.lastReadByUser ?? {}), ...real.lastReadByUser }
+    // Point the real id at the same object so lookups by either key hit it.
+    state.threads.set(real.id, existing)
+  } else {
+    state.threads.set(real.id, real)
+  }
+  aliasToReal.set(tempId, real.id)
+  // Both the temp id and the real id resolve to the same object so a
+  // subscriber holding the temp id keeps seeing the same thread.
+  emit()
+}
+
+/** Send text. Returns { id, clientId } synchronously so callers can pin an
+ *  optimistic bubble; the SSE echo reconciles it later. Idempotent-ish: two
+ *  quick calls will produce two messages, because the composer clears between
+ *  sends. */
+export function sendMessage(userId, threadIdRaw, text) {
   const trimmed = String(text ?? '').trim()
-  if (!trimmed) return null
-  return appendOwnMessage(userId, threadId, { text: trimmed })
+  if (!trimmed || !userId || !threadIdRaw) return null
+  return appendOptimistic(userId, threadIdRaw, { text: trimmed, event: null })
 }
 
-// Slim projection of an event that survives serialization — anything Loop
-// renders in a mini-card belongs here. Keeps the message payload bounded so
-// localStorage never balloons even after many shares.
+/** Send an event share (optional note + slim event card). */
+export function sendEventShare(userId, threadIdRaw, event, note) {
+  const slim = slimEvent(event)
+  if (!slim || !userId || !threadIdRaw) return null
+  const trimmedNote = typeof note === 'string' ? note.trim() : ''
+  return appendOptimistic(userId, threadIdRaw, {
+    text: trimmedNote || null,
+    event: slim,
+  })
+}
+
 function slimEvent(event) {
   if (!event || !event.id) return null
   return {
@@ -322,263 +707,182 @@ function slimEvent(event) {
   }
 }
 
-/**
- * Send an event share (optional note + event mini-card) into `threadId`.
- * Returns the created message, or null if the event is missing / the thread
- * doesn't exist.
- */
-export function sendEventShare(userId, threadId, event, note) {
-  const slim = slimEvent(event)
-  if (!slim) return null
-  const trimmedNote = typeof note === 'string' ? note.trim() : ''
-  return appendOwnMessage(userId, threadId, {
-    text: trimmedNote || null,
-    event: slim,
-  })
-}
-
-// Shared "me" append. Handles the store write, readAt bump, and fake-reply
-// scheduling so sendMessage + sendEventShare stay identical in behaviour.
-function appendOwnMessage(userId, threadId, payload) {
-  if (!userId || !threadId) return null
-  const store = readStore(userId)
-  const thread = store.threads[threadId]
-  if (!thread) return null
+function appendOptimistic(userId, threadIdRaw, payload) {
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t) return null
   const at = new Date().toISOString()
+  const clientId = newId('c')
   const message = {
-    id: newId('m'),
+    id: clientId, // temporary — replaced on SSE echo
+    clientId,
     from: 'me',
     senderId: userId,
     text: payload.text ?? null,
-    ...(payload.event ? { event: payload.event } : {}),
+    event: payload.event ?? undefined,
     at,
+    status: 'sending',
   }
-  thread.messages.push(message)
-  thread.updatedAt = at
-  // Sending IS reading — mark our own message as seen so the unread badge
-  // doesn't include the line we just typed.
-  thread.readAt = at
-  writeStore(userId, store)
-  // Cheap chat illusion: the other side "replies" a few seconds later with a
-  // canned line. Groups get one reply per participant, spaced apart, so it
-  // feels like a real conversation.
-  scheduleFakeReply(userId, threadId, { forEvent: !!payload.event })
+  // Replace the messages array reference so React re-renders — mutating in
+  // place would leave useMemo([thread.messages]) with a stale cache.
+  t.messages = [...t.messages, message]
+  t.updatedAt = at
+  t.readAtLocal = at
+  if (!t.lastReadByUser) t.lastReadByUser = {}
+  t.lastReadByUser[userId] = at
+  emit()
+  doSend(t, message, payload).catch(() => {})
   return message
 }
 
-/** Mark a thread's newest partner message as read up to now. */
-export function markThreadRead(userId, threadId) {
-  if (!userId || !threadId) return
-  const store = readStore(userId)
-  const thread = store.threads[threadId]
-  if (!thread) return
-  const stamp = thread.updatedAt || new Date().toISOString()
-  if (thread.readAt === stamp) return
-  thread.readAt = stamp
-  writeStore(userId, store)
-}
-
-/** Count of threads with at least one unread partner message. */
-export function unreadCount(userId) {
-  if (!userId) return 0
-  return listThreads(userId).filter((t) => t.unread).length
-}
-
-// Canned replies the partner sends back. Rotated by thread hash so two threads
-// don't produce the same first reply.
-const CANNED_REPLIES = [
-  'Yes! I was just about to hit you up 🔥',
-  'lol appreciate that — you making it out?',
-  'For sure. We back at it this weekend?',
-  'Man 😂 you already know',
-  'Send me the flyer whenever, I got you',
-  'Yeah RSVP is live — grab yours before it caps',
-  "Let's link. What time works?",
-  'Guest list is open till Friday — want me to add a +1?',
-]
-// Event-share specific replies — reads like a real reaction to the flyer that
-// just showed up in the DM rather than a generic canned line.
-const EVENT_SHARE_REPLIES = [
-  'Ooh this looks fire 🔥 I might pull up',
-  'Wait this is exactly my vibe, sending it to my group',
-  'Bet — RSVPing right now',
-  "Damn I've been meaning to check them out. We linking?",
-  'lock in a +1 for me if you got the plug',
-  'Nice — what time you rolling?',
-  'omg saved. thanks for the heads up 🙏',
-]
-function pickReply(seed, kind = 'text') {
-  let h = 0
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0
-  const pool = kind === 'event' ? EVENT_SHARE_REPLIES : CANNED_REPLIES
-  return pool[Math.abs(h) % pool.length]
-}
-
-// Push one canned reply into the thread. `senderId` picks which participant is
-// speaking (groups); DMs pass the partner id. Guards against the fake reply
-// firing after the user has typed again — the illusion breaks if the "other
-// side" cuts into a monologue. `kind` picks the pool ('event' → reactions to a
-// shared flyer, otherwise the default chatter pool).
-function postFakeReply(userId, threadId, senderId, seed, kind = 'text') {
-  const store = readStore(userId)
-  const thread = store.threads[threadId]
-  if (!thread) return
-  const last = thread.messages[thread.messages.length - 1]
-  if (!last || last.from !== 'me') return
-  const at = new Date().toISOString()
-  thread.messages.push({
-    id: newId('m'),
-    from: 'them',
-    senderId,
-    text: pickReply(seed, kind),
-    at,
-  })
-  thread.updatedAt = at
-  writeStore(userId, store)
-}
-
-function scheduleFakeReply(userId, threadId, opts = {}) {
-  const store = readStore(userId)
-  const thread = store.threads[threadId]
-  if (!thread) return
-  const kind = opts.forEvent ? 'event' : 'text'
-  // Groups: schedule a reply for each participant, staggered so they feel like
-  // separate people responding rather than a chorus firing at the same tick.
-  if (thread.kind === 'group' && Array.isArray(thread.participants)) {
-    thread.participants.forEach((p, i) => {
-      const delay = 1500 + i * 1200 + Math.floor(Math.random() * 1500)
-      setTimeout(
-        () => postFakeReply(userId, threadId, p.id, `${threadId}::${p.id}::${kind}`, kind),
-        delay,
-      )
+async function doSend(thread, message, payload) {
+  // Wait for the server thread if we're still optimistically stubbed.
+  let serverId = thread.serverId
+  if (!serverId) {
+    // Poll briefly — up to ~5s — for the create to resolve. Simpler than
+    // building a full promise queue; the create is fast.
+    for (let i = 0; i < 25; i++) {
+      if (thread.serverId) {
+        serverId = thread.serverId
+        break
+      }
+      await new Promise((r) => setTimeout(r, 200))
+    }
+    if (!serverId) {
+      message.status = 'failed'
+      emit()
+      return
+    }
+  }
+  const eventId = payload.event?.id ?? null
+  const res = await api.messages
+    .sendMessage(serverId, {
+      text: payload.text,
+      eventId,
+      clientId: message.clientId,
     })
+    .catch(() => null)
+  if (!res) {
+    message.status = 'failed'
+    emit()
     return
   }
-  // DMs: one reply, senderId = the partner.
-  const delay = 1500 + Math.floor(Math.random() * 2500)
-  setTimeout(() => {
-    postFakeReply(userId, threadId, thread.partner?.id ?? null, `${threadId}::${kind}`, kind)
-  }, delay)
+  // Adopt server-issued id + timestamp; SSE echo may or may not arrive
+  // afterward (we dedupe either way). Replace the messages array reference
+  // so the render pass sees the change.
+  message.id = res.id
+  message.at = res.created_at
+  message.status = 'delivered'
+  thread.messages = [...thread.messages]
+  thread.updatedAt = res.created_at
+  emit()
 }
 
-/** Total number of threads (unused right now, but handy for a badge later). */
-export function threadCount(userId) {
-  if (!userId) return 0
-  return Object.keys(readStore(userId).threads).length
+/** Toggle a reaction on a message. Optimistic — flips the badge immediately,
+ *  POSTs to the server, then reconciles: if the server's op contradicts our
+ *  guess (e.g. we thought we were adding but we already had one), we defer to
+ *  the server's truth. SSE echo will also arrive and dedupe via ingestReaction. */
+export function toggleReaction(userId, threadIdRaw, messageId, emoji = '❤️') {
+  if (!userId || !threadIdRaw || !messageId) return
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t?.serverId) return
+  const idx = t.messages.findIndex((m) => m.id === messageId)
+  if (idx < 0) return
+  const target = t.messages[idx]
+  const cur = Array.isArray(target.reactions) ? target.reactions : []
+  const mineHas = cur.some((r) => r.userId === userId && r.emoji === emoji)
+  const optimisticOp = mineHas ? 'removed' : 'added'
+  // Apply optimistically via the same code path the SSE frame uses so
+  // any concurrent frame from the peer just no-ops (same target state).
+  ingestReaction(id, messageId, userId, emoji, optimisticOp)
+
+  api.messages
+    .react(t.serverId, messageId, emoji)
+    .then((res) => {
+      if (!res || !res.op) return
+      if (res.op !== optimisticOp) {
+        // Server disagreed — revert to whatever the server says is true.
+        ingestReaction(id, messageId, userId, emoji, res.op)
+      }
+    })
+    .catch(() => {
+      // Roll back on network failure.
+      ingestReaction(id, messageId, userId, emoji, mineHas ? 'added' : 'removed')
+    })
 }
 
-// --- Seeded threads ---------------------------------------------------------
-// Give a new user two or three plausible existing DMs so the inbox never
-// looks empty. Seeded once per user (idempotent) and only when the store is
-// empty — we never overwrite real user content.
-const SEED_MARK = '__seeded__'
-
-function ensureSeeded(userId, store) {
-  if (!userId) return
-  if (store[SEED_MARK]) return
-  if (Object.keys(store.threads).length > 0) {
-    store[SEED_MARK] = true
-    writeStore(userId, store)
-    return
+/** Mark a thread's most-recent partner message as read up to now. */
+export function markThreadRead(userId, threadIdRaw) {
+  if (!userId || !threadIdRaw) return
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t) return
+  const stamp = new Date().toISOString()
+  if (t.readAtLocal === stamp) return
+  t.readAtLocal = stamp
+  if (!t.lastReadByUser) t.lastReadByUser = {}
+  t.lastReadByUser[userId] = stamp
+  emit()
+  if (t.serverId) {
+    api.messages.markRead(t.serverId).catch(() => {})
   }
+}
+
+// --- typing signal (throttled) ---------------------------------------------
+const lastTypingByThread = new Map()
+export function notifyTyping(threadIdRaw) {
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t || !t.serverId) return
   const now = Date.now()
-  const seeds = pickSeedPartners()
-  for (const [i, partner] of seeds.entries()) {
-    const id = threadIdFor(userId, partner.id)
-    // Stagger updatedAt so the list renders in a natural order.
-    const base = now - (i + 1) * 3600000 // an hour apart
-    const script = SEED_SCRIPTS[i % SEED_SCRIPTS.length]
-    store.threads[id] = {
-      id,
-      kind: 'dm',
-      partner: partnerFromAny(partner),
-      messages: script.map((m, j) => ({
-        id: `seed-${i}-${j}`,
-        from: m.from,
-        senderId: m.from === 'me' ? userId : partner.id,
-        text: m.text,
-        at: new Date(base + j * 90000).toISOString(),
-      })),
-      updatedAt: new Date(base + (script.length - 1) * 90000).toISOString(),
-    }
-  }
-  store[SEED_MARK] = true
-  writeStore(userId, store)
+  const last = lastTypingByThread.get(t.serverId) ?? 0
+  if (now - last < 1500) return
+  lastTypingByThread.set(t.serverId, now)
+  api.messages.typing(t.serverId)
 }
 
-function pickSeedPartners() {
-  // Prefer verified organizers first (feels closer to the reference
-  // screenshot), then fall back to the first post authors so the seed feels
-  // connected to something the user has actually seen in the feed.
-  const orgs = MOCK_ORGANIZERS.filter((o) => o.verified).slice(0, 2)
-  const seen = new Set(orgs.map((o) => o.id))
-  const morePeople = []
-  for (const p of MOCK_POSTS) {
-    const org = MOCK_ORGANIZERS.find((o) => o.id === p.organizerId)
-    if (org && !seen.has(org.id)) {
-      seen.add(org.id)
-      morePeople.push(org)
-      if (morePeople.length >= 1) break
-    }
-  }
-  return [...orgs, ...morePeople].slice(0, 3)
-}
-
-const SEED_SCRIPTS = [
-  [
-    { from: 'them', text: 'Ayo, you making it to the rooftop set on Sunday?' },
-    { from: 'me', text: 'Trying to — is the guest list still open?' },
-    { from: 'them', text: 'Yeah, drop your +1 by Friday. I got you 🕺' },
-  ],
-  [
-    { from: 'them', text: 'Nice recap post 👀 how was the crowd?' },
-    { from: 'me', text: 'Wildddd. Best one yet, easily.' },
-    { from: 'them', text: "Bet — we're already planning the next one. Stay tuned." },
-  ],
-  [
-    { from: 'them', text: 'Send me the flyer when you get a sec' },
-    { from: 'me', text: 'On it — dropping tonight.' },
-  ],
-]
-
-// --- React bridges ---------------------------------------------------------
-// Shared useSyncExternalStore wrappers so the widget, inbox, and thread views
-// don't each re-implement the subscribe/getSnapshot pair. `getSnapshot`
-// returns the cached list/thread — writeStore() clears those caches, so the
-// returned reference is stable between writes (satisfies useSyncExternalStore).
+// --- React hooks -----------------------------------------------------------
 
 export function useThreads(userId) {
   const s = useCallback(() => listThreads(userId), [userId])
-  const sub = useCallback(
-    (cb) =>
-      subscribe((changedUserId) => {
-        if (changedUserId === userId) cb()
-      }),
-    [userId],
-  )
+  const sub = useCallback((cb) => subscribe(cb), [])
   return useSyncExternalStore(sub, s, () => EMPTY)
 }
 
 export function useThread(userId, threadId) {
   const s = useCallback(() => getThread(userId, threadId), [userId, threadId])
-  const sub = useCallback(
-    (cb) =>
-      subscribe((changedUserId) => {
-        if (changedUserId === userId) cb()
-      }),
-    [userId],
-  )
+  const sub = useCallback((cb) => subscribe(cb), [])
   return useSyncExternalStore(sub, s, () => null)
 }
 
 export function useUnreadCount(userId) {
   const s = useCallback(() => unreadCount(userId), [userId])
-  const sub = useCallback(
-    (cb) =>
-      subscribe((changedUserId) => {
-        if (changedUserId === userId) cb()
-      }),
-    [userId],
-  )
+  const sub = useCallback((cb) => subscribe(cb), [])
   return useSyncExternalStore(sub, s, () => 0)
+}
+
+export function useTyping(threadId) {
+  const s = useCallback(() => typingFor(threadId), [threadId])
+  const sub = useCallback((cb) => subscribe(cb), [])
+  return useSyncExternalStore(sub, s, () => EMPTY_TYPING)
+}
+
+/** Full store reset (called on logout). */
+export function resetMessagesStore() {
+  state.threads.clear()
+  state.typing.clear()
+  aliasToReal.clear()
+  pendingMessagesByThread.clear()
+  typingSnapshotByThread.clear()
+  threadRefCache.clear()
+  emit()
+}
+
+// Silence a lint hint about `threadsSnapshotKey` being unused externally — it
+// exists to invalidate the snapshot even if the array reference didn't change.
+export const _internal = {
+  get snapshotKey() {
+    return threadsSnapshotKey
+  },
 }

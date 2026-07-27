@@ -1,18 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Calendar, MapPin, PenSquare, Search, Send, Users, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  Calendar,
+  Check,
+  CheckCheck,
+  MapPin,
+  PenSquare,
+  Search,
+  Send,
+  Users,
+  X,
+} from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import {
   describeThread,
   ensureGroupThread,
+  ensureMessagesLoaded,
   ensureThread,
   markThreadRead,
+  notifyTyping,
   participantOf,
   sendEventShare,
   sendMessage,
+  statusFor,
+  toggleReaction,
   useThread,
   useThreads,
+  useTyping,
 } from '../lib/messages'
 import { VerifiedBadge } from './primitives'
 import { cn, timeAgo } from '../lib/utils'
@@ -173,6 +189,13 @@ export function ThreadList({ threads, activeThreadId, onSelect, onCompose, dense
 
 function previewOf(thread) {
   const last = thread.messages[thread.messages.length - 1]
+  // Heart notification wins the preview line — same behavior as Instagram's
+  // "❤️ liked your message" row when a heart is the most recent thread event.
+  // `unread` is set by the store based on lastReactionAt vs my lastReadAt, so
+  // we only need to check whether the flag is on and the last message is mine.
+  if (thread.unread && thread.lastReactionAt && last?.from === 'me') {
+    return '❤️ Liked your message'
+  }
   if (!last) return 'Say hi 👋'
   // Event shares: describe the share so the row summarises the attachment
   // instead of an empty text field. If there's a note we still show it, with
@@ -204,8 +227,16 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
   const navigate = useNavigate()
   const { user } = useApp()
   const thread = useThread(user?.id, threadId)
+  const typingList = useTyping(threadId)
   const [draft, setDraft] = useState('')
   const scrollRef = useRef(null)
+
+  // Fetch past messages once on open (idempotent — the store no-ops the second
+  // call). Runs once the temp/optimistic thread reconciles to a serverId.
+  useEffect(() => {
+    if (!user?.id || !threadId) return
+    ensureMessagesLoaded(user.id, threadId).catch(() => {})
+  }, [user?.id, threadId, thread?.serverId])
 
   // Mark read on open and again whenever a new partner message arrives while
   // the view is mounted (docked panel is open → the user is "in" the thread).
@@ -219,7 +250,7 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
     const el = scrollRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
-  }, [messageCount])
+  }, [messageCount, typingList.length])
 
   const send = () => {
     const text = draft.trim()
@@ -228,7 +259,22 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
     setDraft('')
   }
 
+  const onDraftChange = (e) => {
+    setDraft(e.target.value)
+    if (user?.id && threadId) notifyTyping(threadId)
+  }
+
   const groups = useMemo(() => groupBySender(thread?.messages ?? []), [thread?.messages])
+  // Id of the last "me" message so the status tail renders once, on the most
+  // recent outbound bubble only (Instagram parity). Derived by id (not index)
+  // so the render pass stays pure.
+  const latestMineId = useMemo(() => {
+    const msgs = thread?.messages ?? []
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].from === 'me') return msgs[i].id
+    }
+    return null
+  }, [thread?.messages])
 
   if (!thread) {
     return (
@@ -322,21 +368,50 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
                     {sender.name}
                   </span>
                 )}
-                {g.messages.map((msg) => (
-                  <MessageBubble
-                    key={msg.id}
-                    message={msg}
-                    mine={g.from === 'me'}
-                    onOpenEvent={(evt) => {
-                      if (!evt?.id) return
-                      navigate(evt.isSports ? `/sports/${evt.id}` : `/event/${evt.id}`)
-                    }}
-                  />
-                ))}
+                {g.messages.map((msg) => {
+                  // Latest-mine flag is derived from the message id, not a
+                  // walking counter, so the render stays pure across re-runs.
+                  const isLatestMine = g.from === 'me' && msg.id === latestMineId
+                  const status = statusFor(msg, thread, user?.id, { isLatestMine })
+                  const onDoubleTap = () => {
+                    if (!user?.id) return
+                    // Optimistic bubble id is a client_id until the server
+                    // echo lands; disallow reacting until we have a real id.
+                    if (!msg.id || String(msg.id).startsWith('c-')) return
+                    toggleReaction(user.id, threadId, msg.id)
+                  }
+                  return (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        'flex flex-col gap-0.5',
+                        g.from === 'me' ? 'items-end' : 'items-start',
+                      )}
+                    >
+                      <TappableBubble onDoubleTap={onDoubleTap}>
+                        <MessageBubble
+                          message={msg}
+                          mine={g.from === 'me'}
+                          onOpenEvent={(evt) => {
+                            if (!evt?.id) return
+                            navigate(evt.isSports ? `/sports/${evt.id}` : `/event/${evt.id}`)
+                          }}
+                        />
+                      </TappableBubble>
+                      <ReactionsBadge
+                        message={msg}
+                        meId={user?.id}
+                        onToggle={() => toggleReaction(user?.id, threadId, msg.id)}
+                      />
+                      {status && <StatusTail status={status} isGroup={!!desc.isGroup} />}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )
         })}
+        {typingList.length > 0 && <TypingBubble typing={typingList} desc={desc} thread={thread} />}
       </div>
 
       {/* composer — Enter to send, Shift+Enter for newline */}
@@ -344,7 +419,7 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
         <div className="flex items-end gap-2">
           <textarea
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={onDraftChange}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -367,6 +442,99 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
         </div>
       </div>
     </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   TappableBubble — wraps a message bubble with a double-tap gesture that
+   works on mouse and touch. Two taps within 350ms fires onDoubleTap; a single
+   tap is a no-op so links/buttons inside the bubble (event card) still work.
+   Also flashes a big heart briefly for visual feedback on every fire.
+
+   NOTE: uses only the manual click detector — do NOT layer onDoubleClick on
+   top: the browser fires BOTH `click`+`click`+`dblclick`, which would toggle
+   twice and cancel out (that's the "sometimes it doesn't work" bug).
+   A short lockout after firing swallows any stray synthetic event.
+-------------------------------------------------------------------------- */
+function TappableBubble({ children, onDoubleTap }) {
+  const lastTapRef = useRef(0)
+  const lockedUntilRef = useRef(0)
+  const [flash, setFlash] = useState(0)
+  const trigger = () => {
+    const now = Date.now()
+    if (now < lockedUntilRef.current) return
+    lockedUntilRef.current = now + 500
+    setFlash((n) => n + 1)
+    onDoubleTap?.()
+  }
+  const handleTap = () => {
+    const now = Date.now()
+    if (now < lockedUntilRef.current) return
+    if (now - lastTapRef.current < 350) {
+      lastTapRef.current = 0
+      trigger()
+    } else {
+      lastTapRef.current = now
+    }
+  }
+  return (
+    <div onClick={handleTap} className="relative cursor-pointer select-none">
+      {children}
+      {flash > 0 && (
+        <span
+          key={flash}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 flex items-center justify-center text-4xl"
+          style={{ animation: 'loopHeartPop 600ms ease-out forwards' }}
+        >
+          ❤️
+        </span>
+      )}
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   ReactionsBadge — small pill under the bubble showing every distinct emoji
+   with its count. Tapping toggles the current viewer's own heart. Renders
+   nothing when there are no reactions.
+-------------------------------------------------------------------------- */
+function ReactionsBadge({ message, meId, onToggle }) {
+  const reactions = Array.isArray(message?.reactions) ? message.reactions : []
+  if (reactions.length === 0) return null
+  // Aggregate by emoji: { emoji, count, mine }
+  const byEmoji = new Map()
+  for (const r of reactions) {
+    const bucket = byEmoji.get(r.emoji) ?? { emoji: r.emoji, count: 0, mine: false }
+    bucket.count += 1
+    if (r.userId === meId) bucket.mine = true
+    byEmoji.set(r.emoji, bucket)
+  }
+  const groups = [...byEmoji.values()]
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggle?.()
+      }}
+      aria-label={groups[0]?.mine ? 'Remove reaction' : 'Add reaction'}
+      className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-border-light bg-white px-2 py-0.5 text-xs shadow-card transition-transform active:scale-95"
+    >
+      {groups.map((g) => (
+        <span key={g.emoji} className="inline-flex items-center gap-1">
+          <span
+            className={cn(g.mine && 'drop-shadow-[0_0_0_1px_var(--tw-shadow-color)]')}
+            aria-hidden
+          >
+            {g.emoji}
+          </span>
+          {g.count > 1 && (
+            <span className="text-[11px] font-semibold text-text-secondary">{g.count}</span>
+          )}
+        </span>
+      ))}
+    </button>
   )
 }
 
@@ -467,6 +635,77 @@ function SharedEventCard({ event, mine, onOpen }) {
         </div>
       </div>
     </button>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   TypingBubble — Instagram-style animated dots bubble on the "them" side.
+   Rendered when the SSE typing store shows ≥1 other participant active. The
+   three dots use Tailwind's animate-bounce with staggered delays so they
+   pulse in sequence rather than in unison.
+-------------------------------------------------------------------------- */
+function TypingBubble({ typing, desc, thread }) {
+  if (!typing || typing.length === 0) return null
+  const first = typing[0]
+  const partner = first && thread ? participantOf(thread, first.userId) : null
+  const avatar = partner?.avatar || desc?.avatars?.[0] || ''
+  return (
+    <div className="flex justify-start gap-2">
+      {avatar ? (
+        <img
+          src={avatar}
+          alt=""
+          className="h-7 w-7 flex-shrink-0 self-end rounded-full bg-surface object-cover"
+        />
+      ) : (
+        <span className="h-7 w-7 flex-shrink-0" aria-hidden />
+      )}
+      <div className="flex items-center gap-1 rounded-2xl bg-white px-3 py-2.5 shadow-card">
+        <span
+          className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted"
+          style={{ animationDelay: '0ms' }}
+        />
+        <span
+          className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted"
+          style={{ animationDelay: '150ms' }}
+        />
+        <span
+          className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted"
+          style={{ animationDelay: '300ms' }}
+        />
+      </div>
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   StatusTail — the "Sending / Delivered / Read" tail beneath the sender's
+   most recent outbound bubble. Uses the same iconography Instagram does:
+   single check for delivered, double check (in primary) for read.
+-------------------------------------------------------------------------- */
+function StatusTail({ status, isGroup }) {
+  if (status === 'sending') {
+    return <span className="pr-1 text-[11px] text-text-muted">Sending…</span>
+  }
+  if (status === 'failed') {
+    return (
+      <span className="pr-1 text-[11px] font-medium text-accent">Not delivered · tap to retry</span>
+    )
+  }
+  if (status === 'read') {
+    return (
+      <span className="flex items-center gap-1 pr-1 text-[11px] font-medium text-primary">
+        <CheckCheck size={12} />
+        {isGroup ? 'Seen' : 'Read'}
+      </span>
+    )
+  }
+  // delivered
+  return (
+    <span className="flex items-center gap-1 pr-1 text-[11px] text-text-muted">
+      <Check size={12} />
+      Delivered
+    </span>
   )
 }
 

@@ -1181,6 +1181,74 @@ export const api = {
     markAllRead: () => request('/notifications/read-all', { method: 'POST' }),
   },
 
+  // Direct messaging (real endpoints; no mock fallback — DMs must genuinely
+  // persist). Each helper returns the envelope's `data`, or a null-ish sentinel
+  // on failure so callers stay optimistic without throwing. The SSE stream
+  // isn't in this map — MessagesRealtime opens the EventSource directly since
+  // it needs the raw event listener plumbing, not a promise.
+  messages: {
+    listThreads: async () => {
+      try {
+        const res = await request('/threads')
+        return res ?? []
+      } catch {
+        return []
+      }
+    },
+    getMessages: async (threadId, cursor) => {
+      const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+      try {
+        const res = await fetch(apiUrl(`/threads/${threadId}/messages${qs}`), {
+          credentials: 'include',
+        })
+        if (!res.ok) throw new Error(String(res.status))
+        return await res.json() // { data, nextCursor }
+      } catch {
+        return { data: [], nextCursor: null }
+      }
+    },
+    createDm: (partnerId) =>
+      request('/threads/dm', { method: 'POST', body: { partner_id: partnerId } }),
+    createGroup: (participantIds, name) =>
+      request('/threads/group', {
+        method: 'POST',
+        body: { participant_ids: participantIds, name: name || null },
+      }),
+    sendMessage: (threadId, { text, eventId, clientId } = {}) =>
+      request(`/threads/${threadId}/messages`, {
+        method: 'POST',
+        body: {
+          text: text || null,
+          event_id: eventId || null,
+          client_id: clientId || null,
+        },
+      }),
+    markRead: (threadId) => request(`/threads/${threadId}/read`, { method: 'POST' }),
+    // Toggle a reaction on a message — server flips insert/delete on the
+    // composite key and echoes { op: 'added' | 'removed' } so the client can
+    // roll back a mispredicted optimistic tap.
+    react: (threadId, messageId, emoji = '❤️') =>
+      request(`/threads/${threadId}/messages/${messageId}/react`, {
+        method: 'POST',
+        body: { emoji },
+      }),
+    // Typing is fire-and-forget — no need to await, no need to error a UI on
+    // a dropped fetch. Called from the composer's onChange (throttled).
+    typing: (threadId) => {
+      try {
+        void fetch(apiUrl(`/threads/${threadId}/typing`), {
+          method: 'POST',
+          credentials: 'include',
+        })
+      } catch {
+        /* ignore */
+      }
+    },
+    // The URL for MessagesRealtime's EventSource construction. Centralized so
+    // API_BASE handling isn't duplicated across the provider.
+    streamUrl: () => apiUrl('/messages/stream'),
+  },
+
   // Pre-event reminders (planning §7.5, work-plan #28). No mock fallback — a
   // reminder must genuinely persist, so the caller shows a real success/error.
   reminders: {

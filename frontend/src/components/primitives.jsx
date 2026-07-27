@@ -11,7 +11,7 @@ import {
   Images,
 } from 'lucide-react'
 import { m, AnimatePresence } from 'motion/react'
-import { cn, formatCount, ROLE_STYLE } from '../lib/utils'
+import { cn, formatCount, ROLE_STYLE, ROLE_OPTIONS, roleLabelFor } from '../lib/utils'
 import { backdrop, sheet, springSnappy } from '../lib/motion'
 
 /* --------------------------------------------------------------------------
@@ -245,6 +245,64 @@ export function RoleBadge({ role }) {
     >
       {key}
     </span>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   RoleSelector — pick a self-defined role (attendee ⇄ organizer flavors)
+
+   A shared control used in both the edit-profile modal and Settings. Renders
+   the four ROLE_OPTIONS as selectable cards; the currently-active one is
+   resolved from the user's stored { role, organizerKind, isHost } via
+   roleLabelFor so the two surfaces always agree. Calls onSelect(preset) with a
+   backend preset key ('attendee' | 'organizer' | 'promoter' | 'sports_host');
+   the parent persists it and owns the busy state. A no-op reselect of the
+   current role is ignored so we don't fire a pointless request.
+-------------------------------------------------------------------------- */
+export function RoleSelector({ user, onSelect, busy }) {
+  const currentLabel = roleLabelFor({
+    role: user?.role,
+    organizerKind: user?.organizerKind,
+    isHost: user?.isHost,
+  })
+  // Map the display label onto the backend preset key (snake_case).
+  const presetFor = (label) => label.toLowerCase().replace(/\s+/g, '_')
+
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {ROLE_OPTIONS.map((opt) => {
+        const active = opt.label === currentLabel
+        const style = ROLE_STYLE[opt.label] ?? ROLE_STYLE.Attendee
+        return (
+          <button
+            key={opt.label}
+            type="button"
+            disabled={busy}
+            aria-pressed={active}
+            onClick={() => !active && onSelect(presetFor(opt.label))}
+            className={cn(
+              'flex items-start gap-3 rounded-card border px-4 py-3 text-left transition-colors disabled:opacity-60',
+              active
+                ? 'border-primary bg-primary-light'
+                : 'border-border-light bg-white hover:border-text-muted',
+            )}
+          >
+            <span
+              className="mt-0.5 inline-flex items-center rounded-pill px-2.5 py-1 text-xs font-semibold"
+              style={{ backgroundColor: style.bg, color: style.text }}
+            >
+              {opt.label}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs leading-relaxed text-text-secondary">
+                {opt.description}
+              </span>
+            </span>
+            {active && <Check size={16} className="mt-1 flex-shrink-0 text-primary" />}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 

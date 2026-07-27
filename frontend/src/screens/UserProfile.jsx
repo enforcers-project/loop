@@ -14,9 +14,15 @@ import { m, AnimatePresence } from 'motion/react'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { cn, formatCount, formatJoinDate, pluralize } from '../lib/utils'
+import { cn, formatCount, formatJoinDate, pluralize, roleLabelFor } from '../lib/utils'
 import { backdrop, sheet, dialog } from '../lib/motion'
-import { ImageSourcePicker, inputClass, RoleBadge, Spinner } from '../components/primitives'
+import {
+  ImageSourcePicker,
+  inputClass,
+  RoleBadge,
+  RoleSelector,
+  Spinner,
+} from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
 import { InterestBlobs } from '../components/InterestBlobs'
@@ -29,6 +35,10 @@ const HANDLE_RE = /^[a-zA-Z0-9_]{3,30}$/
 // Max upload size — S3 accepts anything, but a profile picture shouldn't be
 // huge, and rejecting client-side gives a friendlier error than a failed PUT.
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024
+// Cover images are full-width, so allow a little more headroom than the avatar.
+const MAX_COVER_BYTES = 8 * 1024 * 1024
+// Default banner shown until the user uploads their own cover image.
+const DEFAULT_COVER = 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=1600&q=80'
 
 /* Full-screen avatar viewer with a "Change picture" action. Clicking the profile
    photo opens this; the button opens the OS file picker, uploads to S3 via the
@@ -83,7 +93,16 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
    The avatar row reuses the parent's S3 upload flow (onUpload/uploading) — the
    same path as the full-screen AvatarModal — and persists immediately on pick,
    independent of the Save button (which only commits the text fields). */
-function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSave }) {
+function EditProfileModal({
+  user,
+  avatarSrc,
+  onUpload,
+  uploading,
+  onClose,
+  onSave,
+  onSelectRole,
+  roleBusy,
+}) {
   const [name, setName] = useState(user?.name ?? '')
   // handleRaw is the stored handle (no @, may be null); fall back to empty.
   const [handle, setHandle] = useState(user?.handleRaw ?? '')
@@ -238,6 +257,15 @@ function EditProfileModal({ user, avatarSrc, onUpload, uploading, onClose, onSav
               {bio.length}/{BIO_MAX}
             </div>
           </div>
+
+          {/* role — persists immediately on pick (independent of Save, like the
+              avatar), so switching attendee ⇄ organizer takes effect at once */}
+          <div>
+            <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
+              I'm here as
+            </span>
+            <RoleSelector user={user} onSelect={onSelectRole} busy={roleBusy} />
+          </div>
         </div>
 
         {/* footer */}
@@ -390,12 +418,13 @@ export function UserProfile() {
   const {
     user,
     role,
-    isHost,
     interests,
     savedIds,
     goingIds,
     updateAvatar,
+    updateCover,
     updateProfile,
+    updateRole,
     updateInterests,
   } = useApp()
   const toast = useToast()
@@ -403,7 +432,10 @@ export function UserProfile() {
   const [editOpen, setEditOpen] = useState(false)
   const [interestsOpen, setInterestsOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [coverUploading, setCoverUploading] = useState(false)
+  const [roleBusy, setRoleBusy] = useState(false)
   const avatarSrc = user?.avatar || DEFAULT_AVATAR
+  const coverSrc = user?.cover || DEFAULT_COVER
 
   // Persist an interest-list edit. Rethrows so the modal can keep itself open
   // and surface an inline error; success closes the modal and toasts.
@@ -431,6 +463,22 @@ export function UserProfile() {
     }
   }
 
+  // Switch the self-defined role. Persists immediately (like the avatar) so the
+  // pill, nav "Create" link, and organizer tabs update at once. Context's adopt
+  // re-derives role/isHost from the refreshed user.
+  const onSelectRole = async (preset) => {
+    if (roleBusy) return
+    setRoleBusy(true)
+    try {
+      await updateRole(preset)
+      toast.success('Role updated.')
+    } catch (err) {
+      toast.error(err.message || 'Could not update role. Please try again.')
+    } finally {
+      setRoleBusy(false)
+    }
+  }
+
   // Upload a picked image to S3 (presigned-URL flow in api.uploadAvatar), then
   // let context adopt the refreshed user so the new photo shows everywhere.
   const onUpload = async (file) => {
@@ -453,10 +501,39 @@ export function UserProfile() {
       setUploading(false)
     }
   }
+
+  // Upload a picked cover image (same presigned-URL flow as the avatar, via
+  // api.uploadCover), then let context adopt the refreshed user so the banner
+  // updates everywhere.
+  const onUploadCover = async (file) => {
+    if (!file.type?.startsWith('image/')) {
+      toast.error('Please choose an image file.')
+      return
+    }
+    if (file.size > MAX_COVER_BYTES) {
+      toast.error('Image is too large (max 8MB).')
+      return
+    }
+    setCoverUploading(true)
+    try {
+      await updateCover(file)
+      toast.success('Cover image updated.')
+    } catch (err) {
+      toast.error(err.message || 'Could not update cover image. Please try again.')
+    } finally {
+      setCoverUploading(false)
+    }
+  }
   // Two logic roles + the host capability drive the display RoleBadge:
   // an organizer-host shows the green "Sports Host" tint (per planning §5).
   const isOrganizer = role === 'organizer'
-  const roleLabel = isOrganizer ? (isHost ? 'Sports Host' : 'Organizer') : 'Attendee'
+  // roleLabelFor resolves the pill copy from role + organizerKind + isHost, so a
+  // Promoter reads "Promoter" (not the generic "Organizer") on the badge.
+  const roleLabel = roleLabelFor({
+    role: user?.role,
+    organizerKind: user?.organizerKind,
+    isHost: user?.isHost,
+  })
   // Organizers get an extra "Events" tab (their own published events) before
   // Saved. Attendees never see it — they can't create events.
   const tabs = isOrganizer
@@ -531,7 +608,7 @@ export function UserProfile() {
   const going = (goingEvents ?? []).filter((e) => goingIds.has(e.id))
   const myInterests = (allInterests ?? []).filter((i) => interests.includes(i.id))
   const myEventsList = myEvents[eventStatus] ?? []
-  const displayName = user?.name?.trim() || 'Alex Carter'
+  const displayName = user?.name?.trim() || 'Your profile'
   const tabLoading =
     (tab === 'Events' && myEvents[eventStatus] === null) ||
     (tab === 'Saved' && savedEvents === null) ||
@@ -542,15 +619,20 @@ export function UserProfile() {
     <div className="pb-24 md:pb-12">
       {/* cover banner — controlled height, doesn't overpower the content */}
       <div className="relative h-[200px] md:h-[240px]">
-        <EventImage
-          src={
-            user?.cover ||
-            'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=1600&q=80'
-          }
-          alt=""
-          showLabel={false}
-        />
+        <EventImage src={coverSrc} alt="" showLabel={false} />
         <div className="absolute inset-0 bg-gradient-to-r from-primary/55 to-accent/55" />
+        {/* edit-cover control — mirrors the avatar's presigned S3 upload */}
+        <div className="absolute right-4 top-4">
+          <ImageSourcePicker
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onFile={onUploadCover}
+            disabled={coverUploading}
+            className="inline-flex h-9 items-center gap-2 rounded-button bg-black/45 px-3.5 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-black/60 disabled:opacity-60"
+          >
+            <Camera size={16} />
+            {coverUploading ? 'Uploading…' : 'Edit cover'}
+          </ImageSourcePicker>
+        </div>
       </div>
 
       <div className="loop-container relative z-10 max-w-[1100px]">
@@ -585,9 +667,9 @@ export function UserProfile() {
                 </h1>
                 <RoleBadge role={roleLabel} />
               </div>
-              <p className="mt-1 text-sm font-medium text-text-secondary">
-                {user?.handle ?? '@you'}
-              </p>
+              {user?.handle && (
+                <p className="mt-1 text-sm font-medium text-text-secondary">{user.handle}</p>
+              )}
               <div className="mt-3 flex items-center gap-5 text-sm text-text-secondary">
                 <span>
                   <strong className="font-semibold text-ink">
@@ -777,6 +859,8 @@ export function UserProfile() {
             onUpload={onUpload}
             uploading={uploading}
             onSave={onSaveProfile}
+            onSelectRole={onSelectRole}
+            roleBusy={roleBusy}
             onClose={() => setEditOpen(false)}
           />
         )}

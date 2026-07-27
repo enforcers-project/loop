@@ -13,6 +13,53 @@ export const CATEGORY_COLOR = {
   Campus: '#FF7A45',
 }
 
+// The four self-defined roles, each mapping the display label onto the backend
+// triple {role, organizerKind, isHost}. Single source of truth: the RoleSelector
+// (edit-profile + settings), roleLabelFor(), and the backend validator all key
+// off this list. Attendee is the plain member; the other three are organizer
+// flavors (a promoter is organizerKind='promoter'; a sports host is an organizer
+// with the isHost capability). See planning §3/§10.
+export const ROLE_OPTIONS = [
+  {
+    label: 'Attendee',
+    description: 'Discover and RSVP to events.',
+    role: 'attendee',
+    organizerKind: null,
+    isHost: false,
+  },
+  {
+    label: 'Organizer',
+    description: 'Create and manage your own events.',
+    role: 'organizer',
+    organizerKind: 'organizer',
+    isHost: false,
+  },
+  {
+    label: 'Promoter',
+    description: 'Promote events and grow your audience.',
+    role: 'organizer',
+    organizerKind: 'promoter',
+    isHost: false,
+  },
+  {
+    label: 'Sports Host',
+    description: 'Run casual pickup games.',
+    role: 'organizer',
+    organizerKind: 'organizer',
+    isHost: true,
+  },
+]
+
+// Resolve the display label for a user's stored role triple. Sports Host (the
+// isHost capability) wins over the plain organizer/promoter kinds; a promoter is
+// distinguished by organizerKind. Falls back to Attendee for anything unknown.
+export function roleLabelFor({ role, organizerKind, isHost } = {}) {
+  if (role !== 'organizer') return 'Attendee'
+  if (isHost) return 'Sports Host'
+  if (organizerKind === 'promoter') return 'Promoter'
+  return 'Organizer'
+}
+
 /** Role badge tints (Figma RoleBadge variants). */
 export const ROLE_STYLE = {
   Attendee: { bg: '#F7F7F8', text: '#6B6B76' },

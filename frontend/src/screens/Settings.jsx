@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext'
 import { useToast } from '../context/ToastContext'
 import { cn } from '../lib/utils'
 import { AddressPicker } from '../components/AddressPicker'
-import { InlineAlert } from '../components/primitives'
+import { InlineAlert, RoleSelector } from '../components/primitives'
 
 // Loop's minimum age is 13 (COPPA) — mirrors the backend validator in
 // PUT /users/:id/birthdate and the onboarding DOB slide.
@@ -376,6 +376,118 @@ function BirthdateEditor({ user }) {
   )
 }
 
+// The notification toggles the backend recognizes (mirrors NOTIFICATION_KEYS in
+// backend/src/users/routes.js). A null prefs map means the user has never set
+// them — treated as all-on, matching the backend default.
+const NOTIFICATION_ROWS = [
+  {
+    key: 'rsvps',
+    title: 'RSVPs',
+    description: 'When your RSVP is confirmed or an event you’re going to changes.',
+  },
+  { key: 'messages', title: 'Messages', description: 'When someone sends you a new message.' },
+  {
+    key: 'event_reminders',
+    title: 'Event reminders',
+    description: 'A nudge before an event you’re attending starts.',
+  },
+  { key: 'follows', title: 'New followers', description: 'When someone follows you.' },
+]
+
+/* Accessible on/off switch for a single preference row. */
+function Toggle({ checked, disabled, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
+        checked ? 'bg-primary' : 'bg-border-light',
+      )}
+    >
+      <span
+        className={cn(
+          'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+          checked ? 'translate-x-5' : 'translate-x-0.5',
+        )}
+      />
+    </button>
+  )
+}
+
+/* Notification preferences card. Reads the stored prefs (defaulting a null map
+   to all-on), and persists each toggle immediately via saveNotificationPrefs —
+   optimistically flipping the switch, rolling back + toasting on failure. */
+function NotificationPrefs({ user }) {
+  const { saveNotificationPrefs } = useApp()
+  const toast = useToast()
+  // Local mirror so a toggle feels instant; seeded from the user's stored prefs.
+  const [prefs, setPrefs] = useState(() => {
+    const stored = user?.notificationPrefs ?? {}
+    return Object.fromEntries(NOTIFICATION_ROWS.map((r) => [r.key, stored[r.key] ?? true]))
+  })
+  const [savingKey, setSavingKey] = useState(null)
+
+  const onToggle = async (key, next) => {
+    if (savingKey) return
+    const prev = prefs[key]
+    setPrefs((p) => ({ ...p, [key]: next })) // optimistic
+    setSavingKey(key)
+    try {
+      await saveNotificationPrefs({ [key]: next })
+    } catch (err) {
+      setPrefs((p) => ({ ...p, [key]: prev })) // roll back
+      toast.error(err?.message || 'Could not save preference. Try again.')
+    } finally {
+      setSavingKey(null)
+    }
+  }
+
+  return (
+    <>
+      {NOTIFICATION_ROWS.map((row) => (
+        <Row key={row.key} title={row.title} description={row.description}>
+          <Toggle
+            label={row.title}
+            checked={prefs[row.key]}
+            disabled={savingKey != null}
+            onChange={(next) => onToggle(row.key, next)}
+          />
+        </Row>
+      ))}
+    </>
+  )
+}
+
+/* Role card. The same RoleSelector shown in the edit-profile modal, wired to
+   updateRole — switching here instantly flips the nav "Create" link, the
+   profile pill, and organizer-only tabs (context's adopt re-derives role +
+   isHost). The parent owns the busy state; a no-op reselect is a no-op. */
+function RolePrefs({ user }) {
+  const { updateRole } = useApp()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+
+  const onSelect = async (preset) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await updateRole(preset)
+      toast.success('Role updated.')
+    } catch (err) {
+      toast.error(err?.message || 'Could not update role. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <RoleSelector user={user} onSelect={onSelect} busy={busy} />
+}
+
 export function Settings() {
   const navigate = useNavigate()
   const { user, logout } = useApp()
@@ -443,6 +555,29 @@ export function Settings() {
           >
             <BirthdateEditor user={user} />
           </StackedRow>
+        </section>
+      )}
+
+      {user && (
+        <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-white">
+          <StackedRow
+            title="I'm here as"
+            description="Switch between attending and organizing anytime. This sets the badge on your profile and unlocks event creation."
+          >
+            <RolePrefs user={user} />
+          </StackedRow>
+        </section>
+      )}
+
+      {user && (
+        <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-white">
+          <div className="border-b border-border-light px-5 pb-2 pt-4">
+            <h2 className="text-sm font-semibold text-ink">Notifications</h2>
+            <p className="mt-0.5 text-xs text-text-secondary">
+              Choose what Loop notifies you about.
+            </p>
+          </div>
+          <NotificationPrefs user={user} />
         </section>
       )}
 

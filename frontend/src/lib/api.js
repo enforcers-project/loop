@@ -330,6 +330,9 @@ export function toClientUser(u) {
     bio: u.bio ?? '',
     avatar: u.avatar_url || DEFAULT_AVATAR,
     role: u.role,
+    // Organizer flavor ('organizer' | 'promoter' | null) — distinguishes a
+    // Promoter from a plain Organizer for the profile role pill + selector.
+    organizerKind: u.organizer_kind ?? null,
     isHost: u.is_host,
     isVerified: u.is_verified,
     // Denormalized social counts (0 for a brand-new user); the profile header
@@ -347,6 +350,9 @@ export function toClientUser(u) {
     locationRadiusKm: u.location_radius_km ?? 40,
     birthDate: u.birth_date ?? null,
     cover: u.cover_image_url ?? null,
+    // Notification toggles (Settings). null when the user has never set them —
+    // the UI treats a missing map as all-on, matching the backend default.
+    notificationPrefs: u.notification_prefs ?? null,
     joinedAt: u.created_at ?? null,
   }
 }
@@ -683,6 +689,21 @@ export const api = {
   // (handle taken) or validation message.
   updateProfile: (userId, fields) => request(`/users/${userId}`, { method: 'PATCH', body: fields }),
 
+  // Change the user's self-defined role (PUT /users/:id/role). `preset` is one
+  // of 'attendee' | 'organizer' | 'promoter' | 'sports_host' — the backend
+  // resolves it to the valid { role, organizer_kind, is_host } triple and
+  // returns the refreshed SelfUser. No mock fallback — a role change must
+  // genuinely persist (it gates event creation).
+  saveRole: (userId, preset) =>
+    request(`/users/${userId}/role`, { method: 'PUT', body: { preset } }),
+
+  // Update notification toggles (PUT /users/:id/notification-prefs). Send only
+  // the keys that changed — the backend merges over the stored prefs. Returns
+  // the refreshed SelfUser (with the full, merged notification_prefs map). No
+  // mock fallback — a preference change must genuinely persist.
+  saveNotificationPrefs: (userId, prefs) =>
+    request(`/users/${userId}/notification-prefs`, { method: 'PUT', body: prefs }),
+
   // Commit the user's date of birth (PUT /users/:id/birthdate). Feeds the
   // age gate — events with an age_min filter compare against the caller's age
   // derived from birth_date. When onboarding runs before login (no userId) or
@@ -861,6 +882,27 @@ export const api = {
     })
     if (!put.ok) throw new Error(`Upload failed (${put.status})`)
     return request(`/users/${userId}/avatar`, { method: 'PUT', body: { avatar_url: public_url } })
+  },
+
+  // Upload a new cover/banner image. Same three-step presigned flow as
+  // uploadAvatar (ask for a URL → PUT bytes to S3 → save the public URL), just
+  // pointed at the cover endpoints. Returns the updated SelfUser so the caller
+  // can adopt it. Throws on any failure so the UI can surface a real error.
+  uploadCover: async (userId, file) => {
+    const { upload_url, public_url } = await request(`/users/${userId}/cover-upload-url`, {
+      method: 'POST',
+      body: { content_type: file.type },
+    })
+    const put = await fetch(upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    })
+    if (!put.ok) throw new Error(`Upload failed (${put.status})`)
+    return request(`/users/${userId}/cover`, {
+      method: 'PUT',
+      body: { cover_image_url: public_url },
+    })
   },
 
   // People search (GET /api/users?q=…) — trigram fuzzy match, ranked by

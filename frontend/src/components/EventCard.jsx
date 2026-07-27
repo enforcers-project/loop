@@ -138,6 +138,7 @@ export function EventCard({ event, showRationale = false, onClick }) {
           <GoingStack
             count={event.isSports ? (event.playersSignedUp ?? 0) : goingCount}
             avatars={event.goingAvatars}
+            mutuals={event.isSports ? undefined : event.mutualsGoing}
           />
           <div className="flex flex-shrink-0 items-center gap-2">
             <SaveBtn sm saved={saved} onToggle={() => toggleSaved(event.id)} />

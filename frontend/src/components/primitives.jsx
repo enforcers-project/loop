@@ -363,9 +363,14 @@ export function AlmostFullBadge({ label = 'Almost full' }) {
    GoingStack — 3 overlapping avatars + "N going". Displays the true attendee
    count (no "+" prefix) so the number reads as social proof, not a delta.
 -------------------------------------------------------------------------- */
-export function GoingStack({ count, avatars = [], size = 'sm', labelClassName }) {
+// `mutuals` (optional) = { count, names } for people the viewer follows who are
+// going. When present it upgrades the generic "N going" to a social-proof label
+// ("Sarah + 2 going") and the avatars shown are the mutuals' faces, so a friend
+// attending reads as a personal signal rather than an anonymous headcount.
+export function GoingStack({ count, avatars = [], size = 'sm', labelClassName, mutuals }) {
   const px = size === 'sm' ? 24 : 32
   const shown = avatars.slice(0, 3)
+  const label = mutualsLabel(mutuals) ?? `${formatCount(count)} going`
   return (
     <div className="flex items-center gap-2">
       {shown.length > 0 && (
@@ -381,11 +386,28 @@ export function GoingStack({ count, avatars = [], size = 'sm', labelClassName })
           ))}
         </div>
       )}
-      <span className={cn('text-xs font-medium text-text-secondary', labelClassName)}>
-        {formatCount(count)} going
+      <span
+        className={cn(
+          'text-xs font-medium',
+          mutualsLabel(mutuals) ? 'text-ink' : 'text-text-secondary',
+          labelClassName,
+        )}
+      >
+        {label}
       </span>
     </div>
   )
+}
+
+/* Build the mutuals label: "Sarah going", "Sarah + 2 going", or null when there
+   are no named mutuals (caller falls back to the plain count). `count` is the
+   true friends-going total, which can exceed the ≤3 names we carry. */
+function mutualsLabel(mutuals) {
+  if (!mutuals?.names?.length) return null
+  const [first] = mutuals.names
+  const others = Math.max(0, (mutuals.count ?? mutuals.names.length) - 1)
+  if (others === 0) return `${first} going`
+  return `${first} + ${others} going`
 }
 
 /* --------------------------------------------------------------------------

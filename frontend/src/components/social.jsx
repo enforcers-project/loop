@@ -19,7 +19,7 @@ import { backdrop, sheet } from '../lib/motion'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { ImageSourcePicker, inputClass, Spinner, VerifiedBadge } from './primitives'
+import { ImageSourcePicker, inputClass, Spinner } from './primitives'
 import { EventImage } from './EventImage'
 import { CommentReplies } from './CommentReplies'
 
@@ -643,7 +643,6 @@ export function PostCard({ post }) {
             ) : (
               <span className="truncate text-sm font-semibold text-ink">{org?.name}</span>
             )}
-            {org?.verified && <VerifiedBadge size={14} />}
           </div>
           {when && <span className="text-xs text-text-muted">{when} ago</span>}
         </div>

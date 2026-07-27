@@ -213,21 +213,6 @@ export function PasswordField({ value, onChange, placeholder = '•••••�
 }
 
 /* --------------------------------------------------------------------------
-   VerifiedBadge — 16px violet circle with white checkmark
--------------------------------------------------------------------------- */
-export function VerifiedBadge({ size = 16 }) {
-  return (
-    <span
-      className="inline-flex items-center justify-center rounded-full bg-primary text-white"
-      style={{ width: size, height: size }}
-      aria-label="Verified"
-    >
-      <Check size={size * 0.62} strokeWidth={3} />
-    </span>
-  )
-}
-
-/* --------------------------------------------------------------------------
    RoleBadge — pill with role-specific tinted bg + text
 -------------------------------------------------------------------------- */
 export function RoleBadge({ role }) {

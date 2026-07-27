@@ -385,6 +385,32 @@ export function ingestReaction(threadIdRaw, messageId, userId, emoji, op) {
   emit()
 }
 
+/** Handle a live `message-deleted` SSE frame. */
+export function ingestMessageDeleted(threadIdRaw, messageId) {
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t) return
+  const idx = t.messages.findIndex((m) => m.id === messageId)
+  if (idx < 0) return
+  t.messages = [...t.messages.slice(0, idx), ...t.messages.slice(idx + 1)]
+  const last = t.messages[t.messages.length - 1]
+  if (last?.at) t.updatedAt = last.at
+  emit()
+}
+
+/** Handle a live `thread-updated` SSE frame — currently just `name` changes,
+ *  but the payload shape (`changes: {...}`) leaves room to grow. */
+export function ingestThreadUpdated(threadIdRaw, changes) {
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t) return
+  if (!changes || typeof changes !== 'object') return
+  if (Object.prototype.hasOwnProperty.call(changes, 'name')) {
+    t.name = changes.name ?? null
+  }
+  emit()
+}
+
 /** Handle a live `typing` SSE frame. */
 export function ingestTyping(threadIdRaw, userId, meId) {
   const id = resolveId(threadIdRaw)
@@ -837,6 +863,61 @@ export function toggleReaction(userId, threadIdRaw, messageId, emoji = '❤️')
       // Roll back on network failure.
       ingestReaction(id, messageId, userId, emoji, mineHas ? 'added' : 'removed')
     })
+}
+
+/** Delete one of my messages. Optimistic — drops the bubble immediately, then
+ *  POSTs to the server. On failure the message is restored at its original
+ *  position so the sender can retry. Only outbound (mine) messages with a real
+ *  server id can be deleted; optimistic-only bubbles (still `c-…`) are a no-op. */
+export function deleteMessage(userId, threadIdRaw, messageId) {
+  if (!userId || !threadIdRaw || !messageId) return
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t?.serverId) return
+  const idx = t.messages.findIndex((m) => m.id === messageId)
+  if (idx < 0) return
+  const target = t.messages[idx]
+  if (target.from !== 'me') return
+  if (String(target.id).startsWith('c-')) return
+
+  const removed = target
+  t.messages = [...t.messages.slice(0, idx), ...t.messages.slice(idx + 1)]
+  const last = t.messages[t.messages.length - 1]
+  if (last?.at) t.updatedAt = last.at
+  emit()
+
+  api.messages.deleteMessage(t.serverId, messageId).catch(() => {
+    const cur = state.threads.get(id)
+    if (!cur) return
+    if (cur.messages.some((m) => m.id === messageId)) return
+    const insertAt = Math.min(idx, cur.messages.length)
+    cur.messages = [...cur.messages.slice(0, insertAt), removed, ...cur.messages.slice(insertAt)]
+    emit()
+  })
+}
+
+/** Rename a group thread. Optimistic — updates the title immediately, POSTs
+ *  to the server, rolls back on failure. Any participant is allowed (server
+ *  enforces the same). DMs and threads with no server id yet are a no-op. */
+export function renameGroup(userId, threadIdRaw, nextName) {
+  if (!userId || !threadIdRaw) return
+  const id = resolveId(threadIdRaw)
+  const t = state.threads.get(id)
+  if (!t?.serverId) return
+  if (t.kind !== 'group') return
+  const cleaned = typeof nextName === 'string' ? nextName.trim().slice(0, 80) : ''
+  const previous = t.name ?? null
+  const target = cleaned || null
+  if (previous === target) return
+  t.name = target
+  emit()
+
+  api.messages.renameThread(t.serverId, target).catch(() => {
+    const cur = state.threads.get(id)
+    if (!cur) return
+    cur.name = previous
+    emit()
+  })
 }
 
 /** Mark a thread's most-recent partner message as read up to now. */

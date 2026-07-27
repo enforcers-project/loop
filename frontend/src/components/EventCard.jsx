@@ -6,7 +6,7 @@ import { CATEGORY_COLOR, isEventPast, recommendationLabel } from '../lib/utils'
 import { fadeUp, staggerParent } from '../lib/motion'
 import { useApp } from '../context/AppContext'
 import { EventImage } from './EventImage'
-import { AIChip, AlmostFullBadge, GoingStack, RSVPBtn, SaveBtn, VerifiedBadge } from './primitives'
+import { AIChip, AlmostFullBadge, GoingStack, RSVPBtn, SaveBtn } from './primitives'
 
 /* CategoryBadge — the top-left tint pill when there's no AI rationale. */
 function CategoryBadge({ category }) {
@@ -128,7 +128,6 @@ export function EventCard({ event, showRationale = false, onClick }) {
             <span className="truncate text-[13px] font-medium text-text-secondary">
               {event.organizer.name}
             </span>
-            {event.organizer.verified && <VerifiedBadge size={14} />}
           </div>
         )}
 

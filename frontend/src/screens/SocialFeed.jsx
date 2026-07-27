@@ -6,7 +6,7 @@ import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { StoriesRow, StoryViewer, PostCard, Composer } from '../components/social'
 import { EventImage } from '../components/EventImage'
-import { FollowBtn, PageLoader, Spinner, VerifiedBadge } from '../components/primitives'
+import { FollowBtn, PageLoader, Spinner } from '../components/primitives'
 import { formatCount } from '../lib/utils'
 
 /* Small square event thumbnail with the branded fallback baked in. */
@@ -68,7 +68,6 @@ function FollowRow({ user, following, onToggle, onNavigate }) {
           >
             {primary}
           </Link>
-          {user.verified && <VerifiedBadge size={12} />}
         </div>
         {user.handle && user.name ? (
           <p className="truncate text-xs text-text-muted">{user.name}</p>
@@ -535,7 +534,6 @@ export function SocialFeed() {
                         <span className="text-xs text-text-muted">
                           {formatCount(e.rsvpCount ?? 0)} going
                         </span>
-                        {e.organizer?.verified && <VerifiedBadge size={11} />}
                       </div>
                     </div>
                   </Link>

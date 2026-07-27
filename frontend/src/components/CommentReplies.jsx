@@ -4,7 +4,6 @@ import { Trash2 } from 'lucide-react'
 import { pluralize, timeAgo } from '../lib/utils'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { VerifiedBadge } from './primitives'
 
 // Route to a user's public profile. Mirrors social.jsx's authorHref — kept
 // local so this component doesn't cross-import from a sibling.
@@ -159,7 +158,6 @@ export function CommentReplies({ comment, api, canDelete }) {
                   ) : (
                     <span className="text-sm font-semibold text-ink">{r.author}</span>
                   )}
-                  {r.verified && <VerifiedBadge size={12} />}
                   {when && <span className="text-xs text-text-muted">· {when}</span>}
                   {canDelete?.(r) && (
                     <button

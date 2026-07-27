@@ -3,14 +3,21 @@ import prisma from '../lib/prisma.js'
 import { embedPendingEvents } from '../embeddings/pipeline.js'
 import { rebuildStaleVectors } from '../preferences/builder.js'
 import { dispatchDueReminders } from '../reminders/dispatch.js'
+import { runExternalSync } from '../sync/run.js'
 
 // Each stub logs and returns a summary. Real implementations replace these in later sprints.
 
 registerJob('sync-external-events', {
   schedule: '0 */4 * * *', // every 4 hours
   handler: async () => {
-    console.log('[job:sync-external-events] stub — would pull Ticketmaster + SeatGeek')
-    return { stub: true }
+    console.log('[job:sync-external-events] pulling Ticketmaster + SeatGeek across markets...')
+    const result = await runExternalSync({ maxPages: 4 })
+    console.log(
+      `[job:sync-external-events] done — ${result.markets} market(s), ${result.fetched} fetched, ` +
+        `${result.inserted} inserted, ${result.updated} updated, ${result.skippedDuplicates} deduped, ` +
+        `${result.errors.length} error(s)`,
+    )
+    return result
   },
 })
 

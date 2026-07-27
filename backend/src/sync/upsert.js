@@ -30,6 +30,7 @@ export async function upsertSyncedEvents(events, source) {
 
   let inserted = 0
   let updated = 0
+  let skippedFresh = 0 // rows skipped because they were synced within the window
 
   for (const evt of deduped) {
     const categoryId = catBySlug[evt.categorySlug] || catBySlug['music']
@@ -43,7 +44,7 @@ export async function upsertSyncedEvents(events, source) {
     if (existing?.lastSyncedAt) {
       const hoursSinceSync = (Date.now() - existing.lastSyncedAt.getTime()) / (1000 * 60 * 60)
       if (hoursSinceSync < REFRESH_WINDOW_HOURS) {
-        skippedDuplicates
+        skippedFresh++
         continue
       }
     }
@@ -99,7 +100,7 @@ export async function upsertSyncedEvents(events, source) {
     }
   }
 
-  return { inserted, updated, skippedDuplicates }
+  return { inserted, updated, skippedDuplicates, skippedFresh }
 }
 
 /**

@@ -37,17 +37,21 @@ function SidebarCard({ title, children }) {
   )
 }
 
-// A compact person row: tappable avatar + name (→ profile) with an inline
+// A compact person row: tappable avatar + username (→ profile) with an inline
 // Follow button. Used both in the sidebar "Suggested follows" and in the
-// people-search dropdown. `onNavigate` (optional) fires when a link is tapped,
-// letting the search dropdown close itself.
+// people-search dropdown. Instagram-style layout — @username on top in ink,
+// display name muted underneath. `onNavigate` (optional) fires when a link is
+// tapped, letting the search dropdown close itself. `user.handle` here is the
+// bare stored value (no leading '@') — the row renders one, falling back to
+// the display name for legacy accounts that never set a handle.
 function FollowRow({ user, following, onToggle, onNavigate }) {
+  const primary = user.handle ? `@${user.handle}` : user.name
   return (
     <div className="flex items-center gap-3">
       <Link
         to={`/organizer/${user.id}`}
         onClick={onNavigate}
-        aria-label={`Open ${user.name}'s profile`}
+        aria-label={`Open ${primary}'s profile`}
       >
         <img
           src={user.avatar}
@@ -62,11 +66,13 @@ function FollowRow({ user, following, onToggle, onNavigate }) {
             onClick={onNavigate}
             className="truncate text-[13px] font-semibold text-ink transition-colors hover:text-primary"
           >
-            {user.name}
+            {primary}
           </Link>
           {user.verified && <VerifiedBadge size={12} />}
         </div>
-        <p className="truncate text-xs text-text-muted">@{user.handle}</p>
+        {user.handle && user.name ? (
+          <p className="truncate text-xs text-text-muted">{user.name}</p>
+        ) : null}
       </div>
       <FollowBtn following={following} onToggle={onToggle} sm />
     </div>

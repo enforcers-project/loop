@@ -246,7 +246,13 @@ model User {
   organizerKind         OrganizerKind? @map("organizer_kind")
   isHost                Boolean        @default(false) @map("is_host")
   displayName           String?        @map("display_name") @db.VarChar(120)
+  // Username the user is @-mentioned by. Unique across all accounts
+  // (case-insensitive via citext), required at signup, and rate-limited to one
+  // change per 7 days via handleChangedAt.
   handle                String?        @unique @db.Citext
+  // Set on signup + every accepted handle change; the PATCH route reads
+  // `now() - column >= 7 days` before allowing a new value.
+  handleChangedAt       DateTime?      @map("handle_changed_at") @db.Timestamptz(6)
   isVerified            Boolean        @default(false) @map("is_verified")
   // Date of birth for age verification against age-restricted events (§7.4
   // gate). Maps to the existing `birth_date` column already on the shared DB.

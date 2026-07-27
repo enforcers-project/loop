@@ -23,7 +23,38 @@ const router = Router()
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const HANDLE_RE = /^[a-zA-Z0-9_]{3,30}$/
+const DISPLAY_NAME_MIN = 2
+const DISPLAY_NAME_MAX = 120
 const BCRYPT_ROUNDS = 10
+
+// Sanitize an email local-part / display name into a handle-safe stub. Falls
+// back to "user" so a truly empty input still yields a valid stub the collision
+// loop can suffix. The stub is capped short so `_<n>` suffixes still fit under
+// the 30-char handle ceiling.
+function stubHandle(raw) {
+  const cleaned = String(raw ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 20)
+  if (cleaned.length >= 3) return cleaned
+  // Too short after cleanup — pad to satisfy HANDLE_RE's 3-char minimum.
+  return (cleaned + 'user').slice(0, 20)
+}
+
+/**
+ * Pick a handle that's free right now. Tries the stub, then stub_1, stub_2, …
+ * up to a safety cap. Used on Google signup (where we can't prompt for one) and
+ * as a fallback for email signup callers that don't pass one.
+ */
+async function pickUniqueHandle(tx, stub) {
+  for (let i = 0; i < 50; i += 1) {
+    const candidate = i === 0 ? stub : `${stub}_${i}`
+    const clash = await tx.user.findUnique({ where: { handle: candidate }, select: { id: true } })
+    if (!clash) return candidate
+  }
+  return `${stub}_${Math.floor(Math.random() * 1e6)}`
+}
 
 // Google Identity: the client sends an id_token (a Google-signed JWT). We verify
 // it against Google's public keys — no network call to Google's API, and the
@@ -69,8 +100,21 @@ router.post('/signup', async (req, res) => {
   if (is_host && resolvedRole !== 'organizer') {
     return fail(res, 422, 'VALIDATION_ERROR', 'is_host is only valid for organizers')
   }
-  if (handle && !HANDLE_RE.test(handle)) {
-    return fail(res, 422, 'VALIDATION_ERROR', 'handle must be 3–30 chars (letters, numbers, _)')
+  // Username (`handle`) is required at signup and unique across users (citext,
+  // case-insensitive). Display name is required too but NOT unique — two people
+  // can both be "Ada Lovelace"; the @-mention identity is the handle.
+  const cleanHandle = typeof handle === 'string' ? handle.trim().replace(/^@/, '') : ''
+  if (!HANDLE_RE.test(cleanHandle)) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'username must be 3–30 chars (letters, numbers, _)')
+  }
+  const cleanName = typeof display_name === 'string' ? display_name.trim() : ''
+  if (cleanName.length < DISPLAY_NAME_MIN || cleanName.length > DISPLAY_NAME_MAX) {
+    return fail(
+      res,
+      422,
+      'VALIDATION_ERROR',
+      `display name must be ${DISPLAY_NAME_MIN}–${DISPLAY_NAME_MAX} characters`,
+    )
   }
 
   try {
@@ -82,8 +126,11 @@ router.post('/signup', async (req, res) => {
         role: resolvedRole,
         organizerKind: resolvedRole === 'organizer' ? (organizer_kind ?? null) : null,
         isHost: resolvedRole === 'organizer' ? !!is_host : false,
-        displayName: display_name ?? null,
-        handle: handle ?? null,
+        displayName: cleanName,
+        handle: cleanHandle,
+        // Start the 7-day username-change cooldown at account creation so a
+        // fresh user can't cycle usernames mid-onboarding.
+        handleChangedAt: new Date(),
         // Every new account starts with the shared default silhouette (on S3);
         // the user can replace it later from their profile.
         avatarUrl: DEFAULT_AVATAR_URL,
@@ -97,8 +144,10 @@ router.post('/signup', async (req, res) => {
     })
   } catch (err) {
     if (err.code === 'P2002') {
-      const target = err.meta?.target?.join?.(', ') ?? 'email or handle'
-      return fail(res, 409, 'CONFLICT', `That ${target} is already taken`)
+      const target = err.meta?.target
+      const key = Array.isArray(target) ? target[0] : target
+      const label = key === 'handle' ? 'username' : key === 'email' ? 'email' : 'email or username'
+      return fail(res, 409, 'CONFLICT', `That ${label} is already taken`)
     }
     console.error('POST /api/auth/signup error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not create account')
@@ -226,7 +275,13 @@ router.post('/oauth/google', async (req, res) => {
       }
 
       // Otherwise create the user. password_hash stays null (social-only account);
-      // seed profile fields from the Google payload where we have them.
+      // seed profile fields from the Google payload where we have them. Google
+      // doesn't tell us their preferred username, and the derived one may
+      // already be taken by another Loop user — auto-pick a unique handle so
+      // the unique constraint doesn't reject the create. The user can rename
+      // from their profile (once every 7 days). Display name is free-form and
+      // not unique, so we take Google's `name` verbatim.
+      const handle = await pickUniqueHandle(tx, stubHandle(payload.name ?? email.split('@')[0]))
       const created = await tx.user.create({
         data: {
           email,
@@ -235,6 +290,8 @@ router.post('/oauth/google', async (req, res) => {
           organizerKind: resolvedRole === 'organizer' ? (organizer_kind ?? null) : null,
           isHost: resolvedRole === 'organizer' ? !!is_host : false,
           displayName: payload.name ?? null,
+          handle,
+          handleChangedAt: new Date(),
           // Prefer the Google profile photo; fall back to our default silhouette.
           avatarUrl: payload.picture ?? DEFAULT_AVATAR_URL,
           isVerified: true, // Google-verified email

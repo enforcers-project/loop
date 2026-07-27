@@ -28,10 +28,26 @@ import { EventImage } from '../components/EventImage'
 import { InterestBlobs } from '../components/InterestBlobs'
 import { FollowListModal } from '../components/UserSearch'
 
+const NAME_MIN = 2
 const NAME_MAX = 120
 const BIO_MAX = 500
-// Mirror the backend/signup handle rule so the client validates before the PATCH.
-const HANDLE_RE = /^[a-zA-Z0-9_]{3,30}$/
+// Mirror the backend username (`handle`) rule so the client validates before the PATCH.
+const USERNAME_RE = /^[a-zA-Z0-9_]{3,30}$/
+// The username can only change once every 7 days — mirror the backend cooldown
+// here so the input can be pre-disabled with a clean explanation, rather than
+// round-tripping to a 429. Display name has NO cooldown.
+const USERNAME_CHANGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000
+
+/** ms until this field is editable again, or 0 if it already is. */
+function msUntilChangeable(changedAt) {
+  if (!changedAt) return 0
+  const elapsed = Date.now() - new Date(changedAt).getTime()
+  return Math.max(0, USERNAME_CHANGE_COOLDOWN_MS - elapsed)
+}
+
+function daysCeil(ms) {
+  return Math.max(1, Math.ceil(ms / (24 * 60 * 60 * 1000)))
+}
 
 // Max upload size — S3 accepts anything, but a profile picture shouldn't be
 // huge, and rejecting client-side gives a friendlier error than a failed PUT.
@@ -87,12 +103,12 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
   )
 }
 
-/* Edit-profile modal — avatar, name, handle and bio. Prefills from the current
-   user, validates the handle client-side (mirrors the backend rule) so an
-   obvious typo doesn't round-trip, and PATCHes via updateProfile. A 409 from a
-   taken handle is surfaced on the handle field so the user can fix it in place.
-   The avatar row reuses the parent's S3 upload flow (onUpload/uploading) — the
-   same path as the full-screen AvatarModal — and persists immediately on pick,
+/* Edit-profile modal — avatar, display name, username and bio. Prefills from
+   the current user, validates the username client-side (mirrors the backend
+   rule) so an obvious typo doesn't round-trip, and PATCHes via updateProfile.
+   A 409 (username taken) or 429 (7-day cooldown) is pinned to the username
+   field so the user can fix it in place. The avatar row reuses the parent's
+   S3 upload flow (onUpload/uploading) and persists immediately on pick,
    independent of the Save button (which only commits the text fields). */
 function EditProfileModal({
   user,
@@ -105,31 +121,57 @@ function EditProfileModal({
   roleBusy,
 }) {
   const [name, setName] = useState(user?.name ?? '')
-  // handleRaw is the stored handle (no @, may be null); fall back to empty.
-  const [handle, setHandle] = useState(user?.handleRaw ?? '')
+  // handleRaw is the stored username (no @, may be null); fall back to empty.
+  const [username, setUsername] = useState(user?.handleRaw ?? '')
   const [bio, setBio] = useState(user?.bio ?? '')
   const [busy, setBusy] = useState(false)
-  const [handleError, setHandleError] = useState('')
+  const [nameError, setNameError] = useState('')
+  const [usernameError, setUsernameError] = useState('')
+
+  // 7-day cooldown on the username (server-truth). A username still cooling
+  // stays locked in the UI so the user can't submit a change the backend
+  // would reject with a 429. Display name has no cooldown.
+  const usernameCooldownMs = msUntilChangeable(user?.handleChangedAt)
+  const usernameLocked = usernameCooldownMs > 0
 
   const submit = async () => {
     if (busy) return
-    const cleanHandle = handle.trim()
-    if (cleanHandle && !HANDLE_RE.test(cleanHandle)) {
-      setHandleError('3–30 characters — letters, numbers and _ only.')
+    setNameError('')
+    setUsernameError('')
+    const cleanName = name.trim()
+    const cleanUsername = username.trim().replace(/^@/, '')
+    const fields = {}
+    if (cleanName.length < NAME_MIN || cleanName.length > NAME_MAX) {
+      setNameError(`Display name must be ${NAME_MIN}–${NAME_MAX} characters.`)
       return
     }
-    setHandleError('')
+    fields.display_name = cleanName
+    if (!usernameLocked) {
+      if (!USERNAME_RE.test(cleanUsername)) {
+        setUsernameError('3–30 characters — letters, numbers and _ only.')
+        return
+      }
+      fields.handle = cleanUsername
+    }
+    fields.bio = bio.trim()
+
     setBusy(true)
     try {
-      // Send the stored handle without a leading @; empty clears it.
-      await onSave({ display_name: name.trim(), handle: cleanHandle, bio: bio.trim() })
+      await onSave(fields)
       onClose?.()
     } catch (err) {
+      // Backend tags 409/429 errors with { field: 'handle' } so the message
+      // lands on the right input. display_name is not unique, so it never gets
+      // a 409/429 — those only come back from the username field.
+      const field = err.details?.field
       if (err.status === 409) {
-        setHandleError('That handle is already taken.')
-      } else {
-        // Non-handle failures bubble as a toast from the caller; keep the form open.
+        if (field === 'handle') setUsernameError('That username is already taken.')
+        else setUsernameError('That value is already taken.')
+      } else if (err.status === 429) {
+        const days = daysCeil(err.details?.retry_after_ms ?? USERNAME_CHANGE_COOLDOWN_MS)
+        setUsernameError(`You can change this again in ${days} day${days === 1 ? '' : 's'}.`)
       }
+      // Other failures bubble as a toast from the caller; keep the form open.
     } finally {
       setBusy(false)
     }
@@ -195,7 +237,7 @@ function EditProfileModal({
             </div>
           </div>
 
-          {/* display name */}
+          {/* display name — free-form, not unique, no cooldown */}
           <div>
             <label
               htmlFor="edit-name"
@@ -206,36 +248,53 @@ function EditProfileModal({
             <input
               id="edit-name"
               value={name}
-              onChange={(e) => setName(e.target.value.slice(0, NAME_MAX))}
+              onChange={(e) => {
+                setName(e.target.value.slice(0, NAME_MAX))
+                if (nameError) setNameError('')
+              }}
               placeholder="Your name"
-              className={inputClass}
+              className={cn(inputClass, nameError && 'border-accent')}
             />
+            {nameError && <p className="mt-1 text-xs text-accent">{nameError}</p>}
           </div>
 
-          {/* handle */}
+          {/* username — unique + rate-limited to one change per 7 days */}
           <div>
             <label
-              htmlFor="edit-handle"
+              htmlFor="edit-username"
               className="mb-1.5 block text-[13px] font-medium text-text-secondary"
             >
-              Handle
+              Username
             </label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-text-muted">
                 @
               </span>
               <input
-                id="edit-handle"
-                value={handle}
+                id="edit-username"
+                value={username}
                 onChange={(e) => {
-                  setHandle(e.target.value.replace(/^@/, '').slice(0, 30))
-                  if (handleError) setHandleError('')
+                  setUsername(e.target.value.replace(/^@/, '').slice(0, 30))
+                  if (usernameError) setUsernameError('')
                 }}
+                disabled={usernameLocked}
                 placeholder="username"
-                className={cn(inputClass, 'pl-7', handleError && 'border-accent')}
+                className={cn(
+                  inputClass,
+                  'pl-7',
+                  usernameError && 'border-accent',
+                  usernameLocked && 'cursor-not-allowed opacity-60',
+                )}
               />
             </div>
-            {handleError && <p className="mt-1 text-xs text-accent">{handleError}</p>}
+            {usernameError ? (
+              <p className="mt-1 text-xs text-accent">{usernameError}</p>
+            ) : usernameLocked ? (
+              <p className="mt-1 text-xs text-text-muted">
+                Can be changed again in {daysCeil(usernameCooldownMs)} day
+                {daysCeil(usernameCooldownMs) === 1 ? '' : 's'}.
+              </p>
+            ) : null}
           </div>
 
           {/* bio */}
@@ -452,14 +511,15 @@ export function UserProfile() {
     }
   }
 
-  // Persist a profile edit. Rethrows so the modal can keep itself open and pin a
-  // 409 (handle taken) on the field; other failures surface as a toast here.
+  // Persist a profile edit. Rethrows so the modal can keep itself open and pin
+  // a 409 (name/handle taken) or 429 (7-day cooldown) on the offending field;
+  // other failures surface as a toast here.
   const onSaveProfile = async (fields) => {
     try {
       await updateProfile(fields)
       toast.success('Profile updated.')
     } catch (err) {
-      if (err.status !== 409) {
+      if (err.status !== 409 && err.status !== 429) {
         toast.error(err.message || 'Could not save profile. Please try again.')
       }
       throw err

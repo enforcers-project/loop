@@ -30,6 +30,7 @@ import {
 } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
 import { AttendeeStrip } from '../components/UserSearch'
+import { EventPosses } from '../components/EventPosses'
 import { EventComments } from '../components/EventComments'
 import { EventMap } from '../components/EventMap'
 import { OrganizerFooterCard } from '../components/OrganizerFooterCard'
@@ -405,6 +406,12 @@ export function EventDetail() {
         <section className="mx-auto max-w-[860px]">
           <AttendeeStrip eventId={event.id} />
         </section>
+
+        {/* Posses — start or join a group heading to this event together.
+            Hidden for logged-out viewers and cancelled/past events. */}
+        {!isCancelled && event.status !== 'past' && (
+          <EventPosses eventId={event.id} eventTitle={event.title} />
+        )}
 
         {/* Full-width map — real interactive Google Maps embed, replacing the
             broken static-OSM tile + floating pin fallback. */}

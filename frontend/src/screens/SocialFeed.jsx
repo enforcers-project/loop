@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence } from 'motion/react'
-import { PenSquare, Search, X } from 'lucide-react'
+import { PenSquare, Search, Users, X } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { StoriesRow, StoryViewer, PostCard, Composer } from '../components/social'
@@ -241,6 +241,7 @@ export function SocialFeed() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [composer, setComposer] = useState(null) // 'post' | 'story' | null
   const [viewerIndex, setViewerIndex] = useState(null) // group index being viewed, or null
+  const [myPosses, setMyPosses] = useState([]) // for the left-rail "Your posses" card
   const loading = posts === null || events === null
 
   const near = nearForUser(user)
@@ -256,6 +257,19 @@ export function SocialFeed() {
     setStoryGroups([])
     setCursor(null)
   }
+
+  // Posses the viewer is in — for the left-rail card. Loaded once; independent
+  // of the geo-keyed feed reset above.
+  useEffect(() => {
+    if (!user?.id) return
+    let cancelled = false
+    api.posses.mine().then((rows) => {
+      if (!cancelled) setMyPosses(rows)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -406,6 +420,33 @@ export function SocialFeed() {
                 ))}
               </div>
             </SidebarCard>
+
+            {myPosses.length > 0 && (
+              <SidebarCard title="Your posses">
+                <div className="space-y-3.5">
+                  {myPosses.slice(0, 4).map((p) => (
+                    <Link
+                      key={p.id}
+                      to={`/posse/${p.id}`}
+                      className="group flex items-center gap-3"
+                    >
+                      <span className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg bg-primary-light text-primary">
+                        <Users size={18} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-semibold text-ink group-hover:text-primary">
+                          {p.name}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-text-muted">
+                          {p.event?.title ?? 'Event'}
+                          {p.viewer_status === 'pending' && ' · requested'}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </SidebarCard>
+            )}
 
             <SidebarCard title="Suggested follows">
               <div className="space-y-3.5">

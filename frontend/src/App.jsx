@@ -21,6 +21,8 @@ import { SportsPickupDetail } from './screens/SportsPickupDetail'
 import { OrganizerProfile } from './screens/OrganizerProfile'
 import { UserProfile } from './screens/UserProfile'
 import { MessagesPage } from './screens/MessagesPage'
+import { Posses } from './screens/Posses'
+import { PosseDetail } from './screens/PosseDetail'
 import { Settings } from './screens/Settings'
 import { OrganizerAnalytics } from './screens/OrganizerAnalytics'
 import { EventAnalytics } from './screens/EventAnalytics'
@@ -99,6 +101,22 @@ function Shell() {
             element={
               <ProtectedRoute>
                 <MessagesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/posses"
+            element={
+              <ProtectedRoute>
+                <Posses />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/posse/:id"
+            element={
+              <ProtectedRoute>
+                <PosseDetail />
               </ProtectedRoute>
             }
           />

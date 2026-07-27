@@ -687,7 +687,7 @@ export function NewMessagePicker({ onPick, onClose }) {
                         {p.verified && <VerifiedBadge size={13} />}
                       </div>
                       {p.handle && (
-                        <p className="mt-0.5 truncate text-xs text-text-muted">{p.handle}</p>
+                        <p className="mt-0.5 truncate text-xs text-text-muted">@{p.handle}</p>
                       )}
                     </div>
                   </button>
@@ -970,7 +970,7 @@ export function ShareEventSheet({ event, onClose, onSent }) {
                               {p.verified && <VerifiedBadge size={13} />}
                             </div>
                             {p.handle && (
-                              <p className="mt-0.5 truncate text-xs text-text-muted">{p.handle}</p>
+                              <p className="mt-0.5 truncate text-xs text-text-muted">@{p.handle}</p>
                             )}
                           </div>
                           <SelectDot on={on} />

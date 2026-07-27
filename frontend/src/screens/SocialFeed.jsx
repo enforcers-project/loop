@@ -57,7 +57,7 @@ function FollowRow({ user, following, onToggle }) {
           </Link>
           {user.verified && <VerifiedBadge size={12} />}
         </div>
-        <p className="truncate text-xs text-text-muted">{user.handle}</p>
+        <p className="truncate text-xs text-text-muted">@{user.handle}</p>
       </div>
       <FollowBtn following={following} onToggle={onToggle} sm />
     </div>

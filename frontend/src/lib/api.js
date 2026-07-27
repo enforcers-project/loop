@@ -879,7 +879,10 @@ export const api = {
   // aliases so the messaging picker and older FollowRow surfaces render
   // without knowing the field spelling. Mock fallback scans MOCK_ORGANIZERS
   // (already in client shape) so the picker still returns something when the
-  // backend is offline. [] on empty query.
+  // backend is offline. Handles are normalized to raw (no leading `@`) so
+  // every render site can uniformly prefix `@` — mocks store `@lagosnights`,
+  // the backend stores `lagosnights`; strip the prefix here to reconcile. []
+  // on empty query.
   searchUsers: async (q) => {
     const term = String(q ?? '').trim()
     if (!term) return []
@@ -890,15 +893,17 @@ export const api = {
       ).slice(0, 20)
     })
     return (list ?? []).map((u) => {
+      const rawHandle = typeof u.handle === 'string' ? u.handle.replace(/^@/, '') : u.handle
       if (u.display_name !== undefined || u.avatar_url !== undefined) {
         return {
           ...u,
-          name: u.display_name || u.handle || 'Someone',
+          handle: rawHandle,
+          name: u.display_name || rawHandle || 'Someone',
           avatar: u.avatar_url || DEFAULT_AVATAR,
           verified: !!u.is_verified,
         }
       }
-      return u
+      return { ...u, handle: rawHandle }
     })
   },
 

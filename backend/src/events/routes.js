@@ -10,6 +10,7 @@ import {
   notifySelf,
 } from '../notifications/publish.js'
 import { tagAndPersist } from '../ai/autotag.persist.js'
+import { toPublicUser, PUBLIC_USER_SELECT } from '../users/serialize.js'
 
 const router = Router()
 
@@ -33,6 +34,8 @@ const MEANINGFUL_FIELDS = [
   'ageMin',
   'ageLabel',
 ]
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // GET /api/events
 router.get('/', async (req, res) => {
@@ -412,6 +415,94 @@ async function fetchRelatedEvents(eventId) {
 
     return { data: related.map((e) => toEventCard(e)) }
   }
+}
+
+// GET /api/events/:id/attendees — public list of who's going.
+// Attendance is public (product decision), so this needs no auth. For a normal
+// event the going list is rsvps(status='going'); for a sports run it's the
+// roster (claimed players). Each row is a slim PublicUser + viewer-relative
+// `is_following` (null when logged out) so the client can drop a Follow button
+// inline and route to the profile. Cursor-paginated by RSVP recency; the total
+// going count rides on the envelope so the UI can render "42 going" without a
+// second call. Ordered by most-recent RSVP so freshly-committed friends lead.
+router.get('/:id/attendees', async (req, res) => {
+  const eventId = req.params.id
+  if (!UUID_RE.test(eventId)) return fail(res, 404, 'NOT_FOUND', 'Event not found')
+
+  try {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, isSports: true },
+    })
+    if (!event) return fail(res, 404, 'NOT_FOUND', 'Event not found')
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 50)
+
+    // Sports runs fill via the roster, not RSVP — read claimed players there.
+    if (event.isSports) {
+      const where = { eventId, status: 'claimed' }
+      if (req.query.cursor) {
+        const cur = new Date(req.query.cursor)
+        if (!isNaN(cur)) where.claimedAt = { lt: cur }
+      }
+      const [rows, total] = await Promise.all([
+        prisma.rosterEntry.findMany({
+          where,
+          orderBy: { claimedAt: 'desc' },
+          take: limit + 1,
+          include: { user: { select: PUBLIC_USER_SELECT } },
+        }),
+        prisma.rosterEntry.count({ where: { eventId, status: 'claimed' } }),
+      ])
+      return sendAttendees(res, req, rows, (r) => r.user, (r) => r.claimedAt, limit, total)
+    }
+
+    const where = { eventId, status: 'going' }
+    if (req.query.cursor) {
+      const cur = new Date(req.query.cursor)
+      if (!isNaN(cur)) where.createdAt = { lt: cur }
+    }
+    const [rows, total] = await Promise.all([
+      prisma.rsvp.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit + 1,
+        include: { user: { select: PUBLIC_USER_SELECT } },
+      }),
+      prisma.rsvp.count({ where: { eventId, status: 'going' } }),
+    ])
+    return sendAttendees(res, req, rows, (r) => r.user, (r) => r.createdAt, limit, total)
+  } catch (err) {
+    console.error('GET /api/events/:id/attendees error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not load attendees')
+  }
+})
+
+// Shared tail for both attendee paths: trim the +1 lookahead into a cursor,
+// resolve the viewer's follow state against everyone on the page in one query,
+// and serialize to PublicUser. `pickUser`/`pickCursor` adapt the row shape
+// (rsvp vs roster entry) so the pagination + follow logic stays identical.
+async function sendAttendees(res, req, rows, pickUser, pickCursor, limit, total) {
+  let nextCursor = null
+  if (rows.length > limit) {
+    rows.pop()
+    nextCursor = pickCursor(rows[rows.length - 1]).toISOString()
+  }
+
+  const people = rows.map(pickUser).filter(Boolean)
+  let followedSet = new Set()
+  if (req.user?.id && people.length) {
+    const mine = await prisma.follow.findMany({
+      where: { followerId: req.user.id, followeeId: { in: people.map((p) => p.id) } },
+      select: { followeeId: true },
+    })
+    followedSet = new Set(mine.map((m) => m.followeeId))
+  }
+
+  const data = people.map((u) =>
+    toPublicUser(u, req.user?.id ? followedSet.has(u.id) : null),
+  )
+  return res.json({ data, nextCursor, total })
 }
 
 // ===========================================================================

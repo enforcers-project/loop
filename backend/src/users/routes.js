@@ -37,6 +37,78 @@ const HANDLE_RE = /^[a-zA-Z0-9_]{3,30}$/
 const DISPLAY_NAME_MAX = 120
 const BIO_MAX = 500
 
+/** Resolve which of `targetIds` the viewer follows → Set. Empty when logged out. */
+async function resolveFollowedSet(viewerId, targetIds) {
+  if (!viewerId || targetIds.length === 0) return new Set()
+  const rows = await prisma.follow.findMany({
+    where: { followerId: viewerId, followeeId: { in: targetIds } },
+    select: { followeeId: true },
+  })
+  return new Set(rows.map((r) => r.followeeId))
+}
+
+// --- GET /api/users?q= — search people by name / handle ---------------------
+// Public. Trigram (pg_trgm — enabled in the schema) fuzzy match against
+// display_name and handle, so "sara" finds "Sarah" and a typo'd handle still
+// lands. Ranks by greatest similarity, then follower_count as a tiebreak so the
+// more-established account surfaces first. Each row is a PublicUser + a
+// viewer-relative `is_following` (null when logged out) — same shape the
+// followers/following lists return, so the client reuses one row component.
+// The viewer themselves is excluded (you can't follow yourself). `q` under two
+// chars returns empty rather than scanning the whole table.
+router.get('/', async (req, res) => {
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : ''
+  if (q.length < 2) return res.json({ data: [] })
+
+  const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50)
+  const viewerId = req.user?.id ?? null
+
+  try {
+    // Similarity on both fields; GREATEST picks the stronger of the two so a
+    // strong handle match isn't diluted by a weak name match (or vice versa).
+    // The `%` trigram operator (pg_trgm) gates candidates before ranking, so
+    // this rides the GIN index rather than scanning the table. handle is citext,
+    // so the comparison is already case-insensitive. $queryRawUnsafe with
+    // positional params matches the recommender's raw-SQL convention (social.js).
+    // $1 = query text, $2 = viewer id (nullable → the AND clause no-ops), $3 = limit.
+    const rows = await prisma.$queryRawUnsafe(
+      `SELECT id,
+              GREATEST(
+                similarity(coalesce(display_name, ''), $1),
+                similarity(coalesce(handle::text, ''), $1)
+              ) AS sim
+       FROM users
+       WHERE (display_name % $1 OR handle::text % $1)
+         AND ($2::uuid IS NULL OR id <> $2::uuid)
+       ORDER BY sim DESC, follower_count DESC
+       LIMIT $3`,
+      q,
+      viewerId,
+      limit,
+    )
+
+    if (rows.length === 0) return res.json({ data: [] })
+
+    // Hydrate the ranked ids into full PublicUser rows in one query, then re-sort
+    // to the similarity order the raw query established (findMany won't preserve it).
+    const ids = rows.map((r) => r.id)
+    const order = new Map(ids.map((id, i) => [id, i]))
+    const [users, followedSet] = await Promise.all([
+      prisma.user.findMany({ where: { id: { in: ids } }, select: PUBLIC_USER_SELECT }),
+      resolveFollowedSet(viewerId, ids),
+    ])
+    users.sort((a, b) => order.get(a.id) - order.get(b.id))
+
+    const data = users.map((u) =>
+      toPublicUser(u, viewerId ? followedSet.has(u.id) : null),
+    )
+    return res.json({ data })
+  } catch (err) {
+    console.error('GET /api/users?q= error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not search users')
+  }
+})
+
 /** Does the viewer (if any) follow `targetId`? null when logged out. */
 async function resolveIsFollowing(viewerId, targetId) {
   if (!viewerId) return null
@@ -562,6 +634,49 @@ router.get('/:id/saved', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('GET /api/users/:id/saved error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not load saved events')
+  }
+})
+
+// --- GET /api/users/:id/attending — a user's public upcoming events ---------
+// Public (attendance is public). Unlike /:id/rsvps (owner-only, exposes every
+// status including cancelled/interested), this returns ONLY upcoming events the
+// user is *going* to — the safe, public subset that powers the "Attending" tab
+// on someone else's profile. Cursor-paginated by event start time (soonest
+// first). Each item is an EventCard.
+router.get('/:id/attending', async (req, res) => {
+  if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50)
+    const now = new Date()
+    const where = {
+      userId: req.params.id,
+      status: 'going',
+      event: { status: 'published', startsAt: { gte: now } },
+    }
+    // Cursor is the event start time (ISO) of the last row — stable for the
+    // soonest-first order the tab renders.
+    if (req.query.cursor) {
+      const cur = new Date(req.query.cursor)
+      if (!isNaN(cur)) where.event.startsAt = { gte: now, gt: cur }
+    }
+
+    const rows = await prisma.rsvp.findMany({
+      where,
+      orderBy: { event: { startsAt: 'asc' } },
+      take: limit + 1,
+      include: { event: { include: { category: true, organizer: true, sportsDetail: true } } },
+    })
+
+    let nextCursor = null
+    if (rows.length > limit) {
+      rows.pop()
+      nextCursor = rows[rows.length - 1].event.startsAt.toISOString()
+    }
+
+    return res.json({ data: rows.map((r) => toEventCard(r.event)), nextCursor })
+  } catch (err) {
+    console.error('GET /api/users/:id/attending error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not load attending events')
   }
 })
 

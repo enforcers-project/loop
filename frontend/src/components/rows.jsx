@@ -73,26 +73,18 @@ export function FilterBar({ filters, onToggle }) {
 /* --------------------------------------------------------------------------
    SearchBar — NL placeholder with an optional location pill
 -------------------------------------------------------------------------- */
-// `mode`/`onModeChange` (optional) add an inline Events|People segmented toggle
-// at the right of the bar. When present, the placeholder + aria-label follow the
-// active mode so "search people" reads right. Omit them for an events-only bar.
+// A plain search bar. Pass `ariaLabel` to describe what it searches (defaults to
+// "Search events"); `placeholder` overrides the default NL hint.
 export function SearchBar({
   value,
   onChange,
   onSubmit,
   showLocation = true,
   city,
-  mode,
-  onModeChange,
   placeholder,
+  ariaLabel = 'Search events',
 }) {
-  const hasModes = mode != null && typeof onModeChange === 'function'
-  const searchingPeople = mode === 'people'
-  const ph =
-    placeholder ??
-    (searchingPeople
-      ? 'Search people by name or @handle'
-      : "Try 'free Afrobeats party this weekend'")
+  const ph = placeholder ?? "Try 'free Afrobeats party this weekend'"
   return (
     <div className="flex h-[52px] items-center gap-2 rounded-input border border-border-light bg-white px-4 shadow-card transition-shadow focus-within:border-primary focus-within:shadow-card-hover focus-within:ring-2 focus-within:ring-primary/15">
       <Search size={20} className="flex-shrink-0 text-text-muted" />
@@ -101,42 +93,17 @@ export function SearchBar({
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && onSubmit?.()}
         placeholder={ph}
-        aria-label={searchingPeople ? 'Search people' : 'Search events'}
+        aria-label={ariaLabel}
         className="min-w-0 flex-1 bg-transparent text-[15px] text-text-primary outline-none placeholder:text-placeholder"
       />
-      {hasModes ? (
-        <div
-          role="tablist"
-          aria-label="Search mode"
-          className="flex flex-shrink-0 items-center rounded-pill bg-surface p-0.5"
+      {showLocation && city && (
+        <button
+          className="hidden h-8 items-center gap-1 rounded-pill bg-surface px-3 text-xs font-semibold text-text-secondary transition-colors hover:text-ink sm:flex"
+          aria-label={`Location: ${city}`}
         >
-          {['events', 'people'].map((m) => (
-            <button
-              key={m}
-              type="button"
-              role="tab"
-              aria-selected={mode === m}
-              onClick={() => onModeChange(m)}
-              className={cn(
-                'rounded-pill px-3 py-1.5 text-xs font-semibold capitalize transition-colors',
-                mode === m ? 'bg-white text-ink shadow-sm' : 'text-text-secondary hover:text-ink',
-              )}
-            >
-              {m}
-            </button>
-          ))}
-        </div>
-      ) : (
-        showLocation &&
-        city && (
-          <button
-            className="hidden h-8 items-center gap-1 rounded-pill bg-surface px-3 text-xs font-semibold text-text-secondary transition-colors hover:text-ink sm:flex"
-            aria-label={`Location: ${city}`}
-          >
-            <MapPin size={14} className="text-text-muted" />
-            {city}
-          </button>
-        )
+          <MapPin size={14} className="text-text-muted" />
+          {city}
+        </button>
       )}
     </div>
   )

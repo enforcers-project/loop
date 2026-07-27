@@ -4,7 +4,7 @@ import { m, AnimatePresence } from 'motion/react'
 import { X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { api, DEFAULT_AVATAR } from '../lib/api'
-import { cn, formatCount, pluralize } from '../lib/utils'
+import { formatCount, pluralize } from '../lib/utils'
 import { FollowBtn, Spinner, VerifiedBadge } from './primitives'
 import { backdrop, dialog, fadeUp, staggerParent } from '../lib/motion'
 
@@ -15,22 +15,18 @@ function profilePath(u) {
   return `/organizer/${u.id}`
 }
 
-/* Shared identity block (avatar + name + handle + verified) used by both the
-   horizontal rail card and the vertical result row so they stay visually in
-   sync. `stacked` centers everything for the narrow rail card. */
-function Identity({ user, stacked = false }) {
+/* Shared identity block (avatar + name + handle + verified) for a people
+   result row. */
+function Identity({ user }) {
   return (
-    <div className={cn('flex min-w-0 items-center gap-3', stacked && 'flex-col gap-2 text-center')}>
+    <div className="flex min-w-0 items-center gap-3">
       <img
         src={user.avatar_url || DEFAULT_AVATAR}
         alt=""
-        className={cn(
-          'flex-shrink-0 rounded-full object-cover',
-          stacked ? 'h-16 w-16' : 'h-11 w-11',
-        )}
+        className="h-11 w-11 flex-shrink-0 rounded-full object-cover"
       />
       <div className="min-w-0">
-        <div className={cn('flex items-center gap-1', stacked ? 'justify-center' : '')}>
+        <div className="flex items-center gap-1">
           <span className="truncate font-semibold text-ink">
             {user.display_name || 'Loop member'}
           </span>
@@ -62,50 +58,8 @@ function RowFollow({ user, sm = false }) {
 }
 
 /* --------------------------------------------------------------------------
-   UserRail — compact horizontal, side-scrolling strip of people matches shown
-   ABOVE the events grid when a query also matches names. Progressive disclosure:
-   a casual searcher sees a peek of people without switching modes; "See all →"
-   (onSeeAll) flips the parent into the dedicated People view.
--------------------------------------------------------------------------- */
-export function UserRail({ users, onSeeAll }) {
-  const navigate = useNavigate()
-  if (!users?.length) return null
-  return (
-    <section className="mt-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted">People</h2>
-        {onSeeAll && users.length > 2 && (
-          <button onClick={onSeeAll} className="text-sm font-semibold text-primary hover:underline">
-            See all →
-          </button>
-        )}
-      </div>
-      <div className="scrollbar-hide -mx-4 flex snap-x snap-proximity gap-3 overflow-x-auto px-4 pb-1 md:-mx-6 md:px-6">
-        {users.map((u) => (
-          <div
-            key={u.id}
-            className="flex w-[160px] flex-shrink-0 snap-start flex-col items-center gap-3 rounded-card border border-border-light bg-card-bg p-4 shadow-card"
-          >
-            <button
-              type="button"
-              onClick={() => navigate(profilePath(u))}
-              className="min-w-0"
-              aria-label={`View ${u.display_name || 'profile'}`}
-            >
-              <Identity user={u} stacked />
-            </button>
-            <RowFollow user={u} sm />
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-/* --------------------------------------------------------------------------
-   UserResultList — full vertical list of people, the focused "People" view a
-   searcher lands in after committing to the People tab / "See all". Each row is
-   tappable (→ profile) with an inline Follow button.
+   UserResultList — full vertical list of people, the People search results on
+   the Social tab. Each row is tappable (→ profile) with an inline Follow button.
 -------------------------------------------------------------------------- */
 export function UserResultList({ users, emptyLabel = 'No people match your search.' }) {
   const navigate = useNavigate()

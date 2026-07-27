@@ -19,6 +19,7 @@ import { backdrop, sheet, dialog } from '../lib/motion'
 import { ImageSourcePicker, inputClass, RoleBadge, Spinner } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
+import { InterestBlobs } from '../components/InterestBlobs'
 
 const NAME_MAX = 120
 const BIO_MAX = 500
@@ -311,12 +312,14 @@ function InterestsModal({ allInterests, selectedIds, onClose, onSave }) {
         aria-modal="true"
         aria-label="Edit interests"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-h-[85vh] sm:max-w-lg sm:rounded-card"
+        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-h-[85vh] sm:max-w-xl sm:rounded-card"
       >
         <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
           <div>
             <h2 className="text-base font-bold text-ink">Edit interests</h2>
-            <p className="mt-0.5 text-xs text-text-secondary">Pick at least 3 to tune your feed.</p>
+            <p className="mt-0.5 text-xs text-text-secondary">
+              Tap a world to open it. Every pick tunes your feed.
+            </p>
           </div>
           <button
             type="button"
@@ -328,37 +331,13 @@ function InterestsModal({ allInterests, selectedIds, onClose, onSave }) {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          <div className="mb-3 flex items-center gap-3 text-xs">
-            <span
-              className={cn(
-                'rounded-pill px-2.5 py-1 font-semibold',
-                picked.size >= 3 ? 'bg-success/15 text-success' : 'bg-surface text-text-muted',
-              )}
-            >
-              {picked.size} selected
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(allInterests ?? []).map((i) => {
-              const on = picked.has(i.id)
-              return (
-                <button
-                  key={i.id}
-                  type="button"
-                  onClick={() => toggle(i.id)}
-                  className={cn(
-                    'rounded-pill border px-4 py-2 text-sm font-medium transition-colors',
-                    on
-                      ? 'border-primary bg-primary text-white'
-                      : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
-                  )}
-                >
-                  {i.label}
-                </button>
-              )
-            })}
-          </div>
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          <InterestBlobs
+            interests={allInterests ?? []}
+            picked={picked}
+            onToggle={toggle}
+            minPicks={3}
+          />
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-border-light px-5 py-3.5">

@@ -1,9 +1,14 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Trash2 } from 'lucide-react'
 import { pluralize, timeAgo } from '../lib/utils'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { VerifiedBadge } from './primitives'
+
+// Route to a user's public profile. Mirrors social.jsx's authorHref — kept
+// local so this component doesn't cross-import from a sibling.
+const profileHref = (id) => (id ? `/organizer/${id}` : null)
 
 // Reply thread under a single comment (planning §7.3, work-plan #30). The
 // backend already stores one level of nesting (parent_comment_id) and both the
@@ -120,16 +125,36 @@ export function CommentReplies({ comment, api, canDelete }) {
       {open &&
         replies.map((r) => {
           const when = timeAgo(r.createdAt)
+          const href = profileHref(r.authorId)
           return (
             <div key={r.id} className="mt-2 flex gap-2.5 border-l border-border-light pl-3">
-              <img
-                src={r.authorAvatar}
-                alt=""
-                className="h-7 w-7 flex-shrink-0 rounded-full bg-surface object-cover"
-              />
+              {href ? (
+                <Link to={href} aria-label={`Open ${r.author}'s profile`} className="flex-shrink-0">
+                  <img
+                    src={r.authorAvatar}
+                    alt=""
+                    className="h-7 w-7 rounded-full bg-surface object-cover transition-transform hover:scale-[1.05]"
+                  />
+                </Link>
+              ) : (
+                <img
+                  src={r.authorAvatar}
+                  alt=""
+                  className="h-7 w-7 flex-shrink-0 rounded-full bg-surface object-cover"
+                />
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-semibold text-ink">{r.author}</span>
+                  {href ? (
+                    <Link
+                      to={href}
+                      className="text-sm font-semibold text-ink transition-colors hover:text-primary"
+                    >
+                      {r.author}
+                    </Link>
+                  ) : (
+                    <span className="text-sm font-semibold text-ink">{r.author}</span>
+                  )}
                   {r.verified && <VerifiedBadge size={12} />}
                   {when && <span className="text-xs text-text-muted">· {when}</span>}
                   {canDelete?.(r) && (

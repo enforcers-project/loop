@@ -30,12 +30,7 @@ function Identity({ user, stacked = false }) {
         )}
       />
       <div className="min-w-0">
-        <div
-          className={cn(
-            'flex items-center gap-1',
-            stacked ? 'justify-center' : '',
-          )}
-        >
+        <div className={cn('flex items-center gap-1', stacked ? 'justify-center' : '')}>
           <span className="truncate font-semibold text-ink">
             {user.display_name || 'Loop member'}
           </span>
@@ -45,7 +40,8 @@ function Identity({ user, stacked = false }) {
           <p className="truncate text-[13px] text-text-secondary">@{user.handle}</p>
         ) : (
           <p className="truncate text-[13px] text-text-muted">
-            {formatCount(user.follower_count ?? 0)} {pluralize(user.follower_count ?? 0, 'follower')}
+            {formatCount(user.follower_count ?? 0)}{' '}
+            {pluralize(user.follower_count ?? 0, 'follower')}
           </p>
         )}
       </div>
@@ -79,10 +75,7 @@ export function UserRail({ users, onSeeAll }) {
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted">People</h2>
         {onSeeAll && users.length > 2 && (
-          <button
-            onClick={onSeeAll}
-            className="text-sm font-semibold text-primary hover:underline"
-          >
+          <button onClick={onSeeAll} className="text-sm font-semibold text-primary hover:underline">
             See all →
           </button>
         )}

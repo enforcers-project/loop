@@ -875,8 +875,7 @@ export const api = {
   // ranked by similarity. Returns PublicUser rows with a viewer-relative
   // `is_following` (null when logged out). [] on any failure or a <2-char query
   // so the search UI degrades to "no people" rather than throwing.
-  searchUsers: (q) =>
-    get(`/users?q=${encodeURIComponent(q)}`, () => []).then((rows) => rows ?? []),
+  searchUsers: (q) => get(`/users?q=${encodeURIComponent(q)}`, () => []).then((rows) => rows ?? []),
 
   // Who's going to an event (GET /api/events/:id/attendees). Public. Returns
   // { users: PublicUser[], nextCursor, total } — total is the true going count
@@ -894,7 +893,7 @@ export const api = {
       return {
         users: json.data ?? [],
         nextCursor: json.nextCursor ?? null,
-        total: json.total ?? (json.data?.length ?? 0),
+        total: json.total ?? json.data?.length ?? 0,
       }
     } catch {
       return { users: [], nextCursor: null, total: 0 }

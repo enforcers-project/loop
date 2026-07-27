@@ -99,9 +99,7 @@ router.get('/', async (req, res) => {
     ])
     users.sort((a, b) => order.get(a.id) - order.get(b.id))
 
-    const data = users.map((u) =>
-      toPublicUser(u, viewerId ? followedSet.has(u.id) : null),
-    )
+    const data = users.map((u) => toPublicUser(u, viewerId ? followedSet.has(u.id) : null))
     return res.json({ data })
   } catch (err) {
     console.error('GET /api/users?q= error:', err)

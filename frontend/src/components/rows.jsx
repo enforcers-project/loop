@@ -90,7 +90,9 @@ export function SearchBar({
   const searchingPeople = mode === 'people'
   const ph =
     placeholder ??
-    (searchingPeople ? 'Search people by name or @handle' : "Try 'free Afrobeats party this weekend'")
+    (searchingPeople
+      ? 'Search people by name or @handle'
+      : "Try 'free Afrobeats party this weekend'")
   return (
     <div className="flex h-[52px] items-center gap-2 rounded-input border border-border-light bg-white px-4 shadow-card transition-shadow focus-within:border-primary focus-within:shadow-card-hover focus-within:ring-2 focus-within:ring-primary/15">
       <Search size={20} className="flex-shrink-0 text-text-muted" />

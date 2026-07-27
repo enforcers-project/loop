@@ -454,7 +454,15 @@ router.get('/:id/attendees', async (req, res) => {
         }),
         prisma.rosterEntry.count({ where: { eventId, status: 'claimed' } }),
       ])
-      return sendAttendees(res, req, rows, (r) => r.user, (r) => r.claimedAt, limit, total)
+      return sendAttendees(
+        res,
+        req,
+        rows,
+        (r) => r.user,
+        (r) => r.claimedAt,
+        limit,
+        total,
+      )
     }
 
     const where = { eventId, status: 'going' }
@@ -471,7 +479,15 @@ router.get('/:id/attendees', async (req, res) => {
       }),
       prisma.rsvp.count({ where: { eventId, status: 'going' } }),
     ])
-    return sendAttendees(res, req, rows, (r) => r.user, (r) => r.createdAt, limit, total)
+    return sendAttendees(
+      res,
+      req,
+      rows,
+      (r) => r.user,
+      (r) => r.createdAt,
+      limit,
+      total,
+    )
   } catch (err) {
     console.error('GET /api/events/:id/attendees error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not load attendees')
@@ -499,9 +515,7 @@ async function sendAttendees(res, req, rows, pickUser, pickCursor, limit, total)
     followedSet = new Set(mine.map((m) => m.followeeId))
   }
 
-  const data = people.map((u) =>
-    toPublicUser(u, req.user?.id ? followedSet.has(u.id) : null),
-  )
+  const data = people.map((u) => toPublicUser(u, req.user?.id ? followedSet.has(u.id) : null))
   return res.json({ data, nextCursor, total })
 }
 

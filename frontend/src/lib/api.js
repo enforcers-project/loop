@@ -1279,6 +1279,15 @@ export const api = {
         return []
       }
     },
+    // Cross-event discovery feed — public + reciprocal-mutuals posses for
+    // upcoming events I'm not already in.
+    discover: async () => {
+      try {
+        return (await request('/posses/discover')) ?? []
+      } catch {
+        return []
+      }
+    },
     create: ({ eventId, name, note, visibility, joinPolicy }) =>
       request('/posses', {
         method: 'POST',

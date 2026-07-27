@@ -27,7 +27,7 @@ import prisma from '../lib/prisma.js'
 import { fail, requireAuth } from '../auth/middleware.js'
 import { enforceProfanity } from '../lib/profanity.js'
 import { publish } from '../messages/bus.js'
-import { isMutual } from '../recommendations/social.js'
+import { getMutualIds, isMutual } from '../recommendations/social.js'
 import { POSSE_MEMBER_SELECT, toPosse } from './serialize.js'
 
 const router = Router()
@@ -256,6 +256,53 @@ router.get('/posses', requireAuth, async (req, res) => {
     return res.json({ data })
   } catch (err) {
     console.error('GET /api/posses error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not load posses')
+  }
+})
+
+// --- GET /api/posses/discover -----------------------------------------------
+// Cross-event discovery feed: public posses + mutuals posses created by a
+// reciprocal follow, for upcoming events, excluding ones I'm already in.
+// Registered BEFORE /posses/:id so "discover" isn't captured as an id.
+router.get('/posses/discover', requireAuth, async (req, res) => {
+  const me = req.user.id
+  try {
+    // Resolve my reciprocal-follow set once (batch), rather than per-posse.
+    const mutualIds = new Set(await getMutualIds(me))
+
+    const posses = await prisma.posse.findMany({
+      where: {
+        visibility: { in: ['public', 'mutuals'] },
+        event: { status: 'published', startsAt: { gt: new Date() } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            flyerUrl: true,
+            startsAt: true,
+            venueName: true,
+            city: true,
+          },
+        },
+        members: { select: POSSE_MEMBER_SELECT },
+      },
+    })
+
+    const data = []
+    for (const p of posses) {
+      const viewer = viewerMembership(p, me)
+      if (viewer) continue // skip ones I'm already in / requested
+      if (p.visibility === 'public' || mutualIds.has(p.creatorId)) {
+        data.push(toPosse(p, { viewer: null }))
+      }
+    }
+    return res.json({ data })
+  } catch (err) {
+    console.error('GET /api/posses/discover error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not load posses')
   }
 })

@@ -20,6 +20,7 @@ import {
   ingestTyping,
   resetMessagesStore,
 } from '../lib/messages'
+import { emitPosseEvent, isPosseFrame } from '../lib/posseEvents'
 
 const BACKOFFS = [1000, 2000, 5000, 15000]
 
@@ -96,7 +97,10 @@ export function MessagesRealtimeProvider({ children }) {
             )
             break
           default:
-            // ignore unknown types — forward-compat
+            // Posse roster frames ride this same stream — forward them to the
+            // posse pub/sub so an open PosseDetail can refresh its roster live.
+            if (isPosseFrame(payload.type)) emitPosseEvent(payload)
+            // else ignore unknown types — forward-compat
             break
         }
       }

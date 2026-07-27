@@ -230,9 +230,7 @@ export function Auth() {
                     </span>
                     <input
                       value={username}
-                      onChange={(e) =>
-                        setUsername(e.target.value.replace(/^@/, '').slice(0, 30))
-                      }
+                      onChange={(e) => setUsername(e.target.value.replace(/^@/, '').slice(0, 30))}
                       onKeyDown={(e) => e.key === 'Enter' && submit()}
                       autoComplete="off"
                       placeholder="ada"

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Calendar, MapPin } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
-import { CATEGORY_COLOR, isEventPast, recommendationLabel } from '../lib/utils'
+import { CATEGORY_COLOR, isEventPast, pluralize, recommendationLabel } from '../lib/utils'
 import { CatRow, SearchBar, pillBase, pillSelected, pillUnselected } from '../components/rows'
 import { cn } from '../lib/utils'
 import { EventGrid } from '../components/EventCard'
@@ -126,6 +126,11 @@ export function ForYouFeed() {
   const [tab, setTab] = useState('For You')
   const [cat, setCat] = useState('All')
   const [query, setQuery] = useState('')
+  // Debounced mirror of `query`. Typing hits the DB full-text search ~250ms
+  // after the user stops, so search reaches *every* event in the database — not
+  // just the recommendation batch already on screen (which the old in-memory
+  // .includes() filter was limited to).
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   // null while a fetch is in flight (initial mount + tab change), so we can
   // show the page-level spinner instead of an empty grid.
   const [events, setEvents] = useState(null)
@@ -135,11 +140,19 @@ export function ForYouFeed() {
   const near = nearForUser(user)
   const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 250)
+    return () => clearTimeout(t)
+  }, [query])
+
+  const searching = debouncedQuery.length > 0
+
   // Reset-state-on-prop-change (render-time), same pattern as FeaturedCard: when
-  // the fetch inputs change we want to blank the previous tab's list *before*
-  // the new request resolves so the spinner replaces stale rows rather than
-  // flashing them under a new heading.
-  const fetchKey = `${tab}|${interests.join(',')}|${nearKey}`
+  // the fetch inputs change we want to blank the previous list *before* the new
+  // request resolves so the spinner replaces stale rows rather than flashing
+  // them under a new heading. `debouncedQuery` is part of the key so switching
+  // between the feed and a search (and between searches) shows the spinner.
+  const fetchKey = `${tab}|${debouncedQuery}|${interests.join(',')}|${nearKey}`
   const [fetchedKey, setFetchedKey] = useState('')
   if (fetchedKey !== fetchKey) {
     setFetchedKey(fetchKey)
@@ -148,8 +161,12 @@ export function ForYouFeed() {
 
   useEffect(() => {
     let cancelled = false
-    const p =
-      tab === 'For You'
+    // A non-empty query overrides the feed: run the backend full-text search
+    // (GET /events?q=) so results come from the whole DB. Otherwise show the
+    // For You recommendations (or the Trending/Following feed).
+    const p = searching
+      ? api.events({ q: debouncedQuery, near: nearForUser(user) })
+      : tab === 'For You'
         ? api.recommendations(interests)
         : api.events({ sort: tab === 'Trending' ? 'popular' : 'date', near: nearForUser(user) })
     p.then((data) => {
@@ -159,19 +176,11 @@ export function ForYouFeed() {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, interests, nearKey])
+  }, [tab, debouncedQuery, interests, nearKey])
 
   const filtered = (events ?? []).filter((e) => {
     if (isEventPast(e)) return false // keep the feed forward-looking
     if (cat !== 'All' && e.category !== cat) return false
-    if (query.trim()) {
-      const n = query.toLowerCase()
-      return (
-        e.title.toLowerCase().includes(n) ||
-        e.tags.some((t) => t.toLowerCase().includes(n)) ||
-        e.category.toLowerCase().includes(n)
-      )
-    }
     return true
   })
 
@@ -182,7 +191,12 @@ export function ForYouFeed() {
       {/* sticky search — pinned flush below the 80px TopNav (top-20). Filters
           the events feed; people search lives on the Social tab. */}
       <div className="sticky top-20 z-20 -mx-4 bg-white/95 px-4 pb-3 pt-2 backdrop-blur-md md:-mx-6 md:px-6">
-        <SearchBar value={query} onChange={setQuery} city={user?.homeCity} />
+        <SearchBar
+          value={query}
+          onChange={setQuery}
+          onSubmit={() => setDebouncedQuery(query.trim())}
+          city={user?.homeCity}
+        />
       </div>
 
       {/* "Near me" chip — shows the current location + radius that's shaping
@@ -214,6 +228,22 @@ export function ForYouFeed() {
 
       {events === null ? (
         <PageLoader label="Loading events" />
+      ) : searching ? (
+        /* ---- Search mode: a plain results grid over the whole DB (no hero,
+            no rationale chips — these are literal keyword matches, not
+            personalized picks). ------------------------------------------- */
+        <>
+          <h1 className="mb-5 mt-6 font-display text-xl font-bold leading-tight text-ink sm:text-[28px] md:text-3xl">
+            {filtered.length} {pluralize(filtered.length, 'result')} for "{debouncedQuery}"
+          </h1>
+          {filtered.length > 0 ? (
+            <EventGrid events={filtered} />
+          ) : (
+            <p className="py-16 text-center text-sm text-text-muted">
+              No events match "{debouncedQuery}". Try a different search.
+            </p>
+          )}
+        </>
       ) : (
         <>
           {/* featured hero — 24px below categories */}

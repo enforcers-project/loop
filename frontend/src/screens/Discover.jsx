@@ -140,6 +140,13 @@ export function Discover() {
   const [nlLabel, setNlLabel] = useState(null)
   const [nlLoading, setNlLoading] = useState(false)
 
+  // Live keyword search. As the user types we debounce the query and hit the
+  // backend full-text search (GET /events?q=), so matches come from the *whole*
+  // DB — not a client-side filter over the near-you batch. Enter escalates to
+  // the AI natural-language search above; editing the box drops back to here.
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [kwResults, setKwResults] = useState(null) // null = loading / not yet run
+
   const near = locationOverride ?? nearForUser(user)
   const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
 
@@ -161,6 +168,43 @@ export function Discover() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nearKey])
+
+  // Debounce the raw query into `debouncedQuery` (250ms). NL-search mode
+  // (nlResults set) takes over the screen, so we pause the keyword path then to
+  // avoid a redundant fetch behind the AI results.
+  useEffect(() => {
+    if (nlResults !== null) return
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 250)
+    return () => clearTimeout(t)
+  }, [query, nlResults])
+
+  // Run the keyword full-text search whenever the debounced query (or the
+  // location/filter context) changes. Blanks to a spinner between runs.
+  const kwKey = `${debouncedQuery}|${nearKey}|${cat}|${filters.free}|${filters.sports}`
+  const [kwFetchedKey, setKwFetchedKey] = useState('')
+  if (debouncedQuery && kwFetchedKey !== kwKey) {
+    setKwFetchedKey(kwKey)
+    setKwResults(null)
+  }
+  useEffect(() => {
+    if (!debouncedQuery) return
+    let cancelled = false
+    api
+      .events({
+        q: debouncedQuery,
+        near,
+        category: cat,
+        isFree: filters.free,
+        isSports: filters.sports,
+      })
+      .then((data) => {
+        if (!cancelled) setKwResults(data)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery, nearKey, cat, filters.free, filters.sports])
 
   const toggle = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }))
 
@@ -197,6 +241,8 @@ export function Discover() {
     setNlResults(null)
     setNlPills([])
     setNlLabel(null)
+    setDebouncedQuery('')
+    setKwResults(null)
   }
 
   // Local browse filtering (only used when NOT in NL-search mode). NL results
@@ -223,7 +269,14 @@ export function Discover() {
     [events, filtersActive],
   )
 
-  const searching = nlResults !== null
+  // Three view modes, in priority order: AI natural-language results (Enter),
+  // live keyword results (typing), then the default browse experience.
+  const nlSearching = nlResults !== null
+  const kwSearching = !nlSearching && debouncedQuery.length > 0
+
+  // Keyword hits are already full-text-matched + geo/filter-constrained
+  // server-side; just drop past events for consistency with the rest of the UI.
+  const kwFiltered = (kwResults ?? []).filter((e) => !isEventPast(e))
 
   const browseHeading =
     cat !== 'All'
@@ -242,10 +295,10 @@ export function Discover() {
           if (!v.trim()) clearSearch()
         }}
         onSubmit={() => runSearch()}
-        placeholder="Try 'free Afrobeats party this weekend'"
+        placeholder="Search events — or press Enter to ask, e.g. 'free Afrobeats this weekend'"
       />
 
-      {searching ? (
+      {nlSearching ? (
         /* ---- NL-search mode: pills + AI-ranked results ------------------- */
         <>
           {/* Parsed-filter pills — one removable chip per hard constraint the
@@ -279,6 +332,34 @@ export function Discover() {
               ) : (
                 <p className="py-16 text-center text-sm text-text-muted">
                   No events match. Try removing a filter or rewording your search.
+                </p>
+              )}
+            </>
+          )}
+        </>
+      ) : kwSearching ? (
+        /* ---- Keyword-search mode: live full-text DB results as you type. A
+            hint nudges the user that Enter runs the smarter AI search. ------ */
+        <>
+          {kwResults === null ? (
+            <PageLoader label="Searching" />
+          ) : (
+            <>
+              <div className="mb-5 mt-6 flex flex-col gap-1">
+                <h1 className="font-display text-xl font-bold leading-tight text-ink sm:text-[28px] md:text-3xl">
+                  {kwFiltered.length} {pluralize(kwFiltered.length, 'result')} for "{debouncedQuery}
+                  "
+                </h1>
+                <p className="text-sm text-text-secondary">
+                  Press <span className="font-semibold text-ink">Enter</span> to search with natural
+                  language.
+                </p>
+              </div>
+              {kwFiltered.length > 0 ? (
+                <EventGrid events={kwFiltered} />
+              ) : (
+                <p className="py-16 text-center text-sm text-text-muted">
+                  No events match "{debouncedQuery}". Try different words, or press Enter to ask.
                 </p>
               )}
             </>

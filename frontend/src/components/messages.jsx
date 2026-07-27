@@ -6,16 +6,20 @@ import {
   Check,
   CheckCheck,
   MapPin,
+  Pencil,
   PenSquare,
   Search,
   Send,
+  Trash2,
   Users,
   X,
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
+import { useModal } from '../context/ModalContext'
 import { useToast } from '../context/ToastContext'
 import {
+  deleteMessage,
   describeThread,
   ensureGroupThread,
   ensureMessagesLoaded,
@@ -23,6 +27,7 @@ import {
   markThreadRead,
   notifyTyping,
   participantOf,
+  renameGroup,
   sendEventShare,
   sendMessage,
   statusFor,
@@ -31,7 +36,6 @@ import {
   useThreads,
   useTyping,
 } from '../lib/messages'
-import { VerifiedBadge } from './primitives'
 import { cn, timeAgo } from '../lib/utils'
 
 /* Shared messaging UI pieces used by both the docked widget panel and the
@@ -168,7 +172,6 @@ export function ThreadList({ threads, activeThreadId, onSelect, onCompose, dense
                   >
                     {desc.title}
                   </span>
-                  {desc.verified && <VerifiedBadge size={13} />}
                 </div>
                 <p
                   className={cn(
@@ -228,9 +231,13 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
   const navigate = useNavigate()
   const { user } = useApp()
   const toast = useToast()
+  const modal = useModal()
   const thread = useThread(user?.id, threadId)
   const typingList = useTyping(threadId)
   const [draft, setDraft] = useState('')
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const cancelNameRef = useRef(false)
   const scrollRef = useRef(null)
 
   // Fetch past messages once on open (idempotent — the store no-ops the second
@@ -320,7 +327,6 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
                 <span className="truncate text-sm font-semibold text-ink group-hover:text-primary">
                   {desc.title}
                 </span>
-                {desc.verified && <VerifiedBadge size={13} />}
               </div>
               {desc.subtitle && !compact && (
                 <p className="truncate text-xs text-text-muted">{desc.subtitle}</p>
@@ -330,9 +336,62 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-2.5">
             <AvatarStack avatars={desc.avatars} size={36} />
-            <div className="min-w-0">
-              <span className="truncate text-sm font-semibold text-ink">{desc.title}</span>
-              {desc.subtitle && <p className="truncate text-xs text-text-muted">{desc.subtitle}</p>}
+            <div className="min-w-0 flex-1">
+              {editingName ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    renameGroup(user?.id, threadId, nameDraft)
+                    setEditingName(false)
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <input
+                    autoFocus
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    onBlur={() => {
+                      if (cancelNameRef.current) {
+                        cancelNameRef.current = false
+                      } else {
+                        renameGroup(user?.id, threadId, nameDraft)
+                      }
+                      setEditingName(false)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault()
+                        cancelNameRef.current = true
+                        setEditingName(false)
+                      }
+                    }}
+                    maxLength={80}
+                    placeholder="Group name"
+                    aria-label="Group name"
+                    className="min-w-0 flex-1 rounded-input border border-border-light bg-surface px-2 py-1 text-sm font-semibold text-ink outline-none focus:border-primary"
+                  />
+                </form>
+              ) : (
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate text-sm font-semibold text-ink">{desc.title}</span>
+                  {desc.isGroup && thread.serverId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNameDraft(thread.name ?? '')
+                        setEditingName(true)
+                      }}
+                      aria-label="Rename group"
+                      className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-full text-text-muted transition-colors hover:bg-surface hover:text-ink"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  )}
+                </div>
+              )}
+              {desc.subtitle && !editingName && (
+                <p className="truncate text-xs text-text-muted">{desc.subtitle}</p>
+              )}
             </div>
           </div>
         )}
@@ -341,7 +400,7 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
       {/* scrollable message list */}
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-surface/40 px-3 py-4"
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-surface/40 px-3 py-4"
       >
         {groups.length === 0 && (
           <p className="py-10 text-center text-sm text-text-muted">No messages yet. Say hi 👋</p>
@@ -363,7 +422,7 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
               )}
               <div
                 className={cn(
-                  'flex max-w-[78%] flex-col gap-1',
+                  'flex max-w-[78%] flex-col gap-2',
                   g.from === 'me' ? 'items-end' : 'items-start',
                 )}
               >
@@ -384,24 +443,49 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
                     if (!msg.id || String(msg.id).startsWith('c-')) return
                     toggleReaction(user.id, threadId, msg.id)
                   }
+                  const canDelete = g.from === 'me' && !!msg.id && !String(msg.id).startsWith('c-')
+                  const onDelete = async () => {
+                    if (!canDelete || !user?.id) return
+                    const ok = await modal.confirm({
+                      title: 'Delete message?',
+                      message: 'This can’t be undone.',
+                      confirmLabel: 'Delete',
+                      cancelLabel: 'Cancel',
+                      danger: true,
+                    })
+                    if (!ok) return
+                    deleteMessage(user.id, threadId, msg.id)
+                  }
                   return (
                     <div
                       key={msg.id}
                       className={cn(
-                        'flex flex-col gap-0.5',
+                        'group/msg flex flex-col gap-0.5',
                         g.from === 'me' ? 'items-end' : 'items-start',
                       )}
                     >
-                      <TappableBubble onDoubleTap={onDoubleTap}>
-                        <MessageBubble
-                          message={msg}
-                          mine={g.from === 'me'}
-                          onOpenEvent={(evt) => {
-                            if (!evt?.id) return
-                            navigate(evt.isSports ? `/sports/${evt.id}` : `/event/${evt.id}`)
-                          }}
-                        />
-                      </TappableBubble>
+                      <div className="flex items-center gap-1.5">
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={onDelete}
+                            aria-label="Delete message"
+                            className="grid h-7 w-7 place-items-center rounded-full text-text-muted opacity-0 transition-opacity hover:bg-surface hover:text-accent focus:opacity-100 group-hover/msg:opacity-100"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        <TappableBubble onDoubleTap={onDoubleTap}>
+                          <MessageBubble
+                            message={msg}
+                            mine={g.from === 'me'}
+                            onOpenEvent={(evt) => {
+                              if (!evt?.id) return
+                              navigate(evt.isSports ? `/sports/${evt.id}` : `/event/${evt.id}`)
+                            }}
+                          />
+                        </TappableBubble>
+                      </div>
                       <ReactionsBadge
                         message={msg}
                         meId={user?.id}
@@ -929,7 +1013,6 @@ export function NewMessagePicker({ onPick, onClose }) {
                         <span className="truncate text-sm font-semibold text-ink">
                           {p.handle ? `@${p.handle}` : p.name}
                         </span>
-                        {p.verified && <VerifiedBadge size={13} />}
                       </div>
                       {p.handle && p.name && (
                         <p className="mt-0.5 truncate text-xs text-text-secondary">{p.name}</p>
@@ -1163,7 +1246,6 @@ export function ShareEventSheet({ event, onClose, onSent }) {
                               <span className="truncate text-sm font-semibold text-ink">
                                 {desc.title}
                               </span>
-                              {desc.verified && <VerifiedBadge size={13} />}
                             </div>
                             {desc.subtitle && (
                               <p className="mt-0.5 truncate text-xs text-text-muted">
@@ -1212,7 +1294,6 @@ export function ShareEventSheet({ event, onClose, onSent }) {
                               <span className="truncate text-sm font-semibold text-ink">
                                 {p.handle ? `@${p.handle}` : p.name}
                               </span>
-                              {p.verified && <VerifiedBadge size={13} />}
                             </div>
                             {p.handle && p.name && (
                               <p className="mt-0.5 truncate text-xs text-text-secondary">

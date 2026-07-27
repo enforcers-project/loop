@@ -5,6 +5,8 @@
 //   GET  /api/threads                                        my threads + unread
 //   GET  /api/threads/:id/messages                           cursor-paginated
 //   POST /api/threads/:id/messages      {text?, event_id?, client_id?}
+//   DELETE /api/threads/:id/messages/:mid                    sender-only delete
+//   PATCH /api/threads/:id              {name}               rename group
 //   POST /api/threads/:id/read                               bump lastReadAt
 //   POST /api/threads/:id/typing                             fan-out only
 //   GET  /api/messages/stream                                SSE for req.user
@@ -349,6 +351,87 @@ router.post('/threads/:id/messages', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('POST /api/threads/:id/messages error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not send message')
+  }
+})
+
+// --- PATCH /api/threads/:id -------------------------------------------------
+// Body: { name }. Any group participant can rename (DMs 422). Empty/whitespace
+// name clears the custom title (falls back to derived participant names on the
+// client). Fans out a `thread-updated` SSE frame so every peer's header retitles
+// live.
+router.patch('/threads/:id', requireAuth, async (req, res) => {
+  const me = req.user.id
+  const threadId = req.params.id
+  const member = await requireParticipant(threadId, me, res)
+  if (!member) return
+
+  const raw = typeof req.body?.name === 'string' ? req.body.name.trim().slice(0, 80) : ''
+  const name = raw || null
+
+  try {
+    const thread = await prisma.messageThread.findUnique({
+      where: { id: threadId },
+      select: { id: true, dmKey: true },
+    })
+    if (!thread) return fail(res, 404, 'NOT_FOUND', 'Thread not found')
+    if (thread.dmKey) {
+      return fail(res, 422, 'VALIDATION_ERROR', 'Only group chats can be renamed')
+    }
+    if (name && enforceProfanity(req, res, [name]).blocked) return
+
+    const updated = await prisma.messageThread.update({
+      where: { id: threadId },
+      data: { name },
+      select: { id: true, name: true },
+    })
+
+    const ids = await participantIds(threadId)
+    publish(ids, {
+      type: 'thread-updated',
+      threadId,
+      changes: { name: updated.name },
+      by: me,
+    })
+
+    return res.json({ data: { id: updated.id, name: updated.name } })
+  } catch (err) {
+    console.error('PATCH /api/threads/:id error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not rename group')
+  }
+})
+
+// --- DELETE /api/threads/:id/messages/:mid ---------------------------------
+// Sender-only. Removes the row (reactions cascade). Fans out a
+// `message-deleted` SSE frame so every peer's UI drops the bubble live.
+router.delete('/threads/:id/messages/:mid', requireAuth, async (req, res) => {
+  const me = req.user.id
+  const threadId = req.params.id
+  const messageId = req.params.mid
+  const member = await requireParticipant(threadId, me, res)
+  if (!member) return
+  if (!isUuid(messageId)) return fail(res, 404, 'NOT_FOUND', 'Message not found')
+
+  try {
+    const msg = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true, threadId: true, senderId: true },
+    })
+    if (!msg || msg.threadId !== threadId) {
+      return fail(res, 404, 'NOT_FOUND', 'Message not found')
+    }
+    if (msg.senderId !== me) {
+      return fail(res, 403, 'FORBIDDEN', 'You can only delete your own messages')
+    }
+
+    await prisma.message.delete({ where: { id: messageId } })
+
+    const ids = await participantIds(threadId)
+    publish(ids, { type: 'message-deleted', threadId, messageId })
+
+    return res.json({ data: { message_id: messageId, thread_id: threadId } })
+  } catch (err) {
+    console.error('DELETE /api/threads/:id/messages/:mid error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not delete message')
   }
 })
 

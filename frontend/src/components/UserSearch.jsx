@@ -5,7 +5,7 @@ import { X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { api, DEFAULT_AVATAR } from '../lib/api'
 import { formatCount, pluralize } from '../lib/utils'
-import { FollowBtn, Spinner, VerifiedBadge } from './primitives'
+import { FollowBtn, Spinner } from './primitives'
 import { backdrop, dialog, fadeUp, staggerParent } from '../lib/motion'
 
 /* Every public profile — organizer or attendee — renders through the
@@ -33,7 +33,6 @@ function Identity({ user }) {
       <div className="min-w-0">
         <div className="flex items-center gap-1">
           <span className="truncate font-semibold text-ink">{primary}</span>
-          {user.is_verified && <VerifiedBadge size={14} />}
         </div>
         {user.handle && user.display_name ? (
           <p className="truncate text-[13px] text-text-secondary">{user.display_name}</p>

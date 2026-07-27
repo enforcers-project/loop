@@ -4,7 +4,6 @@ import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { timeAgo } from '../lib/utils'
-import { VerifiedBadge } from './primitives'
 import { CommentReplies } from './CommentReplies'
 
 // Threaded comments on an EventDetail page (planning §7.3, work-plan #30).
@@ -139,7 +138,6 @@ export function EventComments({ eventId, organizerId }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-semibold text-ink">{c.author}</span>
-                    {c.verified && <VerifiedBadge size={14} />}
                     {when && <span className="text-xs text-text-muted">· {when}</span>}
                     {canDelete && (
                       <button

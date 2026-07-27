@@ -26,7 +26,6 @@ import {
   SaveBtn,
   StickyRsvpBar,
   TicketBtn,
-  VerifiedBadge,
 } from '../components/primitives'
 import { EventCard } from '../components/EventCard'
 import { AttendeeStrip } from '../components/UserSearch'
@@ -257,7 +256,6 @@ export function EventDetail() {
                     />
                     <span className="flex items-center gap-1 font-semibold">
                       {event.organizer.name}
-                      {event.organizer.verified && <VerifiedBadge size={16} />}
                     </span>
                   </Link>
                   <FollowBtn

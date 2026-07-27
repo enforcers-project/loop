@@ -5,7 +5,7 @@ import { ArrowLeft, Check, ExternalLink, UserCheck } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { PageLoader, Spinner, VerifiedBadge } from '../components/primitives'
+import { PageLoader, Spinner } from '../components/primitives'
 import { StatTile } from '../components/analytics/AnalyticsPrimitives'
 import { cn } from '../lib/utils'
 
@@ -337,7 +337,6 @@ function AttendeeRow({ row, busy, onCheckIn }) {
           <span className="truncate text-sm font-medium text-ink">
             {u.display_name || 'Someone'}
           </span>
-          {u.is_verified && <VerifiedBadge size={13} />}
         </div>
         <div className="flex items-center gap-2 text-xs text-text-muted">
           {u.handle && <span className="truncate">@{u.handle}</span>}

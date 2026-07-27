@@ -5,7 +5,7 @@ import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
-import { PageLoader, VerifiedBadge } from '../components/primitives'
+import { PageLoader } from '../components/primitives'
 
 const SKILL_STYLE = {
   Beginner: { bg: '#F0EFFE', text: '#6D5EFC' },
@@ -259,7 +259,6 @@ export function SportsPickupDetail() {
           <div className="mt-6">
             <h3 className="mb-2 flex items-center gap-2 font-display text-base font-bold text-ink">
               Waitlist
-              <VerifiedBadge size={14} />
             </h3>
             <div className="space-y-2">
               {waitlist.map((p, i) => (

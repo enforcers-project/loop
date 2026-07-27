@@ -598,8 +598,13 @@ export function PostCard({ post }) {
         created?.id ? created : { id: `local-${prev.length}`, author: user?.name ?? 'You', text },
       ])
       setDraft('')
-    } catch {
-      // Leave the draft in place so the user can retry.
+    } catch (err) {
+      // Leave the draft in place so the user can retry. Surface a filter-block
+      // toast so a rejection isn't silent — otherwise the field just clears
+      // and the user has no idea why.
+      if (err?.code === 'PROFANITY_BLOCKED' || err?.code === 'RATE_LIMITED') {
+        toast.error(err.message)
+      }
     } finally {
       setPosting(false)
     }

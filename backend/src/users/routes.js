@@ -9,6 +9,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { fail, requireAuth } from '../auth/middleware.js'
+import { enforceProfanity } from '../lib/profanity.js'
 import { toPublicUser, PUBLIC_USER_SELECT } from './serialize.js'
 import { toSelfUser } from '../auth/serialize.js'
 import { toEventCard } from '../events/serialize.js'
@@ -632,6 +633,10 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (Object.keys(data).length === 0) {
     return fail(res, 422, 'VALIDATION_ERROR', 'No editable fields provided')
   }
+
+  // Identity fields are hard-block only — a "flagged" display name/handle would
+  // still be visible to everyone, so if it trips the filter we refuse the save.
+  if (enforceProfanity(req, res, [data.displayName, data.handle, data.bio]).blocked) return
 
   try {
     const updated = await prisma.user.update({ where: { id: req.user.id }, data })

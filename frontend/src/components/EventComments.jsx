@@ -46,8 +46,14 @@ export function EventComments({ eventId, organizerId }) {
         setComments((prev) => [...(prev ?? []), created])
         setDraft('')
       }
-    } catch {
-      toast.error('Could not post your comment. Try again.')
+    } catch (err) {
+      // Filter-block gets a specific message; everything else uses the
+      // generic retry copy so we don't leak backend internals to the user.
+      if (err?.code === 'PROFANITY_BLOCKED' || err?.code === 'RATE_LIMITED') {
+        toast.error(err.message)
+      } else {
+        toast.error('Could not post your comment. Try again.')
+      }
     } finally {
       setPosting(false)
     }

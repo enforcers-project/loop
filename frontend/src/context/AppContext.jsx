@@ -460,6 +460,19 @@ export function AppProvider({ children }) {
     })
   }, [])
 
+  // Mark an event "going" without hitting the RSVP endpoint — for side effects
+  // that RSVP the user server-side already (e.g. joining a posse auto-RSVPs).
+  // Keeps goingIds in step so the event UI shows "You're going ✓" and the user
+  // can't re-RSVP and double-count. No-op if already going.
+  const markGoing = useCallback(
+    (id) => {
+      if (!id || goingIds.has(id)) return
+      goingTouched.current.add(id) // survive an in-flight hydration overwrite
+      setGoingFlag(id, true)
+    },
+    [goingIds, setGoingFlag],
+  )
+
   const toggleGoing = useCallback(
     async (id) => {
       if (!requireAuth()) return null
@@ -556,6 +569,7 @@ export function AppProvider({ children }) {
         saveNotificationPrefs,
         toggleSaved,
         toggleGoing,
+        markGoing,
         toggleFollow,
       }}
     >

@@ -1030,7 +1030,8 @@ enum PosseRole {
 
 enum PosseMemberStatus {
   active // in the posse + in the thread
-  pending // requested to join; NOT in the thread yet
+  pending // requested to join (join-policy = ask); captain decides. NOT in the thread yet
+  invited // a member invited them; the invitee decides (accept → active / decline → gone). NOT in the thread yet
 
   @@map("posse_member_status")
 }

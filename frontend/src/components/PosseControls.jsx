@@ -111,6 +111,7 @@ function ModalShell({ title, onClose, children, footer }) {
 -------------------------------------------------------------------------- */
 export function CreatePosseModal({ eventId, eventTitle, open, onClose, onCreated }) {
   const toast = useToast()
+  const { markGoing } = useApp()
   const [name, setName] = useState('')
   const [note, setNote] = useState('')
   const [visibility, setVisibility] = useState('private')
@@ -130,6 +131,10 @@ export function CreatePosseModal({ eventId, eventTitle, open, onClose, onCreated
         joinPolicy,
       })
       toast.success('Posse created')
+      // Creating a posse auto-RSVPs the captain server-side (unless age-gated),
+      // so sync goingIds — otherwise the event still shows "RSVP now" and a tap
+      // would double-count them.
+      if (!posse?.rsvp_blocked) markGoing(posse?.event_id ?? eventId)
       onCreated?.(posse)
     } catch (err) {
       toast.error(err.message || 'Could not create posse')

@@ -12,7 +12,7 @@ import { CreatePosseModal, PosseAvatars } from './PosseControls'
    feature. Renders nothing for logged-out viewers (posses are member-scoped). */
 export function EventPosses({ eventId, eventTitle }) {
   const navigate = useNavigate()
-  const { isLoggedIn, requireAuth } = useApp()
+  const { isLoggedIn, requireAuth, markGoing } = useApp()
   const toast = useToast()
   const [posses, setPosses] = useState([])
   const [createOpen, setCreateOpen] = useState(false)
@@ -44,6 +44,10 @@ export function EventPosses({ eventId, eventTitle }) {
         toast.success('Requested to join')
         api.posses.forEvent(eventId).then(setPosses)
       } else {
+        // An open-join auto-RSVPs the user server-side (unless age-gated), so
+        // reflect that in goingIds — otherwise the event still shows "RSVP now"
+        // and a tap would double-count them as going.
+        if (!res?.rsvp_blocked) markGoing(res?.event_id ?? eventId)
         navigate(`/posse/${posse.id}`)
       }
     } catch (err) {

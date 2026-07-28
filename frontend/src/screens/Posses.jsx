@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Users } from 'lucide-react'
 import { api } from '../lib/api'
+import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { PosseAvatars } from '../components/PosseControls'
 import { PageLoader } from '../components/primitives'
@@ -44,6 +45,7 @@ function MinePosseRow({ posse }) {
 export function Posses() {
   const navigate = useNavigate()
   const toast = useToast()
+  const { markGoing } = useApp()
   const [mine, setMine] = useState(null) // null = loading
   const [discover, setDiscover] = useState([])
   const [joiningId, setJoiningId] = useState(null)
@@ -66,6 +68,9 @@ export function Posses() {
         setDiscover((prev) => prev.filter((p) => p.id !== posse.id))
         api.posses.mine().then(setMine)
       } else {
+        // Open-join auto-RSVPs server-side (unless age-gated); sync goingIds so
+        // the event won't show "RSVP now" and let the user double-count.
+        if (!res?.rsvp_blocked) markGoing(res?.event_id ?? posse.event_id)
         navigate(`/posse/${posse.id}`)
       }
     } catch (err) {

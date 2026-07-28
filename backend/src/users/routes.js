@@ -13,6 +13,7 @@ import { enforceProfanity } from '../lib/profanity.js'
 import { toPublicUser, PUBLIC_USER_SELECT } from './serialize.js'
 import { toSelfUser } from '../auth/serialize.js'
 import { toEventCard } from '../events/serialize.js'
+import { scheduleRebuild } from '../preferences/coalesce.js'
 import {
   presignPutUrl,
   isConfigured as s3Configured,
@@ -245,6 +246,12 @@ router.put('/:id/interests', requireAuth, async (req, res) => {
         data: { onboardingCompletedAt: new Date() },
       }),
     ])
+
+    // Interests drive the seed vector (see preferences/builder.js:computeSeedVector),
+    // which is a majority of the final preference vector until the user has ≥8
+    // event signals. Without this rebuild, editing interests changed no
+    // recommendations until the user also saved/RSVPed something.
+    await scheduleRebuild(req.user.id)
 
     return res.json({
       data: {

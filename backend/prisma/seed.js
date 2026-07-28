@@ -1835,6 +1835,23 @@ async function main() {
   // match — otherwise a sports card would show a full-looking crowd on the
   // event but zero on the roster meter.
   const seededByslug = new Map(EVENTS.map((e) => [e.slug, seedCounts(e)]))
+
+  // Roll every seeded start/end forward so the whole catalog lands inside the
+  // recommender's forward window (recommendations/engine.js filters events to
+  // `starts_at BETWEEN now() AND now() + 30 days`). The hard-coded ISO dates
+  // in EVENTS anchor around 2026-07-17..27; without this shift, any run after
+  // 2026-07-27 wipes the visible catalog and the For-You feed reads as empty.
+  // Compute the offset once from the earliest event so relative spacing (this
+  // event is a day before that one, this cluster is a week apart) is preserved.
+  const earliestSeedMs = EVENTS.reduce((min, e) => {
+    const t = new Date(e.startsAt).getTime()
+    return t < min ? t : min
+  }, Infinity)
+  // Aim the earliest event ~2 days from now so a couple of same-day cards still
+  // appear at the top of the feed and later ones fan out over the next weeks.
+  const SEED_DATE_OFFSET_MS = Date.now() + 2 * 24 * 60 * 60 * 1000 - earliestSeedMs
+  const shiftedDate = (iso) => new Date(new Date(iso).getTime() + SEED_DATE_OFFSET_MS)
+
   for (const evt of EVENTS) {
     const { category, sportsDetail, positions, ...eventData } = evt
 
@@ -1857,8 +1874,8 @@ async function main() {
         source: 'native',
         externalId: evt.slug,
         publishedAt: new Date(),
-        startsAt: new Date(evt.startsAt),
-        endsAt: evt.endsAt ? new Date(evt.endsAt) : null,
+        startsAt: shiftedDate(evt.startsAt),
+        endsAt: evt.endsAt ? shiftedDate(evt.endsAt) : null,
         isSports: evt.isSports || false,
         rsvpCount,
         saveCount,
@@ -1871,8 +1888,8 @@ async function main() {
         source: 'native',
         externalId: evt.slug,
         publishedAt: new Date(),
-        startsAt: new Date(evt.startsAt),
-        endsAt: evt.endsAt ? new Date(evt.endsAt) : null,
+        startsAt: shiftedDate(evt.startsAt),
+        endsAt: evt.endsAt ? shiftedDate(evt.endsAt) : null,
         isSports: evt.isSports || false,
         rsvpCount,
         saveCount,

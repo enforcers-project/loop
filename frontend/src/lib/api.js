@@ -305,47 +305,6 @@ async function request(path, { method = 'GET', body } = {}) {
   return json?.data
 }
 
-/**
- * Approximate quantile of a numeric array — used to derive the "top X%" cutoff
- * for popularity-gated badges without pulling a stats lib. Uses the linear
- * interpolation Type-7 method (matches R/NumPy's default). Empty input → 0.
- */
-function quantile(values, p) {
-  if (!values.length) return 0
-  const sorted = [...values].sort((a, b) => a - b)
-  const pos = (sorted.length - 1) * p
-  const base = Math.floor(pos)
-  const rest = pos - base
-  if (sorted[base + 1] !== undefined) return sorted[base] + rest * (sorted[base + 1] - sorted[base])
-  return sorted[base]
-}
-
-function mockFilter({ category, isFree, isSports, q }) {
-  // Match the backend: past events are hidden from Home/Search. Compare on
-  // isoDate (has TZ offset) — an event that has already started is not
-  // something the user can still attend.
-  const now = Date.now()
-  let list = MOCK_EVENTS.map(withOrganizer).filter((e) => {
-    const t = e.isoDate ? Date.parse(e.isoDate) : NaN
-    return isNaN(t) || t >= now
-  })
-  if (category && category !== 'All') list = list.filter((e) => e.category === category)
-  if (isFree) list = list.filter((e) => e.isFree)
-  if (isSports) list = list.filter((e) => e.isSports)
-  if (q?.trim()) {
-    const n = q.toLowerCase()
-    list = list.filter(
-      (e) =>
-        e.title.toLowerCase().includes(n) ||
-        e.description.toLowerCase().includes(n) ||
-        e.tags.some((t) => t.toLowerCase().includes(n)) ||
-        e.city.toLowerCase().includes(n) ||
-        e.category.toLowerCase().includes(n),
-    )
-  }
-  return list
-}
-
 // Map the backend's snake_case SelfUser (auth/serialize.js) onto the camelCase
 // shape the UI reads. Falls back to a derived handle/avatar so the nav + profile
 // always have something to render.
@@ -812,7 +771,12 @@ export const api = {
       qs.set('city', near.city)
     }
     const suffix = qs.toString() ? `?${qs}` : ''
-    const list = (await get(`/events${suffix}`, () => mockFilter(filters))) ?? []
+    // No mock fallback here. The mock catalog's isoDate values are frozen in
+    // the past, so on any transient backend hiccup the client would render
+    // "only 2 events" (the two future-dated mocks) instead of the real feed.
+    // A failed fetch degrades to [] and the screen's empty state, which is
+    // honest — better than showing a stale two-item catalog.
+    const list = (await get(`/events${suffix}`, () => [])) ?? []
     return list.map(toEventCardShape)
   },
 
@@ -832,44 +796,31 @@ export const api = {
       )
     }).then((list) => (list ?? []).map(toEventCardShape)),
 
-  // Empty-feed fallback: /recommendations filters by the user's saved location
-  // server-side, so a user whose saved city has no seeded events would see an
-  // empty For You feed. When that happens, fall back to non-geo popular events
-  // so the feed always has something to show.
+  // For-You recommendations. On a 401 (no session yet, e.g. /me hasn't landed)
+  // or an empty personalized list, fall through to the real `/events?sort=popular`
+  // list so the feed always renders live data — never the stale MOCK_EVENTS
+  // (whose isoDate values are frozen to 2026-07 and get culled as "past" by
+  // the client-side filter, producing the "only 2 events" symptom).
   recommendations: async (interests) => {
-    const list = await post('/recommendations', { interests }, () => {
-      const cats = new Set(
-        MOCK_INTERESTS.filter((i) => interests.includes(i.id)).map((i) => i.category),
-      )
-      // Reserve "Popular near you" for the ~15% of events with the strongest
-      // RSVP+save signal (see planning §6 recommender). A badge that fires on
-      // every card stops meaning anything — the popularity cutoff is what turns
-      // it into real social proof. Everything below the cutoff falls back to
-      // the category chip via EventCard's showRationale gate.
-      const scored = MOCK_EVENTS.map(withOrganizer).map((e) => ({
-        e,
-        popularity: e.rsvpCount + 2 * e.saveCount,
-        score: (cats.has(e.category) ? 100000 : 0) + e.rsvpCount + 2 * e.saveCount,
-      }))
-      const popularityCutoff = quantile(
-        scored.map((s) => s.popularity),
-        0.85,
-      )
-      return scored
-        .sort((a, b) => b.score - a.score)
-        .map(({ e, popularity }) => {
-          // Category-matched events keep the recommender's own rationale.
-          if (!cats.size || cats.has(e.category)) return e
-          // Out-of-category: only the truly popular ones get the "Popular near
-          // you" chip; the rest render with just the category badge.
-          return popularity >= popularityCutoff
-            ? { ...e, rationale: 'Popular near you' }
-            : { ...e, rationale: undefined }
-        })
-    })
+    let list = null
+    try {
+      const res = await fetch(apiUrl('/recommendations'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ interests }),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        list = json.data
+      }
+    } catch {
+      // Network-only failure — fall through to popular events below.
+    }
     const arr = list ?? []
     if (arr.length > 0) return arr.map(toEventCardShape)
-    const fallback = (await get('/events?sort=popular', () => mockFilter({}))) ?? []
+    // Live popular events as the empty/unauthed fallback — no mock detour.
+    const fallback = (await get('/events?sort=popular', () => [])) ?? []
     return fallback.map(toEventCardShape)
   },
 

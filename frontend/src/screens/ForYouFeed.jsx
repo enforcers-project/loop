@@ -27,7 +27,11 @@ const FEED_TOGGLES = ['Trending', 'Following']
    bottom-up overlay so the white text stays readable. */
 function FeaturedCard({ event }) {
   const navigate = useNavigate()
-  const { savedIds, goingIds, toggleSaved, toggleGoing } = useApp()
+  const { savedIds, goingIds, toggleSaved, toggleGoing, interestLabelsByCategory } = useApp()
+  const matchedLabels =
+    interestLabelsByCategory?.[event.category] ??
+    interestLabelsByCategory?.[event.categorySlug] ??
+    []
   // Re-seed during render when reused for a different event (React's
   // reset-state-on-prop-change pattern — no effect, so no optimistic clobber).
   const [goingCount, setGoingCount] = useState(event.goingCount ?? 0)
@@ -75,7 +79,14 @@ function FeaturedCard({ event }) {
 
       <div className="pointer-events-none absolute inset-x-4 top-4 flex items-start justify-between gap-2">
         {event.rationale ? (
-          <AIChip text={recommendationLabel(event.rationale, event.category)} />
+          <AIChip
+            text={recommendationLabel(
+              event.rationale,
+              event.category,
+              matchedLabels,
+              `${event.title ?? ''} ${event.description ?? ''}`,
+            )}
+          />
         ) : (
           <span
             className="rounded-pill px-2.5 py-1 text-xs font-semibold text-white shadow-sm"

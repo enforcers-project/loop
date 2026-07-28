@@ -133,24 +133,52 @@ export function isEventPast(event, now = Date.now()) {
 }
 
 /**
- * Normalize a raw recommendation rationale into a short, intentional badge
- * label — never long enough to truncate or overflow. Falls back to the
- * event category so "Because you like …" stays specific but concise.
+ * Recommendation badge label. Only two shapes are exposed on the card:
+ *   • "Because you like <Interest>" — when one of the user's onboarding
+ *     picks actually appears in the event's title/description. e.g. an
+ *     "Afrobeats" pick on an "Afrobeats Warehouse Night" event → matches,
+ *     but the same pick on a "Hairspray" musical → doesn't match, so we
+ *     fall through to the generic label. Category-only alignment isn't
+ *     enough — a Music-category user with "House / EDM" shouldn't see
+ *     "Because you like House / EDM" on every Broadway show.
+ *   • "Recommended for you" — everything else.
+ *
+ * Matching rules on `haystack` (usually event.title + ' ' + event.description):
+ *   1. Full normalized label match, word-bounded (e.g. "hip hop" matches
+ *      "Hip-Hop Cypher: Open Mic").
+ *   2. Failing that, any single sub-word ≥4 chars from the label
+ *      (e.g. "House / EDM" → "house" matches "House Music Sunset Cruise";
+ *      short tokens like "pop"/"edm" are excluded to avoid noise like
+ *      "pop-up event" triggering a K-Pop pill).
+ * First matching label wins.
  */
-export function recommendationLabel(rationale, category) {
-  if (!rationale) return 'Recommended'
-  const r = rationale.toLowerCase()
-  if (r.includes('friend')) return rationale.length <= 28 ? rationale : 'Friends going'
-  if (r.includes('hosted by')) return 'From someone you follow'
-  if (r.includes('saved')) return 'Similar to saved'
-  if (r.includes('trending')) return 'Trending nearby'
-  if (r.includes('popular')) return 'Popular near you'
-  if (r.includes('follow')) return 'Recommended for you'
-  if (r.includes('into this lately')) return 'Friends are into this'
-  if (r.startsWith('because you like')) {
-    return category ? `Because you like ${category}` : 'Recommended for you'
+function normalizeForMatch(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function recommendationLabel(rationale, category, userInterestLabels = [], haystack = '') {
+  const norm = normalizeForMatch(haystack)
+  if (userInterestLabels && userInterestLabels.length > 0 && norm) {
+    const padded = ` ${norm} `
+    for (const label of userInterestLabels) {
+      const normLabel = normalizeForMatch(label)
+      if (!normLabel) continue
+      if (padded.includes(` ${normLabel} `)) {
+        return `Because you like ${label}`
+      }
+      const tokens = normLabel.split(' ').filter((t) => t.length >= 4)
+      for (const t of tokens) {
+        if (padded.includes(` ${t} `)) {
+          return `Because you like ${label}`
+        }
+      }
+    }
   }
-  return rationale.length <= 28 ? rationale : 'Recommended for you'
+  return 'Recommended for you'
 }
 
 /**

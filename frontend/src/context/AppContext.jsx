@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react'
 import { api, toClientUser } from '../lib/api'
 import { useModal } from './ModalContext'
 import { useToast } from './ToastContext'
@@ -20,6 +28,10 @@ export function AppProvider({ children }) {
   const [role, setRole] = useState('attendee')
   const [isHost, setIsHost] = useState(false)
   const [interests, setInterestsState] = useState([])
+  // Full interest catalog (id/slug/label/category) — hydrated once so the
+  // For-You card badges can render "Because you like <Interest>" using the
+  // human label from the onboarding picker, not the raw id.
+  const [interestCatalog, setInterestCatalog] = useState([])
   const [savedIds, setSavedIds] = useState(new Set())
   const [goingIds, setGoingIds] = useState(new Set())
   // Hydrated from GET /users/:id/following on login/refresh (effect below).
@@ -43,6 +55,46 @@ export function AppProvider({ children }) {
     setRole(clientUser?.role ?? 'attendee')
     setIsHost(clientUser?.role === 'organizer' && !!clientUser?.isHost)
   }, [])
+
+  // Hydrate the interest catalog once so cards can resolve a picked id to its
+  // human label for the "Because you like <Interest>" pill. The endpoint is
+  // public + cheap; a failure just leaves the badge showing "Recommended for you".
+  useEffect(() => {
+    let cancelled = false
+    api.interests().then((list) => {
+      if (!cancelled) setInterestCatalog(list ?? [])
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Map { CategoryName → ordered list of user's picked labels in that category }
+  // so an event card can pick the first matching label without another lookup.
+  // Keyed by both name ("Music") and lowercase slug ("music") so the card can
+  // hit it whether the event carries the display name or the slug.
+  const interestLabelsByCategory = useMemo(() => {
+    if (!interests.length || !interestCatalog.length) return {}
+    const idOrSlugToItem = new Map()
+    for (const item of interestCatalog) {
+      if (item.id) idOrSlugToItem.set(item.id, item)
+      if (item.slug) idOrSlugToItem.set(item.slug, item)
+    }
+    const map = {}
+    for (const id of interests) {
+      const item = idOrSlugToItem.get(id)
+      if (!item || !item.category) continue
+      const nameKey = item.category
+      const slugKey = item.category.toLowerCase()
+      if (!map[nameKey]) map[nameKey] = []
+      map[nameKey].push(item.label)
+      if (slugKey !== nameKey) {
+        if (!map[slugKey]) map[slugKey] = []
+        map[slugKey].push(item.label)
+      }
+    }
+    return map
+  }, [interests, interestCatalog])
 
   // Hydrate the session on mount: the JWT cookie is HttpOnly, so the only way
   // to know if we're logged in is to ask the server. Runs once.
@@ -495,6 +547,7 @@ export function AppProvider({ children }) {
         savedIds,
         goingIds,
         followingIds,
+        interestLabelsByCategory,
         login,
         signup,
         loginWithGoogle,

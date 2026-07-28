@@ -9,7 +9,13 @@ const MAX_LIMIT = 50
 const PRE_FILTER_LIMIT = 400
 const KNN_K = 80
 const DEFAULT_RADIUS_KM = 40
-const CHURN_GUARD_DAYS = 3
+// Churn guard suppresses events already shown-and-not-clicked so we don't
+// re-serve the same list every request. Kept short (6h) on purpose: with a
+// small live catalog, a multi-day guard silently drains the candidate pool
+// and the feed reads as empty after a couple of scrolls. Long enough that
+// two quick re-renders of the same session don't loop, short enough that
+// each new browsing session sees the full pool again.
+const CHURN_GUARD_HOURS = 6
 const COLD_START_THRESHOLD = 5
 
 // SQL fragment: case-insensitively compare two city expressions on the token
@@ -183,7 +189,7 @@ async function preFilter(userId, user, context) {
   const categoryFilter = context?.category ?? null
 
   let geoClause = ''
-  const params = [userId, CHURN_GUARD_DAYS]
+  const params = [userId, CHURN_GUARD_HOURS]
   let paramIdx = 3
 
   if (lat && lng) {
@@ -232,7 +238,7 @@ async function preFilter(userId, user, context) {
       )
       AND e.id NOT IN (
         SELECT event_id FROM recommendation_impressions
-        WHERE user_id = $1::uuid AND shown_at > now() - interval '${CHURN_GUARD_DAYS} days'
+        WHERE user_id = $1::uuid AND shown_at > now() - interval '${CHURN_GUARD_HOURS} hours'
           AND clicked = false
       )
     ORDER BY e.starts_at ASC
@@ -391,17 +397,25 @@ function applyMMR(candidates, limit) {
   let consecutiveSameCategory = 0
   let lastCategoryId = null
 
-  while (selected.length < limit && remaining.length > 0) {
+  // Two-stage relaxation: try the strict diversity rules first
+  // (consecutive-cap + category-share cap), and if nothing survives, drop them
+  // one at a time before giving up. Without this, a user whose top-KNN is
+  // dominated by a single category (e.g. Music, 311 SF events) fills the
+  // consecutive-cap on the 3rd pick, finds no non-Music candidate in the
+  // top-80, and bails out with 3 total — the "only 2 events" bug on For You.
+  const pickBest = (allowConsecutive, allowCategoryCap) => {
     let bestIdx = -1
     let bestMmr = -Infinity
-
     for (let i = 0; i < remaining.length; i++) {
       const candidate = remaining[i]
-
       const catId = candidate.categoryId
       const catTotal = categoryCount.get(catId) ?? 0
-      if (catTotal >= Math.ceil(limit * MAX_CATEGORY_SHARE)) continue
-      if (catId === lastCategoryId && consecutiveSameCategory >= MAX_CONSECUTIVE_SAME_CATEGORY)
+      if (!allowCategoryCap && catTotal >= Math.ceil(limit * MAX_CATEGORY_SHARE)) continue
+      if (
+        !allowConsecutive &&
+        catId === lastCategoryId &&
+        consecutiveSameCategory >= MAX_CONSECUTIVE_SAME_CATEGORY
+      )
         continue
 
       let maxSimToSelected = 0
@@ -419,7 +433,13 @@ function applyMMR(candidates, limit) {
         bestIdx = i
       }
     }
+    return bestIdx
+  }
 
+  while (selected.length < limit && remaining.length > 0) {
+    let bestIdx = pickBest(false, false)
+    if (bestIdx === -1) bestIdx = pickBest(true, false) // relax consecutive
+    if (bestIdx === -1) bestIdx = pickBest(true, true) // relax category cap
     if (bestIdx === -1) break
 
     const pick = remaining.splice(bestIdx, 1)[0]

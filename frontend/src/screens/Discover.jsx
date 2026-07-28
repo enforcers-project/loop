@@ -236,11 +236,7 @@ export function Discover() {
 
   return (
     <div className="loop-container pb-24 pt-4 md:pb-12">
-      <SearchBar
-        value={query}
-        onChange={setQuery}
-        placeholder="Search events by title"
-      />
+      <SearchBar value={query} onChange={setQuery} placeholder="Search events by title" />
 
       {searching ? (
         /* ---- Title-search mode: results run live as you type. ------------ */

@@ -1663,19 +1663,15 @@ export const api = {
   // same way so both paths behave identically. `label` is accepted for
   // backwards compatibility with older callers but ignored.
   nlSearch: async (q) => {
-    const res = await post(
-      '/ai/search',
-      { q },
-      () => {
-        const n = String(q ?? '')
-          .trim()
-          .toLowerCase()
-        const events = n
-          ? MOCK_EVENTS.map(withOrganizer).filter((e) => e.title?.toLowerCase().includes(n))
-          : []
-        return { reply: '', events: events.slice(0, 20), pills: [], label: {} }
-      },
-    )
+    const res = await post('/ai/search', { q }, () => {
+      const n = String(q ?? '')
+        .trim()
+        .toLowerCase()
+      const events = n
+        ? MOCK_EVENTS.map(withOrganizer).filter((e) => e.title?.toLowerCase().includes(n))
+        : []
+      return { reply: '', events: events.slice(0, 20), pills: [], label: {} }
+    })
     return {
       reply: res.reply ?? '',
       events: (res.events ?? []).map(toEventCardShape),

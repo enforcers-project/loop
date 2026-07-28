@@ -69,7 +69,7 @@ router.post('/search', async (req, res) => {
     const events = serializeHits(hits)
     const reply = events.length
       ? `Found ${events.length} ${events.length === 1 ? 'event' : 'events'} that match.`
-      : "No events match that title — try a different word."
+      : 'No events match that title — try a different word.'
 
     res.json({
       data: {

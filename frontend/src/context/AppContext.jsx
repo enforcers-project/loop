@@ -1,12 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-} from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { api, toClientUser } from '../lib/api'
 import { useModal } from './ModalContext'
 import { useToast } from './ToastContext'

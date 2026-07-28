@@ -35,7 +35,11 @@ const REASONS = new Set([
 
 // Adding a new reportable target = one line here. Each maps to a Prisma model
 // with an `authorId` (checked below for the self-report guard).
-const REPORTABLE = { post: () => prisma.post, comment: () => prisma.comment, story: () => prisma.story }
+const REPORTABLE = {
+  post: () => prisma.post,
+  comment: () => prisma.comment,
+  story: () => prisma.story,
+}
 const loadTarget = (type, id) =>
   REPORTABLE[type]?.().findUnique({ where: { id }, select: { id: true, authorId: true } }) ?? null
 

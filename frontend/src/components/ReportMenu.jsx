@@ -242,7 +242,14 @@ export function HiddenPlaceholder({ variant = 'row', targetType, targetId, onRes
   )
 }
 
-export function ReportButton({ isOwn, targetType, targetId, onReported, className, iconSize = 20 }) {
+export function ReportButton({
+  isOwn,
+  targetType,
+  targetId,
+  onReported,
+  className,
+  iconSize = 20,
+}) {
   const { requireAuth } = useApp()
   const [open, setOpen] = useState(false)
 

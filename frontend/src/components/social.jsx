@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Bookmark,
   ChevronLeft,
   ChevronRight,
   Heart,
@@ -21,6 +20,7 @@ import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { ImageSourcePicker, inputClass, Spinner } from './primitives'
 import { EventImage } from './EventImage'
+import { ShareEventSheet } from './messages'
 import { CommentReplies } from './CommentReplies'
 import { HiddenPlaceholder, ReportButton } from './ReportMenu'
 
@@ -563,7 +563,6 @@ export function PostCard({ post }) {
   const [hidden, setHidden] = useState(false)
   const [liked, setLiked] = useState(!!post.likedByMe)
   const [likeCount, setLikeCount] = useState(post.likes ?? 0)
-  const [saved, setSaved] = useState(false)
   const [comments, setComments] = useState(post.comments ?? [])
   const [draft, setDraft] = useState('')
   const [posting, setPosting] = useState(false)
@@ -571,6 +570,11 @@ export function PostCard({ post }) {
   // "View all comments" link, closed by the backdrop or the X. Scoped to the
   // feed's PostCard; EventDetail keeps its own inline EventComments section.
   const [commentsOpen, setCommentsOpen] = useState(false)
+  // Share-to-DM sheet. A post shares the event it's about, so the sheet is only
+  // reachable when post.eventId is set. We lazily fetch the full event on open
+  // (the feed post only carries the id) and mount the sheet once it resolves.
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareEvent, setShareEvent] = useState(null)
   const org = post.organizer
 
   const iconBtn =
@@ -616,7 +620,28 @@ export function PostCard({ post }) {
     }
   }
 
-  const onSave = () => requireAuth() && setSaved((v) => !v)
+  // Share = open the Instagram-style share-to-DM sheet for the post's event.
+  // Fire the share signal up-front (matches EventDetail) so organizer analytics
+  // reflect the intent even if the user cancels. The full event is fetched
+  // lazily; the sheet mounts only once it resolves.
+  const onShare = async () => {
+    if (!requireAuth()) return
+    if (!post.eventId) return
+    api.interactions([{ interaction_type: 'share', surface: 'social', event_id: post.eventId }])
+    const evt = shareEvent ?? (await api.event(post.eventId))
+    if (!evt) {
+      toast.error('Could not open share. Please try again.')
+      return
+    }
+    setShareEvent(evt)
+    setShareOpen(true)
+  }
+
+  const handleShareSent = (threadIds) => {
+    const n = threadIds?.length ?? 0
+    if (!n) return
+    toast.success(n > 1 ? `Shared to ${n} chats` : 'Shared')
+  }
 
   const submitComment = async () => {
     if (posting) return
@@ -723,17 +748,13 @@ export function PostCard({ post }) {
         <button onClick={() => setCommentsOpen(true)} className={iconBtn} aria-label="Comment">
           <MessageCircle size={22} className="text-ink" />
         </button>
-        <button className={iconBtn} aria-label="Share">
-          <Send size={20} className="text-ink" />
-        </button>
-        <button
-          onClick={onSave}
-          className={cn(iconBtn, 'ml-auto')}
-          aria-label={saved ? 'Remove bookmark' : 'Bookmark'}
-          aria-pressed={saved}
-        >
-          <Bookmark size={22} className={cn(saved ? 'fill-primary text-primary' : 'text-ink')} />
-        </button>
+        {/* Share only appears for posts about an event — that's what the sheet
+            forwards into a DM. Event-less recaps have nothing to share. */}
+        {post.eventId && (
+          <button onClick={onShare} className={iconBtn} aria-label="Share">
+            <Send size={20} className="text-ink" />
+          </button>
+        )}
       </div>
 
       {/* likes + caption + comments */}
@@ -783,6 +804,16 @@ export function PostCard({ post }) {
           />
         )}
       </AnimatePresence>
+
+      {/* Share-to-DM sheet — only mounted while open (and once the event has
+          resolved) so its useThreads subscription doesn't run per card. */}
+      {shareOpen && shareEvent && (
+        <ShareEventSheet
+          event={shareEvent}
+          onClose={() => setShareOpen(false)}
+          onSent={handleShareSent}
+        />
+      )}
     </article>
   )
 }

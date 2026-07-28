@@ -19,6 +19,7 @@ import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, fail } from '../auth/middleware.js'
 import { enforceProfanity } from '../lib/profanity.js'
+import { loadHiddenIds } from '../reports/hidden.js'
 import { notifySelf } from '../notifications/publish.js'
 import {
   presignPutUrl,
@@ -158,12 +159,15 @@ router.get('/feed/social', requireAuth, async (req, res) => {
       if (!isNaN(cur)) where.createdAt = { lt: cur }
     }
 
-    const rows = await prisma.post.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: limit + 1,
-      select: POST_SELECT,
-    })
+    const [rows, hiddenPostIds] = await Promise.all([
+      prisma.post.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit + 1,
+        select: POST_SELECT,
+      }),
+      loadHiddenIds(req.user.id, 'post'),
+    ])
 
     let nextCursor = null
     if (rows.length > limit) {
@@ -171,18 +175,21 @@ router.get('/feed/social', requireAuth, async (req, res) => {
       nextCursor = rows[rows.length - 1].createdAt.toISOString()
     }
 
+    // Drop posts this user has reported; they should never see them again.
+    const visible = rows.filter((r) => !hiddenPostIds.has(r.id))
+
     // Resolve the caller's like state for just this page of posts.
     let likedIds = new Set()
-    if (rows.length) {
+    if (visible.length) {
       const likes = await prisma.postLike.findMany({
-        where: { userId: req.user.id, postId: { in: rows.map((r) => r.id) } },
+        where: { userId: req.user.id, postId: { in: visible.map((r) => r.id) } },
         select: { postId: true },
       })
       likedIds = new Set(likes.map((l) => l.postId))
     }
 
     return res.json({
-      data: rows.map((p) => toPost(p, likedIds.has(p.id))),
+      data: visible.map((p) => toPost(p, likedIds.has(p.id))),
       nextCursor,
     })
   } catch (err) {
@@ -361,12 +368,15 @@ router.get('/posts/:id/comments', async (req, res) => {
       if (!isNaN(cur)) where.createdAt = { lt: cur }
     }
 
-    const rows = await prisma.comment.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: limit + 1,
-      select: COMMENT_SELECT,
-    })
+    const [rows, hiddenCommentIds] = await Promise.all([
+      prisma.comment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit + 1,
+        select: COMMENT_SELECT,
+      }),
+      loadHiddenIds(req.user?.id, 'comment'),
+    ])
 
     let nextCursor = null
     if (rows.length > limit) {
@@ -374,7 +384,9 @@ router.get('/posts/:id/comments', async (req, res) => {
       nextCursor = rows[rows.length - 1].createdAt.toISOString()
     }
 
-    return res.json({ data: rows.map(toComment), nextCursor })
+    const visible = rows.filter((r) => !hiddenCommentIds.has(r.id))
+
+    return res.json({ data: visible.map(toComment), nextCursor })
   } catch (err) {
     console.error('GET /api/posts/:id/comments error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not load comments')
@@ -465,20 +477,27 @@ router.get('/stories', requireAuth, async (req, res) => {
   try {
     const limit = clampLimit(req.query.limit)
 
-    const rows = await prisma.story.findMany({
-      where: { expiresAt: { gt: new Date() } },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        authorId: true,
-        eventId: true,
-        mediaUrl: true,
-        caption: true,
-        createdAt: true,
-        expiresAt: true,
-        author: { select: AUTHOR_SELECT },
-      },
-    })
+    const [allRows, hiddenStoryIds] = await Promise.all([
+      prisma.story.findMany({
+        where: { expiresAt: { gt: new Date() } },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          authorId: true,
+          eventId: true,
+          mediaUrl: true,
+          caption: true,
+          createdAt: true,
+          expiresAt: true,
+          author: { select: AUTHOR_SELECT },
+        },
+      }),
+      loadHiddenIds(req.user.id, 'story'),
+    ])
+
+    // Drop stories this user has reported before grouping (an author whose only
+    // story was reported simply never appears in the grouping map below).
+    const rows = allRows.filter((s) => !hiddenStoryIds.has(s.id))
 
     // Which of these stories the caller has already seen.
     let viewedIds = new Set()
@@ -638,12 +657,15 @@ router.get('/events/:id/comments', async (req, res) => {
       if (!isNaN(cur)) where.createdAt = { lt: cur }
     }
 
-    const rows = await prisma.comment.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: limit + 1,
-      select: COMMENT_SELECT,
-    })
+    const [rows, hiddenCommentIds] = await Promise.all([
+      prisma.comment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit + 1,
+        select: COMMENT_SELECT,
+      }),
+      loadHiddenIds(req.user?.id, 'comment'),
+    ])
 
     let nextCursor = null
     if (rows.length > limit) {
@@ -651,7 +673,9 @@ router.get('/events/:id/comments', async (req, res) => {
       nextCursor = rows[rows.length - 1].createdAt.toISOString()
     }
 
-    return res.json({ data: rows.map(toComment), nextCursor })
+    const visible = rows.filter((r) => !hiddenCommentIds.has(r.id))
+
+    return res.json({ data: visible.map(toComment), nextCursor })
   } catch (err) {
     console.error('GET /api/events/:id/comments error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not load comments')

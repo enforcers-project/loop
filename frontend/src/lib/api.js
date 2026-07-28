@@ -1501,6 +1501,31 @@ export const api = {
   // both event and post comments; returns nothing (204) on success.
   deleteComment: (id) => request(`/comments/${id}`, { method: 'DELETE' }),
 
+  // Report a post / comment / story (POST /api/reports). Idempotent (upserts on
+  // reporter+target). Server returns { hidden: true } and, from the next list
+  // fetch onward, subtracts the target from what this user sees. `targetType`
+  // is 'post' | 'comment' | 'story'; `reason` is one of the enum values
+  // (spam, harassment, hate, nudity, violence, self_harm, misinfo, other).
+  reportContent: ({ targetType, targetId, reason, note }) =>
+    request('/reports', {
+      method: 'POST',
+      body: {
+        target_type: targetType,
+        target_id: targetId,
+        reason,
+        ...(note ? { note } : {}),
+      },
+    }),
+
+  // Undo a report (DELETE /api/reports). Idempotent — a missing row still
+  // returns 200 so a double-tap Undo doesn't 404. On success the target starts
+  // showing again on the next list fetch.
+  unreportContent: ({ targetType, targetId }) =>
+    request('/reports', {
+      method: 'DELETE',
+      body: { target_type: targetType, target_id: targetId },
+    }),
+
   // Mark a story viewed (POST /api/stories/:id/view; backend #29). Idempotent
   // and fire-and-forget — a failed seen-marker never blocks the UI, so we
   // swallow errors rather than throw.

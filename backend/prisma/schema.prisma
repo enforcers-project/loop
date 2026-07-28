@@ -306,6 +306,7 @@ model User {
   messageReactions     MessageReaction[]
   possesCreated        Posse[]                    @relation("PosseCreator")
   posseMemberships     PosseMember[]
+  contentReports       ContentReport[]            @relation("ContentReporter")
 
   @@map("users")
 }
@@ -1008,14 +1009,14 @@ model MessageReaction {
 enum PosseVisibility {
   private // invite-only; not discoverable
   mutuals // discoverable by reciprocal follows (A follows B AND B follows A)
-  public  // discoverable by anyone who can see the event
+  public // discoverable by anyone who can see the event
 
   @@map("posse_visibility")
 }
 
 enum PosseJoinPolicy {
   open // discoverers join instantly
-  ask  // discoverers request; captain approves
+  ask // discoverers request; captain approves
 
   @@map("posse_join_policy")
 }
@@ -1028,7 +1029,7 @@ enum PosseRole {
 }
 
 enum PosseMemberStatus {
-  active  // in the posse + in the thread
+  active // in the posse + in the thread
   pending // requested to join; NOT in the thread yet
 
   @@map("posse_member_status")
@@ -1067,4 +1068,46 @@ model PosseMember {
   @@id([posseId, userId])
   @@index([userId, status])
   @@map("posse_members")
+}
+
+// --- Content reports (viewer flags a post/comment/story) --------------------
+// A single row per (reporter, target_type, target_id). The unique key doubles
+// as a per-user hide index: the social/story/comment list endpoints subtract
+// this set from what they return, so a reporter never sees the item again.
+
+enum ContentReportTarget {
+  post
+  comment
+  story
+
+  @@map("content_report_target")
+}
+
+enum ContentReportReason {
+  spam
+  harassment
+  hate
+  nudity
+  violence
+  self_harm
+  misinfo
+  other
+
+  @@map("content_report_reason")
+}
+
+model ContentReport {
+  id         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reporterId String              @map("reporter_id") @db.Uuid
+  targetType ContentReportTarget @map("target_type")
+  targetId   String              @map("target_id") @db.Uuid
+  reason     ContentReportReason
+  note       String?             @db.VarChar(500)
+  createdAt  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  reporter User @relation("ContentReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([targetType, targetId, createdAt])
+  @@map("content_reports")
 }

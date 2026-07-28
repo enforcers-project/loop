@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { LayoutGrid, MapPin, Map as MapIcon, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { LayoutGrid, MapPin, Map as MapIcon } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { CatRow, FilterBar, SearchBar } from '../components/rows'
@@ -130,22 +130,14 @@ export function Discover() {
   // spinner instead of "0 events near you".
   const [events, setEvents] = useState(null)
 
-  // Natural-language search state (work-plan #22). `nlResults` is non-null once
-  // a search runs; it holds the AI-ranked events and flips the screen into
-  // search mode (pills + results, browse UI hidden). `nlPills` are the removable
-  // parsed-filter chips, `nlLabel` is the label-shape that produced them (posted
-  // back on pill-removal so the parse is skipped). `nlLoading` gates a spinner.
+  // Title search state. `nlResults` is null while a search is in flight and
+  // becomes the ranked title-match array once it resolves; that flip drives the
+  // search-mode UI (browse hidden, results shown).
   const [nlResults, setNlResults] = useState(null)
-  const [nlPills, setNlPills] = useState([])
-  const [nlLabel, setNlLabel] = useState(null)
-  const [nlLoading, setNlLoading] = useState(false)
 
-  // Live keyword search. As the user types we debounce the query and hit the
-  // backend full-text search (GET /events?q=), so matches come from the *whole*
-  // DB — not a client-side filter over the near-you batch. Enter escalates to
-  // the AI natural-language search above; editing the box drops back to here.
+  // Debounce the raw query (350ms) so the search fires once typing settles
+  // rather than on every keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [kwResults, setKwResults] = useState(null) // null = loading / not yet run
 
   const near = locationOverride ?? nearForUser(user)
   const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
@@ -169,81 +161,43 @@ export function Discover() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nearKey])
 
-  // Debounce the raw query into `debouncedQuery` (250ms). NL-search mode
-  // (nlResults set) takes over the screen, so we pause the keyword path then to
-  // avoid a redundant fetch behind the AI results.
+  // Debounce the raw query into `debouncedQuery` (350ms) so the search fires
+  // once typing settles, not on every keystroke.
   useEffect(() => {
-    if (nlResults !== null) return
-    const t = setTimeout(() => setDebouncedQuery(query.trim()), 250)
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 350)
     return () => clearTimeout(t)
-  }, [query, nlResults])
-
-  // Run the keyword full-text search whenever the debounced query (or the
-  // location/filter context) changes. Blanks to a spinner between runs.
-  const kwKey = `${debouncedQuery}|${nearKey}|${cat}|${filters.free}|${filters.sports}`
-  const [kwFetchedKey, setKwFetchedKey] = useState('')
-  if (debouncedQuery && kwFetchedKey !== kwKey) {
-    setKwFetchedKey(kwKey)
-    setKwResults(null)
-  }
-  useEffect(() => {
-    if (!debouncedQuery) return
-    let cancelled = false
-    api
-      .events({
-        q: debouncedQuery,
-        near,
-        category: cat,
-        isFree: filters.free,
-        isSports: filters.sports,
-      })
-      .then((data) => {
-        if (!cancelled) setKwResults(data)
-      })
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, nearKey, cat, filters.free, filters.sports])
+  }, [query])
 
   const toggle = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }))
 
-  // Run a natural-language search. `label` is passed only on pill-removal (to
-  // skip the LLM re-parse); a fresh Enter-search omits it so the query is parsed.
-  const runSearch = async (label) => {
-    const q = query.trim()
-    if (!q) {
-      clearSearch()
-      return
-    }
-    setNlLoading(true)
-    try {
-      const res = await api.nlSearch(q, label)
-      setNlResults(res.events)
-      setNlPills(res.pills)
-      setNlLabel(res.label)
-    } finally {
-      setNlLoading(false)
-    }
-  }
+  // Monotonic request id so a slow earlier search can't overwrite a newer one's
+  // results (last-typed wins, regardless of which response lands first).
+  const searchSeq = useRef(0)
 
-  // Remove one parsed-filter pill: drop its key from the label and re-run with
-  // the remainder so the LLM doesn't re-add it. Removing the last pill keeps the
-  // search (semantic match on the raw query) but with no hard constraints.
-  const removePill = (key) => {
-    const nextLabel = { ...(nlLabel ?? {}) }
-    delete nextLabel[key]
-    setNlLabel(nextLabel)
-    runSearch(nextLabel)
-  }
-
-  const clearSearch = () => {
+  // Render-time reset (same pattern as the `fetchedKey` block above): when the
+  // active query changes, blank the results so the spinner shows while the new
+  // search runs. An empty query converges on the browse experience
+  // (searching=false).
+  const [searchedFor, setSearchedFor] = useState('')
+  if (searchedFor !== debouncedQuery) {
+    setSearchedFor(debouncedQuery)
     setNlResults(null)
-    setNlPills([])
-    setNlLabel(null)
-    setDebouncedQuery('')
-    setKwResults(null)
   }
+
+  // Fire the title search automatically whenever the debounced query changes.
+  useEffect(() => {
+    if (!debouncedQuery) return
+    const seq = ++searchSeq.current
+    api
+      .nlSearch(debouncedQuery)
+      .then((res) => {
+        if (seq !== searchSeq.current) return // a newer search superseded this one
+        setNlResults(res.events)
+      })
+      .catch(() => {
+        if (seq === searchSeq.current) setNlResults([]) // surface the empty state
+      })
+  }, [debouncedQuery])
 
   // Local browse filtering (only used when NOT in NL-search mode). NL results
   // are already ranked + constrained server-side, so we render them as-is.
@@ -269,14 +223,9 @@ export function Discover() {
     [events, filtersActive],
   )
 
-  // Three view modes, in priority order: AI natural-language results (Enter),
-  // live keyword results (typing), then the default browse experience.
-  const nlSearching = nlResults !== null
-  const kwSearching = !nlSearching && debouncedQuery.length > 0
-
-  // Keyword hits are already full-text-matched + geo/filter-constrained
-  // server-side; just drop past events for consistency with the rest of the UI.
-  const kwFiltered = (kwResults ?? []).filter((e) => !isEventPast(e))
+  // Two view modes: NL-search results (a query is active) or the default browse
+  // experience. The search runs live as the user types.
+  const searching = debouncedQuery.length > 0
 
   const browseHeading =
     cat !== 'All'
@@ -287,84 +236,26 @@ export function Discover() {
 
   return (
     <div className="loop-container pb-24 pt-4 md:pb-12">
-      <SearchBar
-        value={query}
-        onChange={(v) => {
-          setQuery(v)
-          // Clearing the box exits search mode back to the browse experience.
-          if (!v.trim()) clearSearch()
-        }}
-        onSubmit={() => runSearch()}
-        placeholder="Search events — or press Enter to ask, e.g. 'free Afrobeats this weekend'"
-      />
+      <SearchBar value={query} onChange={setQuery} placeholder="Search events by title" />
 
-      {nlSearching ? (
-        /* ---- NL-search mode: pills + AI-ranked results ------------------- */
-        <>
-          {/* Parsed-filter pills — one removable chip per hard constraint the
-              LLM extracted. Removing a pill re-runs without that constraint. */}
-          {nlPills.length > 0 && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-text-muted">Filters:</span>
-              {nlPills.map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => removePill(p.key)}
-                  className="inline-flex items-center gap-1 rounded-pill bg-primary px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-                  aria-label={`Remove ${p.label} filter`}
-                >
-                  {p.label}
-                  <X size={13} />
-                </button>
-              ))}
-            </div>
-          )}
-
-          {nlLoading ? (
-            <PageLoader label="Searching" />
-          ) : (
-            <>
-              <h1 className="mb-5 mt-6 font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
-                {searchHeading}
-              </h1>
-              {nlResults.length > 0 ? (
-                <EventGrid events={nlResults} />
-              ) : (
-                <p className="py-16 text-center text-sm text-text-muted">
-                  No events match. Try removing a filter or rewording your search.
-                </p>
-              )}
-            </>
-          )}
-        </>
-      ) : kwSearching ? (
-        /* ---- Keyword-search mode: live full-text DB results as you type. A
-            hint nudges the user that Enter runs the smarter AI search. ------ */
-        <>
-          {kwResults === null ? (
-            <PageLoader label="Searching" />
-          ) : (
-            <>
-              <div className="mb-5 mt-6 flex flex-col gap-1">
-                <h1 className="font-display text-xl font-bold leading-tight text-ink sm:text-[28px] md:text-3xl">
-                  {kwFiltered.length} {pluralize(kwFiltered.length, 'result')} for "{debouncedQuery}
-                  "
-                </h1>
-                <p className="text-sm text-text-secondary">
-                  Press <span className="font-semibold text-ink">Enter</span> to search with natural
-                  language.
-                </p>
-              </div>
-              {kwFiltered.length > 0 ? (
-                <EventGrid events={kwFiltered} />
-              ) : (
-                <p className="py-16 text-center text-sm text-text-muted">
-                  No events match "{debouncedQuery}". Try different words, or press Enter to ask.
-                </p>
-              )}
-            </>
-          )}
-        </>
+      {searching ? (
+        /* ---- Title-search mode: results run live as you type. ------------ */
+        nlResults === null ? (
+          <PageLoader label="Searching" />
+        ) : (
+          <>
+            <h1 className="mb-5 mt-6 font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
+              {searchHeading}
+            </h1>
+            {nlResults.length > 0 ? (
+              <EventGrid events={nlResults} />
+            ) : (
+              <p className="py-16 text-center text-sm text-text-muted">
+                No events match that title. Try a different word.
+              </p>
+            )}
+          </>
+        )
       ) : (
         /* ---- Browse mode: near-me chip, filters, rails / grid / map ------ */
         <>

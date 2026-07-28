@@ -6,7 +6,7 @@ import { CATEGORY_COLOR, isEventPast, recommendationLabel } from '../lib/utils'
 import { fadeUp, staggerParent } from '../lib/motion'
 import { useApp } from '../context/AppContext'
 import { EventImage } from './EventImage'
-import { AIChip, AlmostFullBadge, GoingStack, RSVPBtn, SaveBtn, VerifiedBadge } from './primitives'
+import { AIChip, AlmostFullBadge, GoingStack, RSVPBtn, SaveBtn } from './primitives'
 
 /* CategoryBadge — the top-left tint pill when there's no AI rationale. */
 function CategoryBadge({ category }) {
@@ -22,7 +22,11 @@ function CategoryBadge({ category }) {
 
 export function EventCard({ event, showRationale = false, onClick }) {
   const navigate = useNavigate()
-  const { savedIds, goingIds, toggleSaved, toggleGoing } = useApp()
+  const { savedIds, goingIds, toggleSaved, toggleGoing, interestLabelsByCategory } = useApp()
+  const matchedLabels =
+    interestLabelsByCategory?.[event.category] ??
+    interestLabelsByCategory?.[event.categorySlug] ??
+    []
   const saved = savedIds.has(event.id)
   const going = goingIds.has(event.id)
   // Past events read as de-emphasized: the poster dims, a "Passed" pill replaces
@@ -85,8 +89,15 @@ export function EventCard({ event, showRationale = false, onClick }) {
 
         {/* top row: AIChip|CategoryBadge (left) + AlmostFullBadge (right) */}
         <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
-          {showRationale && event.rationale ? (
-            <AIChip text={recommendationLabel(event.rationale, event.category)} />
+          {showRationale ? (
+            <AIChip
+              text={recommendationLabel(
+                event.rationale,
+                event.category,
+                matchedLabels,
+                `${event.title ?? ''} ${event.description ?? ''}`,
+              )}
+            />
           ) : (
             <CategoryBadge category={event.category} />
           )}
@@ -128,7 +139,6 @@ export function EventCard({ event, showRationale = false, onClick }) {
             <span className="truncate text-[13px] font-medium text-text-secondary">
               {event.organizer.name}
             </span>
-            {event.organizer.verified && <VerifiedBadge size={14} />}
           </div>
         )}
 

@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { formatCount, pluralize } from '../lib/utils'
-import { FollowBtn, VerifiedBadge, RoleBadge } from './primitives'
+import { FollowBtn, RoleBadge } from './primitives'
 
 /**
  * OrganizerFooterCard — the "hosted by" card that closes the event detail
- * page. Big avatar, name, verified/role badges, follower count, follow CTA
+ * page. Big avatar, name, role badge, follower count, follow CTA
  * and a link to the full organizer profile. Rendered on a light card so it
  * blends with the About/Comments rhythm below the hero.
  */
@@ -31,7 +31,6 @@ export function OrganizerFooterCard({ organizer, eventCount }) {
             >
               {organizer.name}
             </Link>
-            {organizer.verified && <VerifiedBadge size={16} />}
             {organizer.role && <RoleBadge role={organizer.role} />}
           </div>
           {organizer.handle && <p className="mt-0.5 text-sm text-text-muted">{organizer.handle}</p>}

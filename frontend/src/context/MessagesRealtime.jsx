@@ -15,8 +15,10 @@ import { api } from '../lib/api'
 import {
   hydrateThreads,
   ingestMessage,
+  ingestMessageDeleted,
   ingestReaction,
   ingestRead,
+  ingestThreadUpdated,
   ingestTyping,
   resetMessagesStore,
 } from '../lib/messages'
@@ -95,6 +97,12 @@ export function MessagesRealtimeProvider({ children }) {
               payload.emoji,
               payload.op,
             )
+            break
+          case 'message-deleted':
+            ingestMessageDeleted(payload.threadId, payload.messageId)
+            break
+          case 'thread-updated':
+            ingestThreadUpdated(payload.threadId, payload.changes)
             break
           default:
             // Posse roster frames ride this same stream — forward them to the

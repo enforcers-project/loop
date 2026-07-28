@@ -4,7 +4,7 @@ import { Trash2 } from 'lucide-react'
 import { pluralize, timeAgo } from '../lib/utils'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { VerifiedBadge } from './primitives'
+import { HiddenPlaceholder, ReportButton } from './ReportMenu'
 
 // Route to a user's public profile. Mirrors social.jsx's authorHref — kept
 // local so this component doesn't cross-import from a sibling.
@@ -23,7 +23,7 @@ const profileHref = (id) => (id ? `/organizer/${id}` : null)
 //   remove(commentId)       → soft-delete (DELETE /api/comments/:id)
 // `canDelete(reply)` decides whether a reply shows the trash affordance (author
 // or content owner), matching the backend's auth rule.
-export function CommentReplies({ comment, api, canDelete }) {
+export function CommentReplies({ comment, api, canDelete, currentUserId }) {
   const { requireAuth } = useApp()
   const toast = useToast()
   const [open, setOpen] = useState(false)
@@ -33,6 +33,14 @@ export function CommentReplies({ comment, api, canDelete }) {
   const [composing, setComposing] = useState(false)
   const [draft, setDraft] = useState('')
   const [posting, setPosting] = useState(false)
+  const [hiddenIds, setHiddenIds] = useState(() => new Set())
+  const setHidden = (id, on) =>
+    setHiddenIds((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
 
   // Newest-first from the API → oldest-first so a thread reads top-to-bottom and
   // a freshly posted reply appends at the end.
@@ -128,6 +136,18 @@ export function CommentReplies({ comment, api, canDelete }) {
 
       {open &&
         replies.map((r) => {
+          if (hiddenIds.has(r.id)) {
+            return (
+              <div key={r.id} className="mt-2 border-l border-border-light pl-3">
+                <HiddenPlaceholder
+                  variant="row"
+                  targetType="comment"
+                  targetId={r.id}
+                  onRestored={(id) => setHidden(id, false)}
+                />
+              </div>
+            )
+          }
           const when = timeAgo(r.createdAt)
           const href = profileHref(r.authorId)
           return (
@@ -159,17 +179,26 @@ export function CommentReplies({ comment, api, canDelete }) {
                   ) : (
                     <span className="text-sm font-semibold text-ink">{r.author}</span>
                   )}
-                  {r.verified && <VerifiedBadge size={12} />}
                   {when && <span className="text-xs text-text-muted">· {when}</span>}
-                  {canDelete?.(r) && (
-                    <button
-                      onClick={() => remove(r)}
-                      className="ml-auto text-text-muted transition-colors hover:text-accent"
-                      aria-label="Delete reply"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <div className="ml-auto flex items-center gap-1">
+                    {canDelete?.(r) && (
+                      <button
+                        onClick={() => remove(r)}
+                        className="text-text-muted transition-colors hover:text-accent"
+                        aria-label="Delete reply"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                    <ReportButton
+                      isOwn={!!currentUserId && r.authorId === currentUserId}
+                      targetType="comment"
+                      targetId={r.id}
+                      onReported={(id) => setHidden(id, true)}
+                      className="h-6 w-6"
+                      iconSize={14}
+                    />
+                  </div>
                 </div>
                 <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-text-secondary">
                   {r.text}

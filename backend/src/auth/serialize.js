@@ -10,6 +10,11 @@ export function toSelfUser(u) {
     is_host: u.isHost,
     display_name: u.displayName,
     handle: u.handle,
+    // When the username (handle) was last changed. The 7-day cooldown enforced
+    // by PATCH /api/users/:id is computed from this — the client can pre-disable
+    // the input rather than round-tripping to see a 429. display_name has no
+    // cooldown; it's free-form and non-unique.
+    handle_changed_at: u.handleChangedAt ?? null,
     is_verified: u.isVerified,
     avatar_url: u.avatarUrl,
     cover_image_url: u.coverImageUrl,

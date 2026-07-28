@@ -13,6 +13,7 @@ import { enforceProfanity } from '../lib/profanity.js'
 import { toPublicUser, PUBLIC_USER_SELECT } from './serialize.js'
 import { toSelfUser } from '../auth/serialize.js'
 import { toEventCard } from '../events/serialize.js'
+import { scheduleRebuild } from '../preferences/coalesce.js'
 import {
   presignPutUrl,
   isConfigured as s3Configured,
@@ -35,8 +36,26 @@ const isUuid = (s) => typeof s === 'string' && UUID_RE.test(s)
 
 // Handle rules mirror signup (auth/routes.js): 3–30 chars, letters/numbers/_.
 const HANDLE_RE = /^[a-zA-Z0-9_]{3,30}$/
+const DISPLAY_NAME_MIN = 2
 const DISPLAY_NAME_MAX = 120
 const BIO_MAX = 500
+
+// Identity fields (display_name + handle) are each rate-limited to one change
+// every 7 days. Enforced against users.display_name_changed_at /
+// handle_changed_at (both stamped at signup and on every accepted change).
+const IDENTITY_CHANGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000
+
+/** ms until the user may next change the given field, or 0 if eligible now. */
+function msUntilChangeable(changedAt) {
+  if (!changedAt) return 0
+  const elapsed = Date.now() - new Date(changedAt).getTime()
+  return Math.max(0, IDENTITY_CHANGE_COOLDOWN_MS - elapsed)
+}
+
+/** Round ms up to whole days for user-facing "try again in N days" copy. */
+function daysCeil(ms) {
+  return Math.max(1, Math.ceil(ms / (24 * 60 * 60 * 1000)))
+}
 
 // Known notification-preference toggles. The column is a free-form Json?, so
 // we pin an allowlist here: only these keys are accepted, each a boolean. A key
@@ -227,6 +246,12 @@ router.put('/:id/interests', requireAuth, async (req, res) => {
         data: { onboardingCompletedAt: new Date() },
       }),
     ])
+
+    // Interests drive the seed vector (see preferences/builder.js:computeSeedVector),
+    // which is a majority of the final preference vector until the user has ≥8
+    // event signals. Without this rebuild, editing interests changed no
+    // recommendations until the user also saved/RSVPed something.
+    await scheduleRebuild(req.user.id)
 
     return res.json({
       data: {
@@ -583,8 +608,12 @@ router.put('/:id/role', requireAuth, async (req, res) => {
 
 // --- PATCH /api/users/:id — edit own profile --------------------------------
 // Owner-only. Body may include any of { display_name, handle, bio }; only the
-// keys present are updated (partial patch). Empty string clears display_name /
-// bio; handle must match the signup format and stays unique (409 on clash).
+// keys present are updated (partial patch). Rules:
+//   • display_name — required, 2–120 chars, NOT unique (two people can share
+//     the same one). No cooldown.
+//   • handle (username) — required, 3–30 chars [a-zA-Z0-9_], unique across all
+//     users (case-insensitive citext). One change every 7 days (429 on retry).
+//   • bio — optional, empty string clears.
 router.patch('/:id', requireAuth, async (req, res) => {
   if (!isUuid(req.params.id)) return fail(res, 404, 'NOT_FOUND', 'User not found')
   if (req.user.id !== req.params.id) {
@@ -593,28 +622,60 @@ router.patch('/:id', requireAuth, async (req, res) => {
 
   const body = req.body ?? {}
   const data = {}
+  // Whether the caller is trying to change the username (drives cooldown check
+  // + stamps the change timestamp on success).
+  let touchesHandle = false
+
+  // Load the current row so we can compare (no-op writes shouldn't burn the
+  // cooldown) and enforce the 7-day window on username changes.
+  const current = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { handle: true, handleChangedAt: true },
+  })
+  if (!current) return fail(res, 404, 'NOT_FOUND', 'User not found')
 
   if ('display_name' in body) {
     const v = body.display_name
-    if (v != null && typeof v !== 'string') {
+    if (typeof v !== 'string') {
       return fail(res, 422, 'VALIDATION_ERROR', 'display_name must be a string')
     }
-    const trimmed = typeof v === 'string' ? v.trim() : ''
-    if (trimmed.length > DISPLAY_NAME_MAX) {
-      return fail(res, 422, 'VALIDATION_ERROR', `display_name too long (max ${DISPLAY_NAME_MAX})`)
+    const trimmed = v.trim()
+    if (trimmed.length < DISPLAY_NAME_MIN || trimmed.length > DISPLAY_NAME_MAX) {
+      return fail(
+        res,
+        422,
+        'VALIDATION_ERROR',
+        `display_name must be ${DISPLAY_NAME_MIN}–${DISPLAY_NAME_MAX} characters`,
+      )
     }
-    data.displayName = trimmed || null
+    data.displayName = trimmed
   }
 
   if ('handle' in body) {
     const v = body.handle
-    // A blank handle clears it; otherwise it must match the signup format.
-    if (v == null || (typeof v === 'string' && v.trim() === '')) {
-      data.handle = null
-    } else if (typeof v !== 'string' || !HANDLE_RE.test(v.trim())) {
-      return fail(res, 422, 'VALIDATION_ERROR', 'handle must be 3–30 chars (letters, numbers, _)')
-    } else {
-      data.handle = v.trim()
+    if (typeof v !== 'string') {
+      return fail(res, 422, 'VALIDATION_ERROR', 'username must be a string')
+    }
+    const trimmed = v.trim().replace(/^@/, '')
+    if (!HANDLE_RE.test(trimmed)) {
+      return fail(res, 422, 'VALIDATION_ERROR', 'username must be 3–30 chars (letters, numbers, _)')
+    }
+    // Skip the cooldown check when the value hasn't actually changed (citext
+    // makes handle uniqueness case-insensitive, mirror that here).
+    if (trimmed.toLowerCase() !== (current.handle ?? '').toLowerCase()) {
+      const wait = msUntilChangeable(current.handleChangedAt)
+      if (wait > 0) {
+        return fail(
+          res,
+          429,
+          'RATE_LIMITED',
+          `You can change your username again in ${daysCeil(wait)} day(s)`,
+          { field: 'handle', retry_after_ms: wait },
+        )
+      }
+      data.handle = trimmed
+      data.handleChangedAt = new Date()
+      touchesHandle = true
     }
   }
 
@@ -634,17 +695,22 @@ router.patch('/:id', requireAuth, async (req, res) => {
     return fail(res, 422, 'VALIDATION_ERROR', 'No editable fields provided')
   }
 
-  // Identity fields are hard-block only — a "flagged" display name/handle would
-  // still be visible to everyone, so if it trips the filter we refuse the save.
+  // Identity fields are hard-block only — a "flagged" display name/username
+  // would still be visible to everyone, so if it trips the filter we refuse the save.
   if (enforceProfanity(req, res, [data.displayName, data.handle, data.bio]).blocked) return
 
   try {
     const updated = await prisma.user.update({ where: { id: req.user.id }, data })
     return res.json({ data: toSelfUser(updated) })
   } catch (err) {
-    // Unique handle collision — surface a clean 409 rather than a 500.
+    // Unique-index collision on handle. display_name has no unique index.
     if (err.code === 'P2002') {
-      return fail(res, 409, 'CONFLICT', 'That handle is already taken')
+      const target = err.meta?.target
+      const key = Array.isArray(target) ? target[0] : target
+      if (key === 'handle' || touchesHandle) {
+        return fail(res, 409, 'CONFLICT', 'That username is already taken', { field: 'handle' })
+      }
+      return fail(res, 409, 'CONFLICT', 'That value is already taken')
     }
     console.error('PATCH /api/users/:id error:', err)
     return fail(res, 500, 'INTERNAL', 'Could not save profile')

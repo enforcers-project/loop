@@ -4,8 +4,8 @@ import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { timeAgo } from '../lib/utils'
-import { VerifiedBadge } from './primitives'
 import { CommentReplies } from './CommentReplies'
+import { HiddenPlaceholder, ReportButton } from './ReportMenu'
 
 // Threaded comments on an EventDetail page (planning §7.3, work-plan #30).
 // Reads GET /api/events/:id/comments, posts via POST …/comments, and lets a
@@ -22,6 +22,16 @@ export function EventComments({ eventId, organizerId }) {
   const [comments, setComments] = useState(null) // null = loading
   const [draft, setDraft] = useState('')
   const [posting, setPosting] = useState(false)
+  // Ids the viewer has reported in this session — render the Undo placeholder
+  // in place of each so the item doesn't just disappear (Instagram pattern).
+  const [hiddenIds, setHiddenIds] = useState(() => new Set())
+  const setHidden = (id, on) =>
+    setHiddenIds((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
 
   // Backend returns newest-first; reverse to oldest-first so the thread reads
   // top-to-bottom and a freshly posted comment appends naturally at the end.
@@ -126,6 +136,18 @@ export function EventComments({ eventId, organizerId }) {
       ) : (
         <ul className="mt-4 space-y-4">
           {comments.map((c) => {
+            if (hiddenIds.has(c.id)) {
+              return (
+                <li key={c.id}>
+                  <HiddenPlaceholder
+                    variant="row"
+                    targetType="comment"
+                    targetId={c.id}
+                    onRestored={(id) => setHidden(id, false)}
+                  />
+                </li>
+              )
+            }
             const canDelete =
               (user?.id && (c.authorId === user.id || organizerId === user.id)) || false
             const when = timeAgo(c.createdAt)
@@ -139,22 +161,36 @@ export function EventComments({ eventId, organizerId }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-semibold text-ink">{c.author}</span>
-                    {c.verified && <VerifiedBadge size={14} />}
                     {when && <span className="text-xs text-text-muted">· {when}</span>}
-                    {canDelete && (
-                      <button
-                        onClick={() => remove(c)}
-                        className="ml-auto text-text-muted transition-colors hover:text-accent"
-                        aria-label="Delete comment"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    )}
+                    <div className="ml-auto flex items-center gap-1">
+                      {canDelete && (
+                        <button
+                          onClick={() => remove(c)}
+                          className="text-text-muted transition-colors hover:text-accent"
+                          aria-label="Delete comment"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                      <ReportButton
+                        isOwn={!!user?.id && c.authorId === user.id}
+                        targetType="comment"
+                        targetId={c.id}
+                        onReported={(id) => setHidden(id, true)}
+                        className="h-7 w-7"
+                        iconSize={15}
+                      />
+                    </div>
                   </div>
                   <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-text-secondary">
                     {c.text}
                   </p>
-                  <CommentReplies comment={c} api={replyApi} canDelete={canDeleteReply} />
+                  <CommentReplies
+                    comment={c}
+                    api={replyApi}
+                    canDelete={canDeleteReply}
+                    currentUserId={user?.id}
+                  />
                 </div>
               </li>
             )

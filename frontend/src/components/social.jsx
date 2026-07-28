@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Bookmark,
   ChevronLeft,
   ChevronRight,
   Heart,
@@ -19,9 +18,11 @@ import { backdrop, sheet } from '../lib/motion'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
-import { ImageSourcePicker, inputClass, Spinner, VerifiedBadge } from './primitives'
+import { ImageSourcePicker, inputClass, Spinner } from './primitives'
 import { EventImage } from './EventImage'
+import { ShareEventSheet } from './messages'
 import { CommentReplies } from './CommentReplies'
+import { HiddenPlaceholder, ReportButton } from './ReportMenu'
 
 // Public profile route for a user/organizer. The app's public profile lives at
 // /organizer/:id — the same URL an organizer's followers reach, and the same
@@ -328,13 +329,23 @@ const STORY_MS = 5000 // how long each story frame is shown before auto-advancin
    fires `onViewed(storyId)` once so the parent can mark it seen server-side.
 -------------------------------------------------------------------------- */
 export function StoryViewer({ groups, startIndex = 0, onClose, onViewed }) {
+  const { user } = useApp()
   const [gi, setGi] = useState(startIndex) // current group index
   const [si, setSi] = useState(0) // current story index within the group
   const [paused, setPaused] = useState(false)
   const seenRef = useRef(new Set()) // story ids we've already reported viewed
+  const [hiddenIds, setHiddenIds] = useState(() => new Set())
+  const setHidden = (id, on) =>
+    setHiddenIds((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
 
   const group = groups[gi]
   const story = group?.stories?.[si]
+  const storyHidden = story?.id ? hiddenIds.has(story.id) : false
 
   // Step forward one frame; roll into the next author, or close past the last.
   const next = () => {
@@ -360,20 +371,22 @@ export function StoryViewer({ groups, startIndex = 0, onClose, onViewed }) {
     }
   }
 
-  // Report each frame viewed exactly once as it becomes visible.
+  // Report each frame viewed exactly once as it becomes visible. Reported
+  // stories don't count as viewed — the placeholder replaces the media.
   useEffect(() => {
-    if (!story?.id || seenRef.current.has(story.id)) return
+    if (!story?.id || storyHidden || seenRef.current.has(story.id)) return
     seenRef.current.add(story.id)
     onViewed?.(story.id)
-  }, [story?.id, onViewed])
+  }, [story?.id, storyHidden, onViewed])
 
-  // Auto-advance timer, reset whenever the frame changes; paused on hold.
+  // Auto-advance timer, reset whenever the frame changes; paused on hold or
+  // when the current frame is hidden (so the user has time to tap Undo).
   useEffect(() => {
-    if (paused || !story) return
+    if (paused || storyHidden || !story) return
     const t = setTimeout(next, STORY_MS)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gi, si, paused, story?.id])
+  }, [gi, si, paused, storyHidden, story?.id])
 
   // Keyboard: arrows navigate, Esc closes.
   useEffect(() => {
@@ -477,40 +490,61 @@ export function StoryViewer({ groups, startIndex = 0, onClose, onViewed }) {
               </div>
             </>
           )}
+          {!storyHidden && (
+            <ReportButton
+              isOwn={!!user?.id && group.id === user.id}
+              targetType="story"
+              targetId={story.id}
+              onReported={(id) => setHidden(id, true)}
+              className="mr-12 h-9 w-9 text-white/90 hover:bg-white/10 hover:text-white"
+              iconSize={22}
+            />
+          )}
         </div>
 
-        {/* media — hold to pause; tap left/right halves to navigate */}
-        <div
-          className="relative flex flex-1 items-center justify-center"
-          onPointerDown={() => setPaused(true)}
-          onPointerUp={() => setPaused(false)}
-          onPointerLeave={() => setPaused(false)}
-        >
-          <img
-            src={story.mediaUrl}
-            alt={story.caption || ''}
-            className="max-h-full max-w-full object-contain"
+        {storyHidden ? (
+          <HiddenPlaceholder
+            variant="overlay"
+            targetType="story"
+            targetId={story.id}
+            onRestored={(id) => setHidden(id, false)}
           />
-          {/* tap zones sit above the image but below header/close */}
-          <button
-            type="button"
-            aria-label="Previous"
-            onClick={prev}
-            className="absolute inset-y-0 left-0 w-1/3"
-          />
-          <button
-            type="button"
-            aria-label="Next"
-            onClick={next}
-            className="absolute inset-y-0 right-0 w-2/3"
-          />
-        </div>
+        ) : (
+          <>
+            {/* media — hold to pause; tap left/right halves to navigate */}
+            <div
+              className="relative flex flex-1 items-center justify-center"
+              onPointerDown={() => setPaused(true)}
+              onPointerUp={() => setPaused(false)}
+              onPointerLeave={() => setPaused(false)}
+            >
+              <img
+                src={story.mediaUrl}
+                alt={story.caption || ''}
+                className="max-h-full max-w-full object-contain"
+              />
+              {/* tap zones sit above the image but below header/close */}
+              <button
+                type="button"
+                aria-label="Previous"
+                onClick={prev}
+                className="absolute inset-y-0 left-0 w-1/3"
+              />
+              <button
+                type="button"
+                aria-label="Next"
+                onClick={next}
+                className="absolute inset-y-0 right-0 w-2/3"
+              />
+            </div>
 
-        {/* caption */}
-        {story.caption && (
-          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pb-5 pt-10">
-            <p className="text-sm leading-relaxed text-white">{story.caption}</p>
-          </div>
+            {/* caption */}
+            {story.caption && (
+              <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pb-5 pt-10">
+                <p className="text-sm leading-relaxed text-white">{story.caption}</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -526,9 +560,9 @@ export function StoryViewer({ groups, startIndex = 0, onClose, onViewed }) {
 export function PostCard({ post }) {
   const { requireAuth, user } = useApp()
   const toast = useToast()
+  const [hidden, setHidden] = useState(false)
   const [liked, setLiked] = useState(!!post.likedByMe)
   const [likeCount, setLikeCount] = useState(post.likes ?? 0)
-  const [saved, setSaved] = useState(false)
   const [comments, setComments] = useState(post.comments ?? [])
   const [draft, setDraft] = useState('')
   const [posting, setPosting] = useState(false)
@@ -536,6 +570,11 @@ export function PostCard({ post }) {
   // "View all comments" link, closed by the backdrop or the X. Scoped to the
   // feed's PostCard; EventDetail keeps its own inline EventComments section.
   const [commentsOpen, setCommentsOpen] = useState(false)
+  // Share-to-DM sheet. A post shares the event it's about, so the sheet is only
+  // reachable when post.eventId is set. We lazily fetch the full event on open
+  // (the feed post only carries the id) and mount the sheet once it resolves.
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareEvent, setShareEvent] = useState(null)
   const org = post.organizer
 
   const iconBtn =
@@ -581,7 +620,28 @@ export function PostCard({ post }) {
     }
   }
 
-  const onSave = () => requireAuth() && setSaved((v) => !v)
+  // Share = open the Instagram-style share-to-DM sheet for the post's event.
+  // Fire the share signal up-front (matches EventDetail) so organizer analytics
+  // reflect the intent even if the user cancels. The full event is fetched
+  // lazily; the sheet mounts only once it resolves.
+  const onShare = async () => {
+    if (!requireAuth()) return
+    if (!post.eventId) return
+    api.interactions([{ interaction_type: 'share', surface: 'social', event_id: post.eventId }])
+    const evt = shareEvent ?? (await api.event(post.eventId))
+    if (!evt) {
+      toast.error('Could not open share. Please try again.')
+      return
+    }
+    setShareEvent(evt)
+    setShareOpen(true)
+  }
+
+  const handleShareSent = (threadIds) => {
+    const n = threadIds?.length ?? 0
+    if (!n) return
+    toast.success(n > 1 ? `Shared to ${n} chats` : 'Shared')
+  }
 
   const submitComment = async () => {
     if (posting) return
@@ -611,6 +671,17 @@ export function PostCard({ post }) {
   }
 
   const profileHref = authorHref(org?.id)
+
+  if (hidden) {
+    return (
+      <HiddenPlaceholder
+        variant="card"
+        targetType="post"
+        targetId={post.id}
+        onRestored={() => setHidden(false)}
+      />
+    )
+  }
 
   return (
     <article className="overflow-hidden rounded-card border border-border-light bg-white shadow-card">
@@ -643,10 +714,16 @@ export function PostCard({ post }) {
             ) : (
               <span className="truncate text-sm font-semibold text-ink">{org?.name}</span>
             )}
-            {org?.verified && <VerifiedBadge size={14} />}
           </div>
           {when && <span className="text-xs text-text-muted">{when} ago</span>}
         </div>
+        <ReportButton
+          isOwn={!!user?.id && org?.id === user.id}
+          targetType="post"
+          targetId={post.id}
+          onReported={() => setHidden(true)}
+          className="h-9 w-9"
+        />
       </div>
 
       {/* image */}
@@ -671,17 +748,13 @@ export function PostCard({ post }) {
         <button onClick={() => setCommentsOpen(true)} className={iconBtn} aria-label="Comment">
           <MessageCircle size={22} className="text-ink" />
         </button>
-        <button className={iconBtn} aria-label="Share">
-          <Send size={20} className="text-ink" />
-        </button>
-        <button
-          onClick={onSave}
-          className={cn(iconBtn, 'ml-auto')}
-          aria-label={saved ? 'Remove bookmark' : 'Bookmark'}
-          aria-pressed={saved}
-        >
-          <Bookmark size={22} className={cn(saved ? 'fill-primary text-primary' : 'text-ink')} />
-        </button>
+        {/* Share only appears for posts about an event — that's what the sheet
+            forwards into a DM. Event-less recaps have nothing to share. */}
+        {post.eventId && (
+          <button onClick={onShare} className={iconBtn} aria-label="Share">
+            <Send size={20} className="text-ink" />
+          </button>
+        )}
       </div>
 
       {/* likes + caption + comments */}
@@ -727,9 +800,20 @@ export function PostCard({ post }) {
             replyApi={replyApi}
             canDeleteComment={canDeleteComment}
             removeComment={removeComment}
+            currentUserId={user?.id}
           />
         )}
       </AnimatePresence>
+
+      {/* Share-to-DM sheet — only mounted while open (and once the event has
+          resolved) so its useThreads subscription doesn't run per card. */}
+      {shareOpen && shareEvent && (
+        <ShareEventSheet
+          event={shareEvent}
+          onClose={() => setShareOpen(false)}
+          onSent={handleShareSent}
+        />
+      )}
     </article>
   )
 }
@@ -751,6 +835,7 @@ function CommentsModal({
   replyApi,
   canDeleteComment,
   removeComment,
+  currentUserId,
 }) {
   // Close on Escape, matching the app's other overlays.
   useEffect(() => {
@@ -758,6 +843,18 @@ function CommentsModal({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // Ids the viewer has reported in this session — render the Undo placeholder
+  // in place of each so the item doesn't vanish. Local to the modal; a fresh
+  // open re-fetches the server-filtered list.
+  const [hiddenIds, setHiddenIds] = useState(() => new Set())
+  const setHidden = (id, on) =>
+    setHiddenIds((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
 
   return (
     <m.div
@@ -798,6 +895,18 @@ function CommentsModal({
           ) : (
             <div className="space-y-3">
               {comments.map((c) => {
+                if (hiddenIds.has(c.id)) {
+                  return (
+                    <div key={c.id}>
+                      <HiddenPlaceholder
+                        variant="row"
+                        targetType="comment"
+                        targetId={c.id}
+                        onRestored={(id) => setHidden(id, false)}
+                      />
+                    </div>
+                  )
+                }
                 const authorHrefStr = authorHref(c.authorId)
                 return (
                   <div key={c.id}>
@@ -844,11 +953,26 @@ function CommentsModal({
                           <Trash2 size={14} />
                         </button>
                       )}
+                      {c.authorId != null && (
+                        <ReportButton
+                          isOwn={!!currentUserId && c.authorId === currentUserId}
+                          targetType="comment"
+                          targetId={c.id}
+                          onReported={(id) => setHidden(id, true)}
+                          className="mt-0.5 h-6 w-6 opacity-0 group-hover:opacity-100"
+                          iconSize={14}
+                        />
+                      )}
                     </div>
                     {/* Reply thread only for real (server) comments — a local echo
                         has no id the backend knows, so it can't take a parentId. */}
                     {c.authorId != null && (
-                      <CommentReplies comment={c} api={replyApi} canDelete={canDeleteComment} />
+                      <CommentReplies
+                        comment={c}
+                        api={replyApi}
+                        canDelete={canDeleteComment}
+                        currentUserId={currentUserId}
+                      />
                     )}
                   </div>
                 )

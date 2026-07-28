@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { cn, formatCount, isEventPast, pluralize } from '../lib/utils'
-import { FollowBtn, PageLoader, RoleBadge, VerifiedBadge } from '../components/primitives'
+import { FollowBtn, PageLoader, RoleBadge } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { FollowListModal } from '../components/UserSearch'
 
@@ -147,7 +147,6 @@ export function OrganizerProfile() {
                 <h1 className="min-w-0 break-words font-display text-2xl font-bold text-ink sm:text-3xl">
                   {org.name}
                 </h1>
-                {org.verified && <VerifiedBadge size={20} />}
                 <RoleBadge role={org.role} />
               </div>
               <div className="mt-1 flex items-center gap-4 text-sm text-text-secondary">

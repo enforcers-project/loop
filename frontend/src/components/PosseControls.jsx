@@ -13,7 +13,7 @@ import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { cn } from '../lib/utils'
 import { backdrop, dialog } from '../lib/motion'
-import { inputClass, Spinner, VerifiedBadge } from './primitives'
+import { inputClass, Spinner } from './primitives'
 
 const VISIBILITY_OPTIONS = [
   { value: 'private', label: 'Private', description: 'Invite-only. Nobody can find it.' },
@@ -334,7 +334,6 @@ export function InvitePosseModal({ posseId, open, onClose, onInvited }) {
                         <span className="truncate text-sm font-semibold text-ink">
                           {p.name || 'Loop member'}
                         </span>
-                        {p.verified && <VerifiedBadge size={13} />}
                       </div>
                       {p.handle && <p className="truncate text-xs text-text-muted">@{p.handle}</p>}
                     </div>
@@ -400,7 +399,6 @@ export function PosseMemberRow({ member, onApprove, onRemove, busy }) {
             <span className="truncate text-sm font-semibold text-ink">
               {u.display_name || 'Loop member'}
             </span>
-            {u.is_verified && <VerifiedBadge size={13} />}
           </div>
           <p className="truncate text-xs text-text-muted">
             {member.role === 'captain'

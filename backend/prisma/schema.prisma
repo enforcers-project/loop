@@ -246,7 +246,13 @@ model User {
   organizerKind         OrganizerKind? @map("organizer_kind")
   isHost                Boolean        @default(false) @map("is_host")
   displayName           String?        @map("display_name") @db.VarChar(120)
+  // Username the user is @-mentioned by. Unique across all accounts
+  // (case-insensitive via citext), required at signup, and rate-limited to one
+  // change per 7 days via handleChangedAt.
   handle                String?        @unique @db.Citext
+  // Set on signup + every accepted handle change; the PATCH route reads
+  // `now() - column >= 7 days` before allowing a new value.
+  handleChangedAt       DateTime?      @map("handle_changed_at") @db.Timestamptz(6)
   isVerified            Boolean        @default(false) @map("is_verified")
   // Date of birth for age verification against age-restricted events (§7.4
   // gate). Maps to the existing `birth_date` column already on the shared DB.
@@ -300,6 +306,7 @@ model User {
   messageReactions     MessageReaction[]
   possesCreated        Posse[]                    @relation("PosseCreator")
   posseMemberships     PosseMember[]
+  contentReports       ContentReport[]            @relation("ContentReporter")
 
   @@map("users")
 }
@@ -1002,14 +1009,14 @@ model MessageReaction {
 enum PosseVisibility {
   private // invite-only; not discoverable
   mutuals // discoverable by reciprocal follows (A follows B AND B follows A)
-  public  // discoverable by anyone who can see the event
+  public // discoverable by anyone who can see the event
 
   @@map("posse_visibility")
 }
 
 enum PosseJoinPolicy {
   open // discoverers join instantly
-  ask  // discoverers request; captain approves
+  ask // discoverers request; captain approves
 
   @@map("posse_join_policy")
 }
@@ -1022,7 +1029,7 @@ enum PosseRole {
 }
 
 enum PosseMemberStatus {
-  active  // in the posse + in the thread
+  active // in the posse + in the thread
   pending // requested to join (join-policy = ask); captain decides. NOT in the thread yet
   invited // a member invited them; the invitee decides (accept → active / decline → gone). NOT in the thread yet
 
@@ -1062,4 +1069,46 @@ model PosseMember {
   @@id([posseId, userId])
   @@index([userId, status])
   @@map("posse_members")
+}
+
+// --- Content reports (viewer flags a post/comment/story) --------------------
+// A single row per (reporter, target_type, target_id). The unique key doubles
+// as a per-user hide index: the social/story/comment list endpoints subtract
+// this set from what they return, so a reporter never sees the item again.
+
+enum ContentReportTarget {
+  post
+  comment
+  story
+
+  @@map("content_report_target")
+}
+
+enum ContentReportReason {
+  spam
+  harassment
+  hate
+  nudity
+  violence
+  self_harm
+  misinfo
+  other
+
+  @@map("content_report_reason")
+}
+
+model ContentReport {
+  id         String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reporterId String              @map("reporter_id") @db.Uuid
+  targetType ContentReportTarget @map("target_type")
+  targetId   String              @map("target_id") @db.Uuid
+  reason     ContentReportReason
+  note       String?             @db.VarChar(500)
+  createdAt  DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  reporter User @relation("ContentReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([targetType, targetId, createdAt])
+  @@map("content_reports")
 }

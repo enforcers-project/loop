@@ -293,50 +293,16 @@ async function request(path, { method = 'GET', body } = {}) {
     // Machine-readable code from the { error: { code, message } } envelope, so
     // callers can branch (e.g. age gate: BIRTHDATE_REQUIRED vs AGE_RESTRICTED).
     err.code = json?.error?.code ?? null
+    // Extra fields the backend attaches to the envelope (e.g. field name for a
+    // 409 CONFLICT, retry_after_ms for a 429 RATE_LIMITED). Surface everything
+    // beyond code/message so screens can branch on them without re-parsing.
+    if (json?.error && typeof json.error === 'object') {
+      const { code: _c, message: _m, ...rest } = json.error
+      err.details = rest
+    }
     throw err
   }
   return json?.data
-}
-
-/**
- * Approximate quantile of a numeric array — used to derive the "top X%" cutoff
- * for popularity-gated badges without pulling a stats lib. Uses the linear
- * interpolation Type-7 method (matches R/NumPy's default). Empty input → 0.
- */
-function quantile(values, p) {
-  if (!values.length) return 0
-  const sorted = [...values].sort((a, b) => a - b)
-  const pos = (sorted.length - 1) * p
-  const base = Math.floor(pos)
-  const rest = pos - base
-  if (sorted[base + 1] !== undefined) return sorted[base] + rest * (sorted[base + 1] - sorted[base])
-  return sorted[base]
-}
-
-function mockFilter({ category, isFree, isSports, q }) {
-  // Match the backend: past events are hidden from Home/Search. Compare on
-  // isoDate (has TZ offset) — an event that has already started is not
-  // something the user can still attend.
-  const now = Date.now()
-  let list = MOCK_EVENTS.map(withOrganizer).filter((e) => {
-    const t = e.isoDate ? Date.parse(e.isoDate) : NaN
-    return isNaN(t) || t >= now
-  })
-  if (category && category !== 'All') list = list.filter((e) => e.category === category)
-  if (isFree) list = list.filter((e) => e.isFree)
-  if (isSports) list = list.filter((e) => e.isSports)
-  if (q?.trim()) {
-    const n = q.toLowerCase()
-    list = list.filter(
-      (e) =>
-        e.title.toLowerCase().includes(n) ||
-        e.description.toLowerCase().includes(n) ||
-        e.tags.some((t) => t.toLowerCase().includes(n)) ||
-        e.city.toLowerCase().includes(n) ||
-        e.category.toLowerCase().includes(n),
-    )
-  }
-  return list
 }
 
 // Map the backend's snake_case SelfUser (auth/serialize.js) onto the camelCase
@@ -352,6 +318,10 @@ export function toClientUser(u) {
     // Raw stored handle (no leading @, may be null) — the edit form needs the
     // real value to prefill, distinct from the always-present display `handle`.
     handleRaw: u.handle ?? null,
+    // When the username (handle) was last changed on the backend. The profile
+    // edit form uses this to compute the 7-day cooldown locally and disable
+    // the input before the caller sees a 429. Display name has no cooldown.
+    handleChangedAt: u.handle_changed_at ?? null,
     bio: u.bio ?? '',
     avatar: u.avatar_url || DEFAULT_AVATAR,
     role: u.role,
@@ -801,7 +771,12 @@ export const api = {
       qs.set('city', near.city)
     }
     const suffix = qs.toString() ? `?${qs}` : ''
-    const list = (await get(`/events${suffix}`, () => mockFilter(filters))) ?? []
+    // No mock fallback here. The mock catalog's isoDate values are frozen in
+    // the past, so on any transient backend hiccup the client would render
+    // "only 2 events" (the two future-dated mocks) instead of the real feed.
+    // A failed fetch degrades to [] and the screen's empty state, which is
+    // honest — better than showing a stale two-item catalog.
+    const list = (await get(`/events${suffix}`, () => [])) ?? []
     return list.map(toEventCardShape)
   },
 
@@ -821,44 +796,31 @@ export const api = {
       )
     }).then((list) => (list ?? []).map(toEventCardShape)),
 
-  // Empty-feed fallback: /recommendations filters by the user's saved location
-  // server-side, so a user whose saved city has no seeded events would see an
-  // empty For You feed. When that happens, fall back to non-geo popular events
-  // so the feed always has something to show.
+  // For-You recommendations. On a 401 (no session yet, e.g. /me hasn't landed)
+  // or an empty personalized list, fall through to the real `/events?sort=popular`
+  // list so the feed always renders live data — never the stale MOCK_EVENTS
+  // (whose isoDate values are frozen to 2026-07 and get culled as "past" by
+  // the client-side filter, producing the "only 2 events" symptom).
   recommendations: async (interests) => {
-    const list = await post('/recommendations', { interests }, () => {
-      const cats = new Set(
-        MOCK_INTERESTS.filter((i) => interests.includes(i.id)).map((i) => i.category),
-      )
-      // Reserve "Popular near you" for the ~15% of events with the strongest
-      // RSVP+save signal (see planning §6 recommender). A badge that fires on
-      // every card stops meaning anything — the popularity cutoff is what turns
-      // it into real social proof. Everything below the cutoff falls back to
-      // the category chip via EventCard's showRationale gate.
-      const scored = MOCK_EVENTS.map(withOrganizer).map((e) => ({
-        e,
-        popularity: e.rsvpCount + 2 * e.saveCount,
-        score: (cats.has(e.category) ? 100000 : 0) + e.rsvpCount + 2 * e.saveCount,
-      }))
-      const popularityCutoff = quantile(
-        scored.map((s) => s.popularity),
-        0.85,
-      )
-      return scored
-        .sort((a, b) => b.score - a.score)
-        .map(({ e, popularity }) => {
-          // Category-matched events keep the recommender's own rationale.
-          if (!cats.size || cats.has(e.category)) return e
-          // Out-of-category: only the truly popular ones get the "Popular near
-          // you" chip; the rest render with just the category badge.
-          return popularity >= popularityCutoff
-            ? { ...e, rationale: 'Popular near you' }
-            : { ...e, rationale: undefined }
-        })
-    })
+    let list = null
+    try {
+      const res = await fetch(apiUrl('/recommendations'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ interests }),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        list = json.data
+      }
+    } catch {
+      // Network-only failure — fall through to popular events below.
+    }
     const arr = list ?? []
     if (arr.length > 0) return arr.map(toEventCardShape)
-    const fallback = (await get('/events?sort=popular', () => mockFilter({}))) ?? []
+    // Live popular events as the empty/unauthed fallback — no mock detour.
+    const fallback = (await get('/events?sort=popular', () => [])) ?? []
     return fallback.map(toEventCardShape)
   },
 
@@ -1230,6 +1192,10 @@ export const api = {
         },
       }),
     markRead: (threadId) => request(`/threads/${threadId}/read`, { method: 'POST' }),
+    deleteMessage: (threadId, messageId) =>
+      request(`/threads/${threadId}/messages/${messageId}`, { method: 'DELETE' }),
+    renameThread: (threadId, name) =>
+      request(`/threads/${threadId}`, { method: 'PATCH', body: { name: name ?? null } }),
     // Toggle a reaction on a message — server flips insert/delete on the
     // composite key and echoes { op: 'added' | 'removed' } so the client can
     // roll back a mispredicted optimistic tap.
@@ -1490,6 +1456,31 @@ export const api = {
   // both event and post comments; returns nothing (204) on success.
   deleteComment: (id) => request(`/comments/${id}`, { method: 'DELETE' }),
 
+  // Report a post / comment / story (POST /api/reports). Idempotent (upserts on
+  // reporter+target). Server returns { hidden: true } and, from the next list
+  // fetch onward, subtracts the target from what this user sees. `targetType`
+  // is 'post' | 'comment' | 'story'; `reason` is one of the enum values
+  // (spam, harassment, hate, nudity, violence, self_harm, misinfo, other).
+  reportContent: ({ targetType, targetId, reason, note }) =>
+    request('/reports', {
+      method: 'POST',
+      body: {
+        target_type: targetType,
+        target_id: targetId,
+        reason,
+        ...(note ? { note } : {}),
+      },
+    }),
+
+  // Undo a report (DELETE /api/reports). Idempotent — a missing row still
+  // returns 200 so a double-tap Undo doesn't 404. On success the target starts
+  // showing again on the next list fetch.
+  unreportContent: ({ targetType, targetId }) =>
+    request('/reports', {
+      method: 'DELETE',
+      body: { target_type: targetType, target_id: targetId },
+    }),
+
   // Mark a story viewed (POST /api/stories/:id/view; backend #29). Idempotent
   // and fire-and-forget — a failed seen-marker never blocks the UI, so we
   // swallow errors rather than throw.
@@ -1620,26 +1611,22 @@ export const api = {
       }
     }),
 
-  // Natural-language event search (POST /api/ai/search, work-plan #22). Parses
-  // the query into hard constraints (Groq LLM → regex fallback), pgvector
-  // re-ranks, and returns removable filter `pills` + the `label` that produced
-  // them. To remove a pill, pass the remaining `label` back so the parse is
-  // skipped (the LLM won't re-add the dropped filter). Returns EventCard-shaped
-  // events; degrades to the legacy keyword mock when the backend is offline.
-  nlSearch: async (q, label) => {
-    const res = await post(
-      '/ai/search',
-      { q, ...(label ? { label } : {}) },
-      // Offline fallback: no LLM/pills, just keyword-matched mock events.
-      () => {
-        const n = String(q ?? '').toLowerCase()
-        let matches = MOCK_EVENTS.map(withOrganizer)
-        if (n.includes('free')) matches = matches.filter((e) => e.isFree)
-        const cat = MOCK_CATEGORIES.find((c) => n.includes(c.name.toLowerCase()))
-        if (cat) matches = matches.filter((e) => e.category === cat.name)
-        return { reply: '', events: matches.slice(0, 12), pills: [], label: {} }
-      },
-    )
+  // Title-only event search for the Discover search bar (POST /api/ai/search).
+  // Case-insensitive substring match on event.title so a query like "fut" only
+  // returns events whose title literally contains those letters — no semantic
+  // fan-out, no NL parse, no pills. Offline fallback filters MOCK_EVENTS the
+  // same way so both paths behave identically. `label` is accepted for
+  // backwards compatibility with older callers but ignored.
+  nlSearch: async (q) => {
+    const res = await post('/ai/search', { q }, () => {
+      const n = String(q ?? '')
+        .trim()
+        .toLowerCase()
+      const events = n
+        ? MOCK_EVENTS.map(withOrganizer).filter((e) => e.title?.toLowerCase().includes(n))
+        : []
+      return { reply: '', events: events.slice(0, 20), pills: [], label: {} }
+    })
     return {
       reply: res.reply ?? '',
       events: (res.events ?? []).map(toEventCardShape),

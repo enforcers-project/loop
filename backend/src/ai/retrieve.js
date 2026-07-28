@@ -434,6 +434,45 @@ function mergePreserveOrder(primary, secondary, limit) {
   return out
 }
 
+/**
+ * Title-only event search for the Discover search bar. Case-insensitive
+ * substring match on event.title, restricted to published + future events, and
+ * ranked by pg_trgm similarity so "fut" surfaces "Futureforce" before an
+ * unrelated event. Returns up to TITLE_SEARCH_LIMIT full Prisma rows (with the
+ * usual EVENT_INCLUDE relations) so serializeHits can render EventCards.
+ *
+ * Substring semantics come from ILIKE — trigram similarity is only the
+ * tiebreaker, so a query like "fut" never returns a title that doesn't
+ * literally contain those letters.
+ */
+const TITLE_SEARCH_LIMIT = 20
+
+export async function searchEventsByTitle(rawQuery) {
+  const q = String(rawQuery ?? '').trim()
+  if (!q) return []
+  const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT id
+       FROM events
+      WHERE status = 'published'
+        AND starts_at >= NOW()
+        AND title ILIKE $1
+      ORDER BY similarity(title, $2) DESC, starts_at ASC
+      LIMIT $3`,
+    like,
+    q,
+    TITLE_SEARCH_LIMIT,
+  )
+  if (!rows.length) return []
+  const ids = rows.map((r) => r.id)
+  const events = await prisma.event.findMany({
+    where: { id: { in: ids } },
+    include: EVENT_INCLUDE,
+  })
+  const order = new Map(ids.map((id, i) => [id, i]))
+  return events.sort((a, b) => order.get(a.id) - order.get(b.id))
+}
+
 /** Serialize a Prisma event row for the drawer response (EventCard shape). */
 export function serializeHits(events) {
   return events.map((ev) => toEventCard(ev))

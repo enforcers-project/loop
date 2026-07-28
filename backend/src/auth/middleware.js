@@ -16,8 +16,10 @@ const ANON_SESSION_COOKIE = 'loop_sid'
 const ANON_SESSION_HEADER = 'x-session-id'
 
 /** Standard error envelope (planning §7 Conventions). */
-export function fail(res, status, code, message) {
-  return res.status(status).json({ error: { code, message } })
+export function fail(res, status, code, message, details) {
+  const error = { code, message }
+  if (details && typeof details === 'object') Object.assign(error, details)
+  return res.status(status).json({ error })
 }
 
 export async function attachSession(req, _res, next) {

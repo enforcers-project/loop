@@ -23,6 +23,7 @@ import aiDescriptionRouter from './ai/description.js'
 import aiAutotagRouter from './ai/autotag.routes.js'
 import preferencesRouter from './preferences/routes.js'
 import socialRouter from './social/routes.js'
+import reportsRouter from './reports/routes.js'
 import analyticsRouter from './analytics/routes.js'
 import { eventReminderRouter, userReminderRouter, reminderRouter } from './reminders/routes.js'
 import { startScheduler } from './jobs/index.js'
@@ -130,6 +131,11 @@ app.get('/api/organizers/:id', (req, res) => {
 // Prisma-backed. Mounted at /api so the router owns /feed/social, /posts,
 // /posts/:id/like, /posts/:id/comments, /stories, /stories/:id/view.
 app.use('/api', socialRouter)
+
+// --- Content reports (viewer flags a post/comment/story) --------------------
+// POST /api/reports — upsert-idempotent, hides the target from the reporter's
+// list responses (see src/reports/hidden.js).
+app.use('/api', reportsRouter)
 
 // --- Auth (JWT HttpOnly cookie, Prisma-backed; §7.1) ------------------------
 // signup / login / logout / refresh / me — see src/auth/routes.js.

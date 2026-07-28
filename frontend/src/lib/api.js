@@ -474,6 +474,34 @@ export function nearForUser(user) {
   return null
 }
 
+// Build the GET /api/events query string from a filters object. Shared by
+// api.events() (first page only) and api.eventsPage() (cursor-paginated) so the
+// two stay in lockstep — a filter added here applies to both. Returns a string
+// beginning with '?' (or '' when there are no params).
+function eventsQuery(filters = {}) {
+  const qs = new URLSearchParams()
+  if (filters.category && filters.category !== 'All') qs.set('category', filters.category)
+  if (filters.isFree) qs.set('isFree', 'true')
+  if (filters.isSports) qs.set('isSports', 'true')
+  if (filters.q) qs.set('q', filters.q)
+  if (filters.sort) qs.set('sort', filters.sort)
+  if (filters.cursor) qs.set('cursor', filters.cursor)
+  if (filters.limit) qs.set('limit', String(filters.limit))
+  const near = filters.near
+  if (near?.lat != null && near?.lng != null) {
+    qs.set('nearLat', String(near.lat))
+    qs.set('nearLng', String(near.lng))
+    qs.set('radiusKm', String(near.radiusKm ?? 40))
+    // Also send city so the backend can include events created without pinned
+    // coordinates (organizer skipped Places autocomplete); the backend ORs it
+    // with the radius filter instead of hard-excluding null-coord rows.
+    if (near.city) qs.set('city', near.city)
+  } else if (near?.city) {
+    qs.set('city', near.city)
+  }
+  return qs.toString() ? `?${qs}` : ''
+}
+
 // Resolve a category display name (e.g. "Nightlife") to the backend's real
 // category id. The category list is small and immutable during a session, so we
 // fetch it once and cache the promise. Matches on name or slug, case-insensitively.
@@ -752,25 +780,7 @@ export const api = {
   // offline path (mockFilter) has no geo filter anyway, so this only tightens
   // real backend responses.
   events: async (filters = {}) => {
-    const qs = new URLSearchParams()
-    if (filters.category && filters.category !== 'All') qs.set('category', filters.category)
-    if (filters.isFree) qs.set('isFree', 'true')
-    if (filters.isSports) qs.set('isSports', 'true')
-    if (filters.q) qs.set('q', filters.q)
-    if (filters.sort) qs.set('sort', filters.sort)
-    const near = filters.near
-    if (near?.lat != null && near?.lng != null) {
-      qs.set('nearLat', String(near.lat))
-      qs.set('nearLng', String(near.lng))
-      qs.set('radiusKm', String(near.radiusKm ?? 40))
-      // Also send city so the backend can include events created without pinned
-      // coordinates (organizer skipped Places autocomplete); the backend ORs it
-      // with the radius filter instead of hard-excluding null-coord rows.
-      if (near.city) qs.set('city', near.city)
-    } else if (near?.city) {
-      qs.set('city', near.city)
-    }
-    const suffix = qs.toString() ? `?${qs}` : ''
+    const suffix = eventsQuery(filters)
     // No mock fallback here. The mock catalog's isoDate values are frozen in
     // the past, so on any transient backend hiccup the client would render
     // "only 2 events" (the two future-dated mocks) instead of the real feed.
@@ -778,6 +788,18 @@ export const api = {
     // honest — better than showing a stale two-item catalog.
     const list = (await get(`/events${suffix}`, () => [])) ?? []
     return list.map(toEventCardShape)
+  },
+
+  // Paginated variant of events(): preserves the backend's `nextCursor` so a
+  // screen can page through the *whole* result set (Load more / infinite
+  // scroll) instead of being stuck on the first page. Same filters as events(),
+  // plus `cursor` (from a prior page) and `limit`. Returns { events, nextCursor };
+  // nextCursor is null when there are no more pages. A failed fetch degrades to
+  // an empty page with a null cursor — honest, and stops further paging.
+  eventsPage: async (filters = {}) => {
+    const suffix = eventsQuery(filters)
+    const { data, nextCursor } = await getPage(`/events${suffix}`, () => [])
+    return { events: (data ?? []).map(toEventCardShape), nextCursor }
   },
 
   event: (id) =>

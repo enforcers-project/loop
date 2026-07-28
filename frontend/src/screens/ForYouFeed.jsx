@@ -6,6 +6,7 @@ import { useApp } from '../context/AppContext'
 import { CATEGORY_COLOR, isEventPast, pluralize, recommendationLabel } from '../lib/utils'
 import { CatRow, SearchBar, pillBase, pillSelected, pillUnselected } from '../components/rows'
 import { cn } from '../lib/utils'
+import { useEventFeed } from '../lib/useEventFeed'
 import { EventGrid } from '../components/EventCard'
 import { EventImage } from '../components/EventImage'
 import { NearMeChip } from '../components/NearMeChip'
@@ -13,6 +14,7 @@ import {
   AIChip,
   AlmostFullBadge,
   GoingStack,
+  LoadMore,
   PageLoader,
   RSVPBtn,
   SaveBtn,
@@ -142,9 +144,6 @@ export function ForYouFeed() {
   // just the recommendation batch already on screen (which the old in-memory
   // .includes() filter was limited to).
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  // null while a fetch is in flight (initial mount + tab change), so we can
-  // show the page-level spinner instead of an empty grid.
-  const [events, setEvents] = useState(null)
 
   // Depend only on the coord primitives (or city) so a full user-object
   // reference change from a /me refresh doesn't retrigger this effect.
@@ -158,36 +157,29 @@ export function ForYouFeed() {
 
   const searching = debouncedQuery.length > 0
 
-  // Reset-state-on-prop-change (render-time), same pattern as FeaturedCard: when
-  // the fetch inputs change we want to blank the previous list *before* the new
-  // request resolves so the spinner replaces stale rows rather than flashing
-  // them under a new heading. `debouncedQuery` is part of the key so switching
-  // between the feed and a search (and between searches) shows the spinner.
+  // Cursor-paginated feed (Load more + infinite scroll). The key encodes every
+  // input that changes the query, so switching tab/search/location resets and
+  // refetches page 1. The loader picks the right source:
+  //   - search      → GET /events?q= (paginated across the whole DB)
+  //   - For You     → POST /recommendations (a single ranked batch, not paged)
+  //   - Trending/Following → GET /events?sort= (paginated)
+  // Recommendations aren't cursor-paged server-side, so that mode returns no
+  // nextCursor and the Load more control simply doesn't appear.
   const fetchKey = `${tab}|${debouncedQuery}|${interests.join(',')}|${nearKey}`
-  const [fetchedKey, setFetchedKey] = useState('')
-  if (fetchedKey !== fetchKey) {
-    setFetchedKey(fetchKey)
-    setEvents(null)
-  }
-
-  useEffect(() => {
-    let cancelled = false
-    // A non-empty query overrides the feed: run the backend full-text search
-    // (GET /events?q=) so results come from the whole DB. Otherwise show the
-    // For You recommendations (or the Trending/Following feed).
-    const p = searching
-      ? api.events({ q: debouncedQuery, near: nearForUser(user) })
-      : tab === 'For You'
-        ? api.recommendations(interests)
-        : api.events({ sort: tab === 'Trending' ? 'popular' : 'date', near: nearForUser(user) })
-    p.then((data) => {
-      if (!cancelled) setEvents(data)
-    })
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, debouncedQuery, interests, nearKey])
+  const { events, loadMore, loadingMore, hasMore, sentinelRef } = useEventFeed(
+    fetchKey,
+    async (cursor) => {
+      if (searching) {
+        return api.eventsPage({ q: debouncedQuery, near, cursor })
+      }
+      if (tab === 'For You') {
+        // Recommendations are a single ranked batch — no pagination.
+        const recs = await api.recommendations(interests)
+        return { events: recs, nextCursor: null }
+      }
+      return api.eventsPage({ sort: tab === 'Trending' ? 'popular' : 'date', near, cursor })
+    },
+  )
 
   const filtered = (events ?? []).filter((e) => {
     if (isEventPast(e)) return false // keep the feed forward-looking
@@ -254,6 +246,12 @@ export function ForYouFeed() {
               No events match "{debouncedQuery}". Try a different search.
             </p>
           )}
+          <LoadMore
+            hasMore={hasMore}
+            loading={loadingMore}
+            onClick={loadMore}
+            sentinelRef={sentinelRef}
+          />
         </>
       ) : (
         <>
@@ -278,6 +276,12 @@ export function ForYouFeed() {
               )
             )}
           </div>
+          <LoadMore
+            hasMore={hasMore}
+            loading={loadingMore}
+            onClick={loadMore}
+            sentinelRef={sentinelRef}
+          />
         </>
       )}
     </div>

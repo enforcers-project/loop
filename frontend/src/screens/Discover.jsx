@@ -6,8 +6,9 @@ import { CatRow, FilterBar, SearchBar } from '../components/rows'
 import { EventGrid } from '../components/EventCard'
 import { EventsMap } from '../components/EventsMap'
 import { NearMeChip } from '../components/NearMeChip'
-import { PageLoader } from '../components/primitives'
+import { LoadMore, PageLoader } from '../components/primitives'
 import { cn, isEventPast, pluralize } from '../lib/utils'
+import { useEventFeed } from '../lib/useEventFeed'
 
 const EMPTY_FILTERS = {
   free: false,
@@ -126,9 +127,6 @@ export function Discover() {
   // priority over the profile's home location so "events near X" reflects the
   // search. Null → fall back to nearForUser(user).
   const [locationOverride, setLocationOverride] = useState(null) // { lat, lng, city }
-  // null while the events fetch is in flight, so the screen can show a
-  // spinner instead of "0 events near you".
-  const [events, setEvents] = useState(null)
 
   // Title search state. `nlResults` is null while a search is in flight and
   // becomes the ranked title-match array once it resolves; that flip drives the
@@ -142,24 +140,12 @@ export function Discover() {
   const near = locationOverride ?? nearForUser(user)
   const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
 
-  // Render-time reset when the fetch input changes so stale rows don't flash
-  // before the new request resolves. See FeaturedCard for the same pattern.
-  const [fetchedKey, setFetchedKey] = useState('')
-  if (fetchedKey !== nearKey) {
-    setFetchedKey(nearKey)
-    setEvents(null)
-  }
-
-  useEffect(() => {
-    let cancelled = false
-    api.events({ near }).then((data) => {
-      if (!cancelled) setEvents(data)
-    })
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nearKey])
+  // Cursor-paginated browse feed (Load more + infinite scroll on the filtered
+  // grid). `events` is null while page 1 is in flight. Keyed on the location so
+  // changing the near-me pin resets and refetches page 1.
+  const { events, loadMore, loadingMore, hasMore, sentinelRef } = useEventFeed(nearKey, (cursor) =>
+    api.eventsPage({ near, cursor }),
+  )
 
   // Debounce the raw query into `debouncedQuery` (350ms) so the search fires
   // once typing settles, not on every keystroke.
@@ -335,6 +321,14 @@ export function Discover() {
                   No events match those filters. Try clearing a few.
                 </p>
               )}
+              {/* Load more pulls the next page of near-you events; the active
+                  category/quick filters re-apply to the appended rows. */}
+              <LoadMore
+                hasMore={hasMore}
+                loading={loadingMore}
+                onClick={loadMore}
+                sentinelRef={sentinelRef}
+              />
             </>
           ) : rails.length > 0 ? (
             <>

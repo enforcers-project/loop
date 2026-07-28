@@ -133,12 +133,14 @@ async function fetchEventsList(query) {
   // Age filter
   if (ageMax) where.ageMin = { lte: Number(ageMax) }
 
-  // Cursor: fetch events after this ID
-  if (cursor) {
-    where.id = { gt: cursor }
-  }
-
   // --- Determine sort order ---
+  // Every ordering ends with `id` as a unique tiebreaker so the cursor below is
+  // stable (Prisma cursor pagination needs the orderBy to uniquely identify the
+  // cursor row). NOTE: the cursor is applied via Prisma's `cursor`/`skip`
+  // options at query time, NOT a `where.id > cursor` clause — an id filter would
+  // (a) be wrong for the startsAt/popularity orderings (id order ≠ sort order,
+  // so pages would skip and duplicate rows) and (b) clobber the geo/city
+  // `where.id.in` set above.
   let orderBy = [{ startsAt: 'asc' }, { id: 'asc' }]
   if (sort === 'popularity') {
     orderBy = [{ rsvpCount: 'desc' }, { saveCount: 'desc' }, { id: 'asc' }]
@@ -230,10 +232,15 @@ async function fetchEventsList(query) {
   }
 
   // --- Execute the main query ---
+  // Prisma cursor pagination: `cursor` points at the last row of the previous
+  // page and `skip: 1` steps past it, so this works for any orderBy (unlike an
+  // id-comparison in WHERE). `take: limit + 1` fetches one extra to detect a
+  // next page.
   const events = await prisma.event.findMany({
     where,
     orderBy,
-    take: limit + 1, // fetch one extra to know if there's a next page
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     include: {
       category: true,
       organizer: true,

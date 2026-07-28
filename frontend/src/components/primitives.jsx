@@ -542,6 +542,29 @@ export function PageLoader({ label = 'Loading' }) {
 }
 
 /* --------------------------------------------------------------------------
+   LoadMore — the footer control for a cursor-paginated list. Renders a centered
+   "Load more" button when another page exists (also doubles as the infinite-
+   scroll sentinel via `sentinelRef`), or nothing once the list is exhausted.
+   Matches the OrganizerDashboard / UserSearch load-more styling.
+-------------------------------------------------------------------------- */
+export function LoadMore({ hasMore, loading, onClick, sentinelRef, label = 'Load more' }) {
+  if (!hasMore) return null
+  return (
+    <div ref={sentinelRef} className="mt-8 flex justify-center">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={loading}
+        className="inline-flex items-center gap-2 rounded-button border border-border-light bg-white px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-50"
+      >
+        {loading && <Spinner size="sm" />}
+        {loading ? 'Loading…' : label}
+      </button>
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
    IconButton — a round icon control for secondary hero actions (Share,
    overflow, socials, back). Sized to sit beside the RSVP/Save buttons so the
    CTA row stays evenly weighted. Keep it visual-only — semantic buttons

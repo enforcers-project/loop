@@ -27,7 +27,7 @@ function shortDate(iso) {
 export function PosseDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user } = useApp()
+  const { user, markGoing } = useApp()
   const toast = useToast()
   const modal = useModal()
 
@@ -86,9 +86,38 @@ export function PosseDetail() {
 
   const isCaptain = posse.viewer_role === 'captain'
   const isMember = posse.viewer_status === 'active'
+  const isInvited = posse.viewer_status === 'invited'
   const members = posse.members ?? []
   const pending = members.filter((m) => m.status === 'pending')
   const active = members.filter((m) => m.status === 'active')
+
+  const onAcceptInvite = async () => {
+    setBusy(true)
+    try {
+      const res = await api.posses.accept(posse.id)
+      // Accepting auto-RSVPs server-side (unless age-gated) — sync goingIds so
+      // the event won't show "RSVP now" and let the user double-count.
+      if (!res?.rsvp_blocked) markGoing(res?.event_id ?? posse.event_id)
+      toast.success("You're in")
+      await load()
+    } catch (err) {
+      toast.error(err.message || 'Could not accept invite')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const onDeclineInvite = async () => {
+    setBusy(true)
+    try {
+      await api.posses.decline(posse.id)
+      toast.success('Invite declined')
+      navigate('/posses')
+    } catch (err) {
+      toast.error(err.message || 'Could not decline invite')
+      setBusy(false)
+    }
+  }
 
   const onApprove = async (userId) => {
     setBusy(true)
@@ -196,6 +225,33 @@ export function PosseDetail() {
         </Link>
       )}
 
+      {/* invite banner — the viewer was invited and hasn't responded yet */}
+      {isInvited && (
+        <div className="mt-4 flex flex-col gap-3 rounded-card border border-primary/30 bg-primary-light/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-medium text-ink">
+            You&apos;ve been invited to this posse. Accepting RSVPs you to the event.
+          </p>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onDeclineInvite}
+              disabled={busy}
+              className="inline-flex h-9 items-center rounded-button border border-border-light bg-white px-4 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted disabled:opacity-50"
+            >
+              Decline
+            </button>
+            <button
+              type="button"
+              onClick={onAcceptInvite}
+              disabled={busy}
+              className="inline-flex h-9 items-center rounded-button bg-primary px-5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              Accept
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="mt-6 grid gap-6 lg:grid-cols-[300px_1fr]">
         {/* roster */}
         <aside>
@@ -209,7 +265,7 @@ export function PosseDetail() {
                 onClick={() => setInviteOpen(true)}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
               >
-                <UserPlus size={15} /> Add
+                <UserPlus size={15} /> Invite
               </button>
             )}
           </div>
@@ -260,7 +316,11 @@ export function PosseDetail() {
             <ThreadView threadId={posse.thread_id} compact />
           ) : (
             <div className="flex flex-1 items-center justify-center px-6 text-center">
-              <p className="text-sm text-text-secondary">Join the posse to see the chat.</p>
+              <p className="text-sm text-text-secondary">
+                {isInvited
+                  ? 'Accept the invite to join the chat.'
+                  : 'Join the posse to see the chat.'}
+              </p>
             </div>
           )}
         </section>

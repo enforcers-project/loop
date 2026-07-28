@@ -233,9 +233,10 @@ export function CreatePosseModal({ eventId, eventTitle, open, onClose, onCreated
 }
 
 /* --------------------------------------------------------------------------
-   InvitePosseModal — search people and add them to a posse. An invite is
-   pre-approval (backend adds them active immediately), so this is "add", not
-   "request". Calls onInvited(userId) after each successful add.
+   InvitePosseModal — search people and invite them to a posse. An invite is an
+   offer the recipient accepts or declines (backend creates an `invited` row);
+   it does NOT add them until they accept. Calls onInvited(userId) after each
+   successful invite.
 -------------------------------------------------------------------------- */
 export function InvitePosseModal({ posseId, open, onClose, onInvited }) {
   const { user } = useApp()
@@ -278,10 +279,10 @@ export function InvitePosseModal({ posseId, open, onClose, onInvited }) {
     try {
       await api.posses.invite(posseId, person.id)
       setInvitedIds((prev) => new Set(prev).add(person.id))
-      toast.success(`Added ${person.name || 'them'}`)
+      toast.success(`Invited ${person.name || 'them'}`)
       onInvited?.(person.id)
     } catch (err) {
-      toast.error(err.message || 'Could not add them')
+      toast.error(err.message || 'Could not invite them')
     } finally {
       setPendingId(null)
     }
@@ -292,7 +293,7 @@ export function InvitePosseModal({ posseId, open, onClose, onInvited }) {
   return (
     <AnimatePresence>
       {open && (
-        <ModalShell title="Add people" onClose={onClose}>
+        <ModalShell title="Invite people" onClose={onClose}>
           <div className="relative mb-3">
             <Search
               size={16}
@@ -313,7 +314,7 @@ export function InvitePosseModal({ posseId, open, onClose, onInvited }) {
           </div>
           {term.length < 2 ? (
             <p className="py-10 text-center text-sm text-text-muted">
-              Start typing a name or @handle to add people.
+              Start typing a name or @handle to invite people.
             </p>
           ) : visible.length === 0 && !searching ? (
             <p className="py-10 text-center text-sm text-text-muted">No people found.</p>
@@ -352,11 +353,11 @@ export function InvitePosseModal({ posseId, open, onClose, onInvited }) {
                         <Spinner size="sm" />
                       ) : done ? (
                         <>
-                          <Check size={15} /> Added
+                          <Check size={15} /> Invited
                         </>
                       ) : (
                         <>
-                          <UserPlus size={15} /> Add
+                          <UserPlus size={15} /> Invite
                         </>
                       )}
                     </button>

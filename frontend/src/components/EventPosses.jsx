@@ -60,6 +60,7 @@ export function EventPosses({ eventId, eventTitle }) {
   const ctaLabel = (p) => {
     if (p.viewer_status === 'active') return 'Open'
     if (p.viewer_status === 'pending') return 'Requested'
+    if (p.viewer_status === 'invited') return 'View invite'
     return p.join_policy === 'ask' ? 'Ask to join' : 'Join'
   }
 

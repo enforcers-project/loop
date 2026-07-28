@@ -1305,6 +1305,10 @@ export const api = {
     join: (id) => request(`/posses/${id}/join`, { method: 'POST' }),
     invite: (id, userId) =>
       request(`/posses/${id}/invite`, { method: 'POST', body: { user_id: userId } }),
+    // Invitee responds to their own invite. accept → active (+ RSVP going, so
+    // the response carries rsvp_blocked); decline → the invite is removed.
+    accept: (id) => request(`/posses/${id}/accept`, { method: 'POST' }),
+    decline: (id) => request(`/posses/${id}/decline`, { method: 'POST' }),
     approve: (id, userId) => request(`/posses/${id}/members/${userId}/approve`, { method: 'POST' }),
     // Remove someone (captain) or leave (self) — same route, server decides by
     // whether uid === caller.

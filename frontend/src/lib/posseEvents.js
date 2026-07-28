@@ -11,6 +11,7 @@
 // Frames (all carry posseId; some carry userId):
 //   posse_join       — someone became an active member
 //   posse_request    — someone asked to join (captain-facing)
+//   posse_invited    — someone was invited (invitee-facing; they accept/decline)
 //   posse_leave      — someone left / was removed
 //   posse_dissolved  — the posse was dissolved
 
@@ -35,7 +36,13 @@ export function emitPosseEvent(frame) {
   }
 }
 
-const POSSE_FRAME_TYPES = new Set(['posse_join', 'posse_request', 'posse_leave', 'posse_dissolved'])
+const POSSE_FRAME_TYPES = new Set([
+  'posse_join',
+  'posse_request',
+  'posse_invited',
+  'posse_leave',
+  'posse_dissolved',
+])
 
 /** Is this SSE frame a posse roster frame? */
 export function isPosseFrame(type) {

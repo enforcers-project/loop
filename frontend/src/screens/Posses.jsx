@@ -7,6 +7,24 @@ import { useToast } from '../context/ToastContext'
 import { PosseAvatars } from '../components/PosseControls'
 import { PageLoader } from '../components/primitives'
 
+/* The posse thumbnail — event poster, or a fallback glyph. */
+function PosseThumb({ posse }) {
+  if (posse.event?.poster) {
+    return (
+      <img
+        src={posse.event.poster}
+        alt=""
+        className="h-12 w-12 flex-shrink-0 rounded-lg bg-surface object-cover"
+      />
+    )
+  }
+  return (
+    <span className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-lg bg-primary-light text-primary">
+      <Users size={20} />
+    </span>
+  )
+}
+
 /* One "your posses" row — deep-links to the posse. */
 function MinePosseRow({ posse }) {
   return (
@@ -14,17 +32,7 @@ function MinePosseRow({ posse }) {
       to={`/posse/${posse.id}`}
       className="flex items-center gap-3 rounded-card border border-border-light bg-card-bg p-3 shadow-card transition-shadow hover:shadow-card-hover"
     >
-      {posse.event?.poster ? (
-        <img
-          src={posse.event.poster}
-          alt=""
-          className="h-12 w-12 flex-shrink-0 rounded-lg bg-surface object-cover"
-        />
-      ) : (
-        <span className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-lg bg-primary-light text-primary">
-          <Users size={20} />
-        </span>
-      )}
+      <PosseThumb posse={posse} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-ink">{posse.name}</p>
         <p className="truncate text-xs text-text-muted">
@@ -40,6 +48,42 @@ function MinePosseRow({ posse }) {
   )
 }
 
+/* An invite you've received — tap the body to preview the posse, or use the
+   Accept / Decline buttons. `busy` disables both while a response is in flight. */
+function InvitePosseRow({ posse, onAccept, onDecline, busy }) {
+  return (
+    <div className="flex items-center gap-3 rounded-card border border-primary/30 bg-primary-light/40 p-3 shadow-card">
+      <Link to={`/posse/${posse.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+        <PosseThumb posse={posse} />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-ink">{posse.name}</p>
+          <p className="truncate text-xs text-text-muted">
+            Invited · {posse.event?.title ?? 'Event'}
+          </p>
+        </div>
+      </Link>
+      <div className="flex flex-shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onDecline(posse)}
+          disabled={busy}
+          className="inline-flex h-9 items-center rounded-button border border-border-light bg-white px-3 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted disabled:opacity-50"
+        >
+          Decline
+        </button>
+        <button
+          type="button"
+          onClick={() => onAccept(posse)}
+          disabled={busy}
+          className="inline-flex h-9 items-center rounded-button bg-primary px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          Accept
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* Posses (/posses) — your posses (active/pending) plus a discovery feed of
    public + reciprocal-mutuals posses you can join or request. */
 export function Posses() {
@@ -49,6 +93,7 @@ export function Posses() {
   const [mine, setMine] = useState(null) // null = loading
   const [discover, setDiscover] = useState([])
   const [joiningId, setJoiningId] = useState(null)
+  const [respondingId, setRespondingId] = useState(null) // invite being accepted/declined
 
   useEffect(() => {
     api.posses.mine().then(setMine)
@@ -80,30 +125,84 @@ export function Posses() {
     }
   }
 
+  const onAcceptInvite = async (posse) => {
+    if (respondingId) return
+    setRespondingId(posse.id)
+    try {
+      const res = await api.posses.accept(posse.id)
+      // Accepting auto-RSVPs server-side (unless age-gated) — sync goingIds so
+      // the event won't show "RSVP now" and let the user double-count.
+      if (!res?.rsvp_blocked) markGoing(res?.event_id ?? posse.event_id)
+      toast.success(`You're in — ${posse.name}`)
+      navigate(`/posse/${posse.id}`)
+    } catch (err) {
+      toast.error(err.message || 'Could not accept invite')
+      setRespondingId(null)
+    }
+  }
+
+  const onDeclineInvite = async (posse) => {
+    if (respondingId) return
+    setRespondingId(posse.id)
+    try {
+      await api.posses.decline(posse.id)
+      toast.success('Invite declined')
+      setMine((prev) => (prev ?? []).filter((p) => p.id !== posse.id))
+    } catch (err) {
+      toast.error(err.message || 'Could not decline invite')
+    } finally {
+      setRespondingId(null)
+    }
+  }
+
+  const invites = mine.filter((p) => p.viewer_status === 'invited')
+  const joined = mine.filter((p) => p.viewer_status !== 'invited')
+
   return (
     <div className="loop-container py-6 pb-24 md:pb-12">
       <h1 className="font-display text-2xl font-bold text-ink">Your posses</h1>
       <p className="mt-1 text-sm text-text-secondary">Groups heading to events together.</p>
 
-      {mine.length === 0 ? (
-        <div className="mt-8 flex flex-col items-center rounded-card border border-dashed border-border-light bg-surface/50 px-6 py-12 text-center">
-          <span className="grid h-16 w-16 place-items-center rounded-full bg-primary-light text-primary">
-            <Users size={28} />
-          </span>
-          <h2 className="mt-5 font-display text-lg font-bold text-ink">No posses yet</h2>
-          <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-text-secondary">
-            Find an event you&apos;re into and start a posse to head there together.
-          </p>
-          <button
-            onClick={() => navigate('/discover')}
-            className="mt-6 inline-flex h-11 items-center rounded-button bg-primary px-6 text-sm font-semibold text-white transition-transform active:scale-95 hover:opacity-90"
-          >
-            Discover events
-          </button>
-        </div>
+      {invites.length > 0 && (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-text-muted">
+            Invites ({invites.length})
+          </h2>
+          <div className="mt-3 space-y-2">
+            {invites.map((p) => (
+              <InvitePosseRow
+                key={p.id}
+                posse={p}
+                onAccept={onAcceptInvite}
+                onDecline={onDeclineInvite}
+                busy={respondingId === p.id}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {joined.length === 0 ? (
+        invites.length === 0 && (
+          <div className="mt-8 flex flex-col items-center rounded-card border border-dashed border-border-light bg-surface/50 px-6 py-12 text-center">
+            <span className="grid h-16 w-16 place-items-center rounded-full bg-primary-light text-primary">
+              <Users size={28} />
+            </span>
+            <h2 className="mt-5 font-display text-lg font-bold text-ink">No posses yet</h2>
+            <p className="mt-1.5 max-w-xs text-sm leading-relaxed text-text-secondary">
+              Find an event you&apos;re into and start a posse to head there together.
+            </p>
+            <button
+              onClick={() => navigate('/discover')}
+              className="mt-6 inline-flex h-11 items-center rounded-button bg-primary px-6 text-sm font-semibold text-white transition-transform active:scale-95 hover:opacity-90"
+            >
+              Discover events
+            </button>
+          </div>
+        )
       ) : (
         <div className="mt-6 space-y-2">
-          {mine.map((p) => (
+          {joined.map((p) => (
             <MinePosseRow key={p.id} posse={p} />
           ))}
         </div>

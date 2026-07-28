@@ -459,9 +459,11 @@ router.post('/posses/:id/join', requireAuth, async (req, res) => {
 })
 
 // --- POST /api/posses/:id/invite --------------------------------------------
-// Body: { user_id }. Any active member can invite. Adds the invitee as ACTIVE
-// (invite = pre-approval) + thread participant + RSVP going, then drops a posse
-// card into a DM thread between inviter and invitee.
+// Body: { user_id }. Any active member can invite. Creates an `invited`
+// membership the invitee must accept (→ active + thread + RSVP) or decline
+// (→ removed); it does NOT add them to the posse, the thread, or RSVP them yet.
+// Re-inviting someone who already has a pending join request just leaves their
+// request as-is (the captain still decides that one).
 router.post('/posses/:id/invite', requireAuth, async (req, res) => {
   const me = req.user.id
   const inviteeId = req.body?.user_id
@@ -483,27 +485,24 @@ router.post('/posses/:id/invite', requireAuth, async (req, res) => {
     if (already?.status === 'active') {
       return fail(res, 409, 'CONFLICT', 'They are already in this posse')
     }
+    if (already?.status === 'invited') {
+      return fail(res, 409, 'CONFLICT', "They've already been invited")
+    }
+    if (already?.status === 'pending') {
+      // They asked to join first — leave that for the captain to approve rather
+      // than converting it to an invite.
+      return fail(res, 409, 'CONFLICT', "They've already asked to join — approve their request")
+    }
 
+    // Capacity is checked against active members; an invite doesn't consume a
+    // seat until accepted, so we don't count invited/pending here.
     const activeCount = posse.members.filter((m) => m.status === 'active').length
     if (activeCount >= MAX_MEMBERS) {
       return fail(res, 409, 'CONFLICT', `This posse is full (${MAX_MEMBERS} people)`)
     }
 
-    // Invite = pre-approval: upsert the invitee straight to active (covers a
-    // prior pending request too), add them to the thread, RSVP them going.
-    const result = await prisma.$transaction(async (tx) => {
-      await tx.posseMember.upsert({
-        where: { posseId_userId: { posseId: posse.id, userId: inviteeId } },
-        create: { posseId: posse.id, userId: inviteeId, status: 'active' },
-        update: { status: 'active' },
-      })
-      await tx.threadParticipant.upsert({
-        where: { threadId_userId: { threadId: posse.threadId, userId: inviteeId } },
-        create: { threadId: posse.threadId, userId: inviteeId },
-        update: {},
-      })
-      const rsvp = await rsvpGoingInTx(tx, inviteeId, posse.event)
-      return { rsvp }
+    await prisma.posseMember.create({
+      data: { posseId: posse.id, userId: inviteeId, status: 'invited' },
     })
 
     notifyPosse(inviteeId, {
@@ -511,22 +510,95 @@ router.post('/posses/:id/invite', requireAuth, async (req, res) => {
       actorId: me,
       eventId: posse.eventId,
       posseId: posse.id,
-      title: `${req.user.displayName || 'Someone'} added you to "${posse.name}"`,
+      title: `${req.user.displayName || 'Someone'} invited you to "${posse.name}"`,
     })
-    const ids = await activeMemberIds(posse.id)
-    publish(ids, { type: 'posse_join', posseId: posse.id, userId: inviteeId })
+    // Tell the invitee's other sessions to refresh (the invite shows under their
+    // posses); active members don't see the pending invitee, so no fan-out yet.
+    publish([inviteeId], { type: 'posse_invited', posseId: posse.id, userId: inviteeId })
 
     return res.status(201).json({
+      data: { posse_id: posse.id, user_id: inviteeId, status: 'invited' },
+    })
+  } catch (err) {
+    if (err.code === 'P2002') return fail(res, 409, 'CONFLICT', 'They already have an invite')
+    console.error('POST /api/posses/:id/invite error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not invite to posse')
+  }
+})
+
+// --- POST /api/posses/:id/accept --------------------------------------------
+// The invitee accepts their own invite → active + thread participant + RSVP
+// going (through the age gate). 404 if they have no outstanding invite.
+router.post('/posses/:id/accept', requireAuth, async (req, res) => {
+  const me = req.user.id
+  try {
+    const posse = await loadPosse(req.params.id)
+    if (!posse) return fail(res, 404, 'NOT_FOUND', 'Posse not found')
+
+    const mine = viewerMembership(posse, me)
+    if (mine?.status === 'active') {
+      return fail(res, 409, 'CONFLICT', 'You are already in this posse')
+    }
+    if (mine?.status !== 'invited') {
+      return fail(res, 404, 'NOT_FOUND', 'You have no invite to this posse')
+    }
+
+    const activeCount = posse.members.filter((m) => m.status === 'active').length
+    if (activeCount >= MAX_MEMBERS) {
+      return fail(res, 409, 'CONFLICT', `This posse is full (${MAX_MEMBERS} people)`)
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.posseMember.update({
+        where: { posseId_userId: { posseId: posse.id, userId: me } },
+        data: { status: 'active' },
+      })
+      await tx.threadParticipant.upsert({
+        where: { threadId_userId: { threadId: posse.threadId, userId: me } },
+        create: { threadId: posse.threadId, userId: me },
+        update: {},
+      })
+      const rsvp = await rsvpGoingInTx(tx, me, posse.event)
+      return { rsvp }
+    })
+
+    const ids = await activeMemberIds(posse.id)
+    publish(ids, { type: 'posse_join', posseId: posse.id, userId: me })
+
+    const fresh = await loadPosse(posse.id)
+    return res.json({
       data: {
-        posse_id: posse.id,
-        user_id: inviteeId,
-        status: 'active',
+        ...toPosse(fresh, { members: fresh.members, viewer: { role: 'member', status: 'active' } }),
         rsvp_blocked: result.rsvp.blockedCode,
       },
     })
   } catch (err) {
-    console.error('POST /api/posses/:id/invite error:', err)
-    return fail(res, 500, 'INTERNAL', 'Could not invite to posse')
+    console.error('POST /api/posses/:id/accept error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not accept invite')
+  }
+})
+
+// --- POST /api/posses/:id/decline -------------------------------------------
+// The invitee declines their own invite → the invited row is removed. No RSVP,
+// no thread. 404 if they have no outstanding invite.
+router.post('/posses/:id/decline', requireAuth, async (req, res) => {
+  const me = req.user.id
+  try {
+    const posse = await loadPosse(req.params.id)
+    if (!posse) return fail(res, 404, 'NOT_FOUND', 'Posse not found')
+
+    const mine = viewerMembership(posse, me)
+    if (mine?.status !== 'invited') {
+      return fail(res, 404, 'NOT_FOUND', 'You have no invite to this posse')
+    }
+
+    await prisma.posseMember.delete({
+      where: { posseId_userId: { posseId: posse.id, userId: me } },
+    })
+    return res.json({ data: { posse_id: posse.id, declined: true } })
+  } catch (err) {
+    console.error('POST /api/posses/:id/decline error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not decline invite')
   }
 })
 

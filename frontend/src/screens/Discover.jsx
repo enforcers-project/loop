@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LayoutGrid, MapPin, Map as MapIcon, X } from 'lucide-react'
+import { LayoutGrid, MapPin, Map as MapIcon } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { CatRow, FilterBar, SearchBar } from '../components/rows'
@@ -130,19 +130,13 @@ export function Discover() {
   // spinner instead of "0 events near you".
   const [events, setEvents] = useState(null)
 
-  // Natural-language search state (work-plan #22). `nlResults` is non-null once
-  // a search runs; it holds the AI-ranked events and flips the screen into
-  // search mode (pills + results, browse UI hidden). `nlPills` are the removable
-  // parsed-filter chips, `nlLabel` is the label-shape that produced them (posted
-  // back on pill-removal so the parse is skipped). A null `nlResults` while a
-  // query is active means "search in flight" and renders the spinner.
+  // Title search state. `nlResults` is null while a search is in flight and
+  // becomes the ranked title-match array once it resolves; that flip drives the
+  // search-mode UI (browse hidden, results shown).
   const [nlResults, setNlResults] = useState(null)
-  const [nlPills, setNlPills] = useState([])
-  const [nlLabel, setNlLabel] = useState(null)
 
-  // The natural-language search runs automatically as the user types — no Enter
-  // needed. We debounce the raw query (350ms) so we fire one search once typing
-  // settles rather than one per keystroke.
+  // Debounce the raw query (350ms) so the search fires once typing settles
+  // rather than on every keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
   const near = locationOverride ?? nearForUser(user)
@@ -182,39 +176,15 @@ export function Discover() {
 
   // Render-time reset (same pattern as the `fetchedKey` block above): when the
   // active query changes, blank the results so the spinner shows while the new
-  // search runs — and clear the pills/label. An empty query converges on the
-  // browse experience (searching=false). This keeps all the synchronous
-  // state-clearing out of the effect below, which the lint rules disallow.
+  // search runs. An empty query converges on the browse experience
+  // (searching=false).
   const [searchedFor, setSearchedFor] = useState('')
   if (searchedFor !== debouncedQuery) {
     setSearchedFor(debouncedQuery)
     setNlResults(null)
-    setNlPills([])
-    setNlLabel(null)
   }
 
-  // Run a natural-language search. `label` is passed only on pill-removal (to
-  // skip the LLM re-parse); a fresh search omits it so the query is parsed.
-  // Sets state only after the await so it's safe to call from an effect.
-  const runSearch = async (q, label) => {
-    const term = q.trim()
-    if (!term) return
-    const seq = ++searchSeq.current
-    try {
-      const res = await api.nlSearch(term, label)
-      if (seq !== searchSeq.current) return // a newer search superseded this one
-      setNlResults(res.events)
-      setNlPills(res.pills)
-      setNlLabel(res.label)
-    } catch {
-      if (seq === searchSeq.current) setNlResults([]) // surface the empty state
-    }
-  }
-
-  // Fire the NL search automatically whenever the debounced query changes — no
-  // Enter required. Inlined (rather than calling runSearch) so the setState only
-  // happens inside the .then() callback, mirroring the events-fetch effect above
-  // and keeping the lint rule against synchronous setState-in-effect satisfied.
+  // Fire the title search automatically whenever the debounced query changes.
   useEffect(() => {
     if (!debouncedQuery) return
     const seq = ++searchSeq.current
@@ -223,24 +193,11 @@ export function Discover() {
       .then((res) => {
         if (seq !== searchSeq.current) return // a newer search superseded this one
         setNlResults(res.events)
-        setNlPills(res.pills)
-        setNlLabel(res.label)
       })
       .catch(() => {
         if (seq === searchSeq.current) setNlResults([]) // surface the empty state
       })
   }, [debouncedQuery])
-
-  // Remove one parsed-filter pill: drop its key from the label and re-run with
-  // the remainder so the LLM doesn't re-add it. Removing the last pill keeps the
-  // search (semantic match on the raw query) but with no hard constraints.
-  const removePill = (key) => {
-    const nextLabel = { ...(nlLabel ?? {}) }
-    delete nextLabel[key]
-    setNlLabel(nextLabel)
-    setNlResults(null) // spinner while the re-search runs
-    runSearch(query, nextLabel)
-  }
 
   // Local browse filtering (only used when NOT in NL-search mode). NL results
   // are already ranked + constrained server-side, so we render them as-is.
@@ -279,52 +236,26 @@ export function Discover() {
 
   return (
     <div className="loop-container pb-24 pt-4 md:pb-12">
-      <SearchBar
-        value={query}
-        onChange={setQuery}
-        placeholder="Search events — try 'free Afrobeats this weekend'"
-      />
+      <SearchBar value={query} onChange={setQuery} placeholder="Search events by title" />
 
       {searching ? (
-        /* ---- NL-search mode: pills + AI-ranked results, run live as you
-            type (no Enter needed). --------------------------------------- */
-        <>
-          {/* Parsed-filter pills — one removable chip per hard constraint the
-              LLM extracted. Removing a pill re-runs without that constraint. */}
-          {nlPills.length > 0 && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-text-muted">Filters:</span>
-              {nlPills.map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => removePill(p.key)}
-                  className="inline-flex items-center gap-1 rounded-pill bg-primary px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-                  aria-label={`Remove ${p.label} filter`}
-                >
-                  {p.label}
-                  <X size={13} />
-                </button>
-              ))}
-            </div>
-          )}
-
-          {nlResults === null ? (
-            <PageLoader label="Searching" />
-          ) : (
-            <>
-              <h1 className="mb-5 mt-6 font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
-                {searchHeading}
-              </h1>
-              {nlResults.length > 0 ? (
-                <EventGrid events={nlResults} />
-              ) : (
-                <p className="py-16 text-center text-sm text-text-muted">
-                  No events match. Try removing a filter or rewording your search.
-                </p>
-              )}
-            </>
-          )}
-        </>
+        /* ---- Title-search mode: results run live as you type. ------------ */
+        nlResults === null ? (
+          <PageLoader label="Searching" />
+        ) : (
+          <>
+            <h1 className="mb-5 mt-6 font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
+              {searchHeading}
+            </h1>
+            {nlResults.length > 0 ? (
+              <EventGrid events={nlResults} />
+            ) : (
+              <p className="py-16 text-center text-sm text-text-muted">
+                No events match that title. Try a different word.
+              </p>
+            )}
+          </>
+        )
       ) : (
         /* ---- Browse mode: near-me chip, filters, rails / grid / map ------ */
         <>

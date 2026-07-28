@@ -1656,24 +1656,24 @@ export const api = {
       }
     }),
 
-  // Natural-language event search (POST /api/ai/search, work-plan #22). Parses
-  // the query into hard constraints (Groq LLM → regex fallback), pgvector
-  // re-ranks, and returns removable filter `pills` + the `label` that produced
-  // them. To remove a pill, pass the remaining `label` back so the parse is
-  // skipped (the LLM won't re-add the dropped filter). Returns EventCard-shaped
-  // events; degrades to the legacy keyword mock when the backend is offline.
-  nlSearch: async (q, label) => {
+  // Title-only event search for the Discover search bar (POST /api/ai/search).
+  // Case-insensitive substring match on event.title so a query like "fut" only
+  // returns events whose title literally contains those letters — no semantic
+  // fan-out, no NL parse, no pills. Offline fallback filters MOCK_EVENTS the
+  // same way so both paths behave identically. `label` is accepted for
+  // backwards compatibility with older callers but ignored.
+  nlSearch: async (q) => {
     const res = await post(
       '/ai/search',
-      { q, ...(label ? { label } : {}) },
-      // Offline fallback: no LLM/pills, just keyword-matched mock events.
+      { q },
       () => {
-        const n = String(q ?? '').toLowerCase()
-        let matches = MOCK_EVENTS.map(withOrganizer)
-        if (n.includes('free')) matches = matches.filter((e) => e.isFree)
-        const cat = MOCK_CATEGORIES.find((c) => n.includes(c.name.toLowerCase()))
-        if (cat) matches = matches.filter((e) => e.category === cat.name)
-        return { reply: '', events: matches.slice(0, 12), pills: [], label: {} }
+        const n = String(q ?? '')
+          .trim()
+          .toLowerCase()
+        const events = n
+          ? MOCK_EVENTS.map(withOrganizer).filter((e) => e.title?.toLowerCase().includes(n))
+          : []
+        return { reply: '', events: events.slice(0, 20), pills: [], label: {} }
       },
     )
     return {

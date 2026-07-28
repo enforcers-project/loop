@@ -17,7 +17,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, fail } from '../auth/middleware.js'
-import { retrieveEvents, serializeHits } from './retrieve.js'
+import { retrieveEvents, searchEventsByTitle, serializeHits } from './retrieve.js'
 import { generateReply } from './chat.js'
 
 const router = Router()
@@ -54,35 +54,31 @@ function titleFromQuery(q) {
   return clean || 'New chat'
 }
 
-// POST /api/ai/search — one-shot natural-language search (work-plan #22).
+// POST /api/ai/search — title-only event search for the Discover search bar.
 //
-// Public (no thread, no auth): parse the query into hard constraints (LLM →
-// regex), pre-filter + pgvector re-rank via retrieveEvents, and return the hit
-// EventCards plus the removable `pills` the UI renders. A client that removed a
-// pill posts the remaining `label` back so the parse is skipped (the LLM won't
-// re-add the dropped filter). Degrades gracefully — retrieveEvents never throws.
+// Case-insensitive substring match against event.title, ranked by pg_trgm
+// similarity so "fut" surfaces "Futureforce" ahead of an unrelated event that
+// only shares a common word. No LLM parse, no semantic rerank, no pills — the
+// user asked for a literal title search, and that's what this does.
 router.post('/search', async (req, res) => {
   try {
     const q = typeof req.body?.q === 'string' ? req.body.q.trim().slice(0, MAX_QUERY_LEN) : ''
     if (!q) return fail(res, 400, 'VALIDATION_ERROR', 'q is required')
 
-    const labelOverride =
-      req.body?.label && typeof req.body.label === 'object' ? req.body.label : null
-
-    const retrieval = await retrieveEvents(q, { labelOverride })
-    const events = serializeHits(retrieval.events)
+    const hits = await searchEventsByTitle(q)
+    const events = serializeHits(hits)
     const reply = events.length
       ? `Found ${events.length} ${events.length === 1 ? 'event' : 'events'} that match.`
-      : "I couldn't find a match — try removing a filter or broadening the search."
+      : "No events match that title — try a different word."
 
     res.json({
       data: {
         reply,
         events,
-        pills: retrieval.pills,
-        label: retrieval.label,
-        retrieval: retrieval.retrieval,
-        parse: retrieval.parse,
+        pills: [],
+        label: {},
+        retrieval: 'title',
+        parse: 'none',
       },
     })
   } catch (err) {

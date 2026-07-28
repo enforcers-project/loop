@@ -152,7 +152,20 @@ export const ORGANIZERS = [
 
 const IMG = (id, w = 800) => `https://images.unsplash.com/${id}?w=${w}&q=80`
 
-export const EVENTS = [
+// Mock events below have hardcoded 2026-07 isoDate values that would read as
+// "past" once today drifts past them. Shift every date forward by the same
+// delta so the earliest mock always lands ~2 days out from *today*, keeping
+// spacing between them intact. Computed once at module load. Applied by
+// `shiftedIso()` further down when this file's EVENTS list is constructed.
+const _RAW_MOCK_START = Date.parse('2026-07-18T22:00:00-07:00')
+const _MOCK_DATE_OFFSET_MS = Date.now() + 2 * 24 * 60 * 60 * 1000 - _RAW_MOCK_START
+function shiftedIso(iso) {
+  const t = Date.parse(iso)
+  if (isNaN(t)) return iso
+  return new Date(t + _MOCK_DATE_OFFSET_MS).toISOString()
+}
+
+const _RAW_EVENTS = [
   {
     id: 'ev-afrobeats',
     title: 'Afro Nation Rooftop: Amapiano Edition',
@@ -1014,6 +1027,13 @@ export const EVENTS = [
     rationale: 'Because you like Film Screenings',
   },
 ]
+
+// Public catalog — each raw event's `isoDate` shifted so the list always
+// reads as forthcoming from today's perspective.
+export const EVENTS = _RAW_EVENTS.map((e) => ({
+  ...e,
+  isoDate: e.isoDate ? shiftedIso(e.isoDate) : e.isoDate,
+}))
 
 /** Instagram-style social posts derived from events (Figma SocialFeed). */
 export const POSTS = [

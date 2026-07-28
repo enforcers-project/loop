@@ -2,7 +2,12 @@ import prisma from '../lib/prisma.js'
 import { MODEL, VECTOR_DIM } from '../embeddings/embed.js'
 
 const DECAY_HALF_LIFE_DAYS = 30
-const SEED_BLEND_THRESHOLD = 8
+// How many event signals before the behavioral vector fully replaces the
+// onboarding-interest seed. Set low (3) so a couple of saves/RSVPs visibly
+// shift the ranking: at 1 signal alpha=0.33 (33% behavior), at 3 alpha=1
+// (seed drops out entirely). The prior value of 8 meant a demo user still
+// saw a ~87% seed-driven feed after their first save.
+const SEED_BLEND_THRESHOLD = 3
 
 const REVERSAL_PAIRS = {
   unsave: 'save',

@@ -22,7 +22,11 @@ function CategoryBadge({ category }) {
 
 export function EventCard({ event, showRationale = false, onClick }) {
   const navigate = useNavigate()
-  const { savedIds, goingIds, toggleSaved, toggleGoing } = useApp()
+  const { savedIds, goingIds, toggleSaved, toggleGoing, interestLabelsByCategory } = useApp()
+  const matchedLabels =
+    interestLabelsByCategory?.[event.category] ??
+    interestLabelsByCategory?.[event.categorySlug] ??
+    []
   const saved = savedIds.has(event.id)
   const going = goingIds.has(event.id)
   // Past events read as de-emphasized: the poster dims, a "Passed" pill replaces
@@ -85,8 +89,15 @@ export function EventCard({ event, showRationale = false, onClick }) {
 
         {/* top row: AIChip|CategoryBadge (left) + AlmostFullBadge (right) */}
         <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2">
-          {showRationale && event.rationale ? (
-            <AIChip text={recommendationLabel(event.rationale, event.category)} />
+          {showRationale ? (
+            <AIChip
+              text={recommendationLabel(
+                event.rationale,
+                event.category,
+                matchedLabels,
+                `${event.title ?? ''} ${event.description ?? ''}`,
+              )}
+            />
           ) : (
             <CategoryBadge category={event.category} />
           )}

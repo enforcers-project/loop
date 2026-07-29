@@ -861,6 +861,11 @@ export const api = {
   // list so the feed always renders live data — never the stale MOCK_EVENTS
   // (whose isoDate values are frozen to 2026-07 and get culled as "past" by
   // the client-side filter, producing the "only 2 events" symptom).
+  //
+  // Requests the engine's max batch (50) rather than the default 20 — the For
+  // You tab isn't cursor-paginated (the MMR-ranked feed has no stable DB order
+  // to page over), so this single batch is all the user gets. 20 was too thin
+  // once a card became the hero and past-dated picks were culled client-side.
   recommendations: async (interests) => {
     let list = null
     try {
@@ -868,7 +873,7 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ interests }),
+        body: JSON.stringify({ interests, limit: 50 }),
       })
       if (res.ok) {
         const json = await res.json()
@@ -880,7 +885,7 @@ export const api = {
     const arr = list ?? []
     if (arr.length > 0) return arr.map(toEventCardShape)
     // Live popular events as the empty/unauthed fallback — no mock detour.
-    const fallback = (await get('/events?sort=popular', () => [])) ?? []
+    const fallback = (await get('/events?sort=popular&limit=50', () => [])) ?? []
     return fallback.map(toEventCardShape)
   },
 

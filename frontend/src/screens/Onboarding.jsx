@@ -55,14 +55,11 @@ function ageFromParts({ m, d, y }) {
     return NaN
   }
   const today = new Date()
-  // A future birthdate isn't a valid DOB — treat it as invalid (NaN) rather
-  // than letting the subtraction below yield a negative age that renders as
-  // "You're -4." in the preview chip.
-  const todayUTC = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
-  if (dob.getTime() > todayUTC) return NaN
   let age = today.getUTCFullYear() - year
   const monthDelta = today.getUTCMonth() - (month - 1)
   if (monthDelta < 0 || (monthDelta === 0 && today.getUTCDate() < day)) age -= 1
+  // A future birthdate yields a negative age here; the caller distinguishes it
+  // from an out-of-range age (>120) so we can show a specific error.
   return age
 }
 
@@ -281,8 +278,10 @@ export function Onboarding() {
           onContinue={() => {
             const age = ageFromParts(dob)
             if (isNaN(age)) return setError('Enter a valid date of birth.')
+            if (age < 0)
+              return setError("That birthday hasn't happened yet — enter a real date of birth.")
+            if (age > MAX_AGE) return setError('That age looks off — enter a real date of birth.')
             if (age < MIN_AGE) return setError(`You must be at least ${MIN_AGE} to use Loop.`)
-            if (age > MAX_AGE) return setError('Please enter a valid date of birth.')
             setError('')
             setStep(2)
           }}
@@ -499,9 +498,16 @@ function AgeStep({ dob, setDob, error, onContinue }) {
         </label>
       </div>
 
-      {complete && Number.isFinite(age) && (
+      {complete && Number.isFinite(age) && age >= 0 && age <= MAX_AGE && (
         <p className="mt-4 text-center text-sm text-text-secondary">
           You’re <span className="font-semibold text-ink">{age}</span>.
+        </p>
+      )}
+      {complete && Number.isFinite(age) && (age < 0 || age > MAX_AGE) && (
+        <p className="mt-4 text-center text-sm font-medium text-accent">
+          {age < 0
+            ? "That birthday hasn't happened yet."
+            : 'That age looks off — enter a real date of birth.'}
         </p>
       )}
 

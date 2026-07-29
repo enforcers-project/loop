@@ -239,10 +239,44 @@ export function replaceThreads(rows, meId) {
       existing.lastReadByUser = { ...(existing.lastReadByUser ?? {}), ...norm.lastReadByUser }
       existing.readAtLocal = norm.readAtLocal ?? existing.readAtLocal
       existing.updatedAt = norm.updatedAt || existing.updatedAt
-      // Seed message list only if we haven't loaded any yet — a hydrate should
-      // never blow away messages we've already received via getMessages/SSE.
-      if ((!existing.messages || existing.messages.length === 0) && row.last_message) {
-        existing.messages = [normalizeServerMessage(row.last_message, meId)]
+      // Merge the newest server message into our list. Empty → seed it. Non-empty
+      // → dedupe append if it's a message we don't have yet. This is the recovery
+      // path when SSE has silently dropped: a rehydrate must land the missed row,
+      // not just bump `updatedAt`. Otherwise the preview + ThreadView would keep
+      // showing the stale bubble and the only way out would be a page refresh.
+      if (row.last_message) {
+        const incoming = normalizeServerMessage(row.last_message, meId)
+        if (!existing.messages || existing.messages.length === 0) {
+          existing.messages = [incoming]
+        } else if (!existing.messages.some((m) => m.id === incoming.id)) {
+          // If this is our own optimistic bubble echoing back, reconcile by
+          // clientId (same logic ingestMessage uses) so we don't double-render.
+          const byClient =
+            incoming.clientId &&
+            existing.messages.find((m) => m.clientId && m.clientId === incoming.clientId)
+          if (byClient) {
+            byClient.id = incoming.id
+            byClient.at = incoming.at
+            byClient.status = 'delivered'
+            existing.messages = [...existing.messages]
+          } else {
+            const merged = [...existing.messages, incoming].sort(
+              (a, b) => Date.parse(a.at) - Date.parse(b.at),
+            )
+            existing.messages = merged
+          }
+        }
+        // If the newest server message is ahead of what we hold locally there
+        // may be additional missed rows (the server hydrate only carries the
+        // single last_message). Fetch a page in the background so nothing is
+        // stuck in-between. Guarded by a per-thread in-flight promise so a
+        // 60s poll + a visibility rehydrate don't stampede /threads/:id/messages.
+        const localLast = existing.messages[existing.messages.length - 1]
+        const serverAt = Date.parse(row.last_message.created_at ?? row.last_message.createdAt ?? 0)
+        const localAt = localLast ? Date.parse(localLast.at) : 0
+        if (serverAt > 0 && localAt > 0 && serverAt > localAt + 1) {
+          kickBackfill(existing.serverId, meId)
+        }
       }
     } else {
       const fresh = norm
@@ -257,9 +291,24 @@ export function replaceThreads(rows, meId) {
       const stub = state.threads.get(tempId)
       const real = state.threads.get(norm.id)
       if (stub && stub !== real) {
-        // Preserve any optimistic messages the stub was holding.
-        if (stub.messages?.length && (!real.messages || real.messages.length === 0)) {
-          real.messages = stub.messages
+        // Preserve any optimistic messages the stub was holding. Merge into
+        // real.messages by clientId (or dedupe by id) so an optimistic bubble
+        // is never silently dropped when the temp thread reconciles to a real
+        // one that also carries a last_message.
+        if (stub.messages?.length) {
+          const seenIds = new Set((real.messages ?? []).map((m) => m.id))
+          const seenClients = new Set(
+            (real.messages ?? []).filter((m) => m.clientId).map((m) => m.clientId),
+          )
+          const carryover = stub.messages.filter(
+            (m) => !seenIds.has(m.id) && (!m.clientId || !seenClients.has(m.clientId)),
+          )
+          if (carryover.length > 0) {
+            const merged = [...(real.messages ?? []), ...carryover].sort(
+              (a, b) => Date.parse(a.at) - Date.parse(b.at),
+            )
+            real.messages = merged
+          }
         }
         state.threads.delete(tempId)
       }
@@ -463,6 +512,27 @@ export async function ensureMessagesLoaded(meId, threadIdRaw) {
   t.messagesLoaded = true
   const page = await api.messages.getMessages(t.serverId)
   mergeMessages(t.serverId, page.data ?? [], meId)
+}
+
+// Backfill missed messages after a rehydrate spots a gap between the server's
+// `last_message` and our local tail. One in-flight fetch per thread — a burst
+// of rehydrates all reuse the same promise instead of hammering the API.
+// mergeMessages is dedupe/reconcile-safe.
+const backfillInFlight = new Map()
+function kickBackfill(serverId, meId) {
+  if (!serverId) return
+  if (backfillInFlight.has(serverId)) return backfillInFlight.get(serverId)
+  const p = api.messages
+    .getMessages(serverId)
+    .then((page) => mergeMessages(serverId, page.data ?? [], meId))
+    .catch(() => {
+      /* transient — the next hydrate will retry */
+    })
+    .finally(() => {
+      backfillInFlight.delete(serverId)
+    })
+  backfillInFlight.set(serverId, p)
+  return p
 }
 
 // --- selectors used by hooks ------------------------------------------------
@@ -746,7 +816,24 @@ function slimEvent(event) {
 function appendOptimistic(userId, threadIdRaw, payload, opts = {}) {
   const id = resolveId(threadIdRaw)
   const t = state.threads.get(id)
-  if (!t) return null
+  if (!t) {
+    // Store doesn't have this thread yet — rehydrate + retry once the
+    // fetch lands. Prevents a "typed, hit Enter, bubble vanished" silent
+    // drop when the user opens /messages/<uuid> directly or when the SSE
+    // pending-replay hasn't inserted the row yet.
+    kickHydrate(userId).then(() => {
+      if (state.threads.get(resolveId(threadIdRaw))) {
+        appendOptimistic(userId, threadIdRaw, payload, opts)
+      } else if (typeof opts.onError === 'function') {
+        try {
+          opts.onError({ code: 'NO_THREAD', message: 'This conversation is not available.' })
+        } catch {
+          /* ignore */
+        }
+      }
+    })
+    return null
+  }
   const at = new Date().toISOString()
   const clientId = newId('c')
   const message = {

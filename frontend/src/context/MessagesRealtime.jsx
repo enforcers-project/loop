@@ -9,6 +9,12 @@
 //
 // Reconnect strategy: exponential backoff (1s → 2s → 5s → 15s), reset on the
 // first successful frame. On logout we close the stream + clear the store.
+//
+// Token-expiry recovery: the access-token cookie has a 1-hour TTL. Once it
+// expires, `/api/messages/stream` returns 401 and `EventSource` will loop
+// forever reconnecting to the same 401. On the first `onerror` after a
+// previously-successful `hello`, try `api.auth.refresh()` before the next
+// reconnect — one round-trip mints a fresh cookie and the reconnect succeeds.
 import { useEffect } from 'react'
 import { useApp } from './AppContext'
 import { api } from '../lib/api'
@@ -41,15 +47,33 @@ export function MessagesRealtimeProvider({ children }) {
     let backoffIdx = 0
     let reconnectHandle = null
     let firstConnect = true
+    // Set after we've tried a refresh in response to a drop, so a genuine
+    // network flap can't burn through refresh calls in a tight loop. Reset
+    // on the next `hello` — a successful reconnect means the fresh cookie is
+    // in place and future drops get their own refresh attempt.
+    let refreshedThisCycle = false
+
+    const dropSource = () => {
+      try {
+        source?.close()
+      } catch {
+        /* ignore */
+      }
+      source = null
+    }
+
+    const scheduleReconnect = () => {
+      if (closed) return
+      const wait = BACKOFFS[Math.min(backoffIdx, BACKOFFS.length - 1)]
+      backoffIdx += 1
+      reconnectHandle = setTimeout(connect, wait)
+    }
 
     const connect = () => {
       if (closed) return
       // Hydrate once on first mount so the widget renders immediately even if
       // the SSE stream is slow or unreachable. Subsequent reconnects re-hydrate
-      // in the `hello` handler (once we know the connection is live), not per
-      // failed attempt — a flapping stream would otherwise hammer /api/threads
-      // at the backoff cadence. replaceThreads now MERGES rather than clears,
-      // so a stale hydrate can't destroy open threads.
+      // in the `hello` handler (once we know the connection is live).
       if (firstConnect) {
         firstConnect = false
         hydrateThreads(userId).catch(() => {})
@@ -63,11 +87,12 @@ export function MessagesRealtimeProvider({ children }) {
       }
 
       source.addEventListener('hello', () => {
-        // First byte received — reset backoff so the next disconnect starts
-        // aggressive again, and (if this is a reconnect) rehydrate so any
-        // messages missed while offline land.
+        // First byte received — connection is authenticated and live. Reset
+        // backoff so the next disconnect starts aggressive again, and if this
+        // is a reconnect rehydrate whatever the client missed while offline.
         const wasReconnect = backoffIdx > 0
         backoffIdx = 0
+        refreshedThisCycle = false
         if (wasReconnect) hydrateThreads(userId).catch(() => {})
       })
 
@@ -105,30 +130,34 @@ export function MessagesRealtimeProvider({ children }) {
             ingestThreadUpdated(payload.threadId, payload.changes)
             break
           default:
-            // Posse roster frames ride this same stream — forward them to the
-            // posse pub/sub so an open PosseDetail can refresh its roster live.
             if (isPosseFrame(payload.type)) emitPosseEvent(payload)
-            // else ignore unknown types — forward-compat
             break
         }
       }
 
       source.onerror = () => {
-        try {
-          source?.close()
-        } catch {
-          /* ignore */
+        dropSource()
+        // If the stream never delivered `hello`, or we haven't already tried
+        // a refresh this reconnect cycle, do one refresh attempt before the
+        // next reconnect. A stale/expired access token is the common reason a
+        // previously-working stream starts flapping — refresh mints a new
+        // cookie and the reconnect authenticates. On success we reset the
+        // backoff so recovery is snappy; on failure we let the loop back off
+        // as before.
+        if (!refreshedThisCycle) {
+          refreshedThisCycle = true
+          api.auth
+            .refresh()
+            .then((ok) => {
+              if (closed) return
+              if (ok) backoffIdx = 0
+              scheduleReconnect()
+            })
+            .catch(() => scheduleReconnect())
+          return
         }
-        source = null
         scheduleReconnect()
       }
-    }
-
-    const scheduleReconnect = () => {
-      if (closed) return
-      const wait = BACKOFFS[Math.min(backoffIdx, BACKOFFS.length - 1)]
-      backoffIdx += 1
-      reconnectHandle = setTimeout(connect, wait)
     }
 
     connect()
@@ -136,11 +165,7 @@ export function MessagesRealtimeProvider({ children }) {
     return () => {
       closed = true
       if (reconnectHandle) clearTimeout(reconnectHandle)
-      try {
-        source?.close()
-      } catch {
-        /* ignore */
-      }
+      dropSource()
     }
   }, [userId])
 

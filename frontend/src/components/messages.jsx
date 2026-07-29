@@ -264,6 +264,12 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
   const send = () => {
     const text = draft.trim()
     if (!text || !user?.id || !threadId) return
+    // Clear the draft optimistically — the retry path in the store also
+    // appends an optimistic bubble on success, and hard failures (missing
+    // thread, filter block) surface via onError as a toast. Keeping the draft
+    // on `null` return was causing duplicate sends when hydrate + retry
+    // succeeded: the user'd see the bubble, still see their text, hit Enter
+    // again.
     sendMessage(user.id, threadId, text, {
       onError: (err) => toast.error(err.message),
     })
@@ -840,8 +846,9 @@ export function NewMessagePicker({ onPick, onClose }) {
   // Debounced search — a 250ms idle window is enough that "africana" doesn't
   // fire eight requests, but still feels reactive. Empty-query reset lives in
   // the render body (guarded on inequality) so we don't cascade renders from
-  // an effect.
-  const term = q.trim()
+  // an effect. Strip any leading `@` so the backend trigram query stays clean;
+  // otherwise accept whatever searchUsers returns (name + handle matches).
+  const term = q.trim().replace(/^@/, '')
   if (term === '' && results.length !== 0) setResults([])
   if (term === '' && searching) setSearching(false)
 
@@ -970,7 +977,7 @@ export function NewMessagePicker({ onPick, onClose }) {
                   removePick(picks[picks.length - 1].id)
                 }
               }}
-              placeholder={picks.length ? 'Add another…' : 'Search by name or handle…'}
+              placeholder={picks.length ? 'Add another…' : 'Search by name or @username…'}
               className="min-w-[8rem] flex-1 bg-transparent px-1 py-1 text-sm text-text-primary outline-none placeholder:text-placeholder"
             />
           </div>

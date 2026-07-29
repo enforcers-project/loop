@@ -273,7 +273,25 @@ async function put(path, body, fallback) {
 // Auth has NO mock fallback: a login must genuinely succeed or fail, never be
 // faked. This helper surfaces the backend's error envelope as a thrown Error
 // (with .status) so the UI can show a real message.
-async function request(path, { method = 'GET', body } = {}) {
+//
+// 401 recovery: the access-token JWT has a 1-hour TTL; the refresh-token cookie
+// carries the session for 30 days. On a 401 we try `/auth/refresh` once (single-
+// flight: concurrent 401s coalesce to the same in-flight promise) and, if it
+// succeeds, replay the original request. On a refresh failure the original 401
+// propagates. `path === '/auth/refresh'` short-circuits so we never recurse.
+let refreshInFlight = null
+export function refreshAccessToken() {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = fetch(apiUrl('/auth/refresh'), { method: 'POST', credentials: 'include' })
+    .then((res) => res.ok)
+    .catch(() => false)
+    .finally(() => {
+      refreshInFlight = null
+    })
+  return refreshInFlight
+}
+
+async function request(path, { method = 'GET', body, _retry = false } = {}) {
   const res = await fetch(apiUrl(path), {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -281,6 +299,10 @@ async function request(path, { method = 'GET', body } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   })
   if (res.status === 204) return null
+  if (res.status === 401 && !_retry && path !== '/auth/refresh' && path !== '/auth/me') {
+    const ok = await refreshAccessToken()
+    if (ok) return request(path, { method, body, _retry: true })
+  }
   let json = null
   try {
     json = await res.json()
@@ -681,14 +703,30 @@ export const api = {
     google: (idToken, extras = {}) =>
       request('/auth/oauth/google', { method: 'POST', body: { id_token: idToken, ...extras } }),
     logout: () => request('/auth/logout', { method: 'POST' }),
+    // Force a token refresh. Single-flight — concurrent callers await the same
+    // fetch. Returns true on success, false on any failure (network, expired
+    // refresh token). MessagesRealtime uses this on SSE 401 before reconnecting.
+    refresh: refreshAccessToken,
     // Resolve the current session; returns null when not authenticated (401)
     // instead of throwing, so callers can treat "logged out" as a normal state.
+    //
+    // Note: `request()` short-circuits its own 401→refresh path for `/auth/me`
+    // to avoid feedback loops, so we do the refresh dance here explicitly.
+    // Cold-start with an expired access token but a valid refresh cookie will
+    // successfully rehydrate instead of bouncing the user to the login screen.
     me: async () => {
       try {
         return await request('/auth/me')
       } catch (err) {
-        if (err.status === 401) return null
-        throw err
+        if (err.status !== 401) throw err
+        const refreshed = await refreshAccessToken()
+        if (!refreshed) return null
+        try {
+          return await request('/auth/me')
+        } catch (err2) {
+          if (err2.status === 401) return null
+          throw err2
+        }
       }
     },
   },

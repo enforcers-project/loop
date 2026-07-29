@@ -4,7 +4,7 @@
 //   POST /api/threads/group             {participant_ids[], name?}
 //   GET  /api/threads                                        my threads + unread
 //   GET  /api/threads/:id/messages                           cursor-paginated
-//   POST /api/threads/:id/messages      {text?, event_id?, client_id?}
+//   POST /api/threads/:id/messages      {text?, event_id?, post_id?, client_id?}
 //   DELETE /api/threads/:id/messages/:mid                    sender-only delete
 //   PATCH /api/threads/:id              {name}               rename group
 //   POST /api/threads/:id/read                               bump lastReadAt
@@ -18,9 +18,9 @@
 //     opposite-side races collapse to one row via the unique upsert.
 //   - Every :id route runs `requireParticipant` — the 404-on-not-a-member trick
 //     keeps thread existence private (a stranger can't probe ids).
-//   - `attached_event` snapshots the shared event's slim fields at send-time so
-//     a later delete/edit of the source event doesn't change what the bubble
-//     showed.
+//   - `attached_event` / `attached_post` snapshot the shared item's slim fields
+//     at send-time so a later delete/edit of the source doesn't change what the
+//     bubble showed.
 //   - Realtime fan-out via bus.publish() — every route that mutates state also
 //     wakes every subscriber for the affected participants.
 import { Router } from 'express'
@@ -86,6 +86,31 @@ function slimEventFromRow(event, category) {
     isFree: !!event.isFree,
     isSports: !!event.isSports,
     categorySlug: category?.slug ?? null,
+  }
+}
+
+/** Slim projection of a social post so the bubble can render standalone.
+ *  Mirrors slimEventFromRow — snapshotted at send-time so a later delete or
+ *  edit of the source post doesn't retroactively change what was shared. */
+function slimPostFromRow(post) {
+  if (!post) return null
+  const author = post.author
+    ? {
+        id: post.author.id,
+        display_name: post.author.displayName,
+        handle: post.author.handle,
+        avatar_url: post.author.avatarUrl,
+        is_verified: post.author.isVerified,
+      }
+    : null
+  return {
+    id: post.id,
+    author,
+    event_id: post.eventId ?? null,
+    kind: post.kind,
+    image_url: post.imageUrl || '',
+    caption: post.caption || '',
+    created_at: post.createdAt ? new Date(post.createdAt).toISOString() : null,
   }
 }
 
@@ -290,7 +315,8 @@ router.get('/threads/:id/messages', requireAuth, async (req, res) => {
 })
 
 // --- POST /api/threads/:id/messages -----------------------------------------
-// Body: { text?, event_id?, client_id? }. Either text or event_id is required.
+// Body: { text?, event_id?, post_id?, client_id? }. At least one of text, event_id,
+// or post_id is required.
 router.post('/threads/:id/messages', requireAuth, async (req, res) => {
   const me = req.user.id
   const threadId = req.params.id
@@ -301,10 +327,12 @@ router.post('/threads/:id/messages', requireAuth, async (req, res) => {
   const text = rawText.trim().slice(0, MAX_TEXT_LEN)
   const eventId =
     typeof req.body?.event_id === 'string' && isUuid(req.body.event_id) ? req.body.event_id : null
+  const postId =
+    typeof req.body?.post_id === 'string' && isUuid(req.body.post_id) ? req.body.post_id : null
   const clientId = typeof req.body?.client_id === 'string' ? req.body.client_id.slice(0, 80) : null
 
-  if (!text && !eventId) {
-    return fail(res, 422, 'VALIDATION_ERROR', 'Message must have text or an event')
+  if (!text && !eventId && !postId) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'Message must have text, an event, or a post')
   }
 
   const check = enforceProfanity(req, res, [text])
@@ -322,6 +350,32 @@ router.post('/threads/:id/messages', requireAuth, async (req, res) => {
       attachedEvent = slimEventFromRow(ev, ev?.category)
     }
 
+    let attachedPost = null
+    if (postId) {
+      const post = await prisma.post.findUnique({
+        where: { id: postId },
+        select: {
+          id: true,
+          eventId: true,
+          kind: true,
+          imageUrl: true,
+          caption: true,
+          createdAt: true,
+          author: {
+            select: {
+              id: true,
+              displayName: true,
+              handle: true,
+              avatarUrl: true,
+              isVerified: true,
+            },
+          },
+        },
+      })
+      // Same silent-drop-on-miss policy as attached_event above.
+      attachedPost = slimPostFromRow(post)
+    }
+
     const now = new Date()
     const [message] = await prisma.$transaction([
       prisma.message.create({
@@ -330,6 +384,7 @@ router.post('/threads/:id/messages', requireAuth, async (req, res) => {
           senderId: me,
           text: text || null,
           attachedEvent,
+          attachedPost,
           createdAt: now,
           flagged: check.flagged,
         },

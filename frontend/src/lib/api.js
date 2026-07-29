@@ -1242,12 +1242,13 @@ export const api = {
         method: 'POST',
         body: { participant_ids: participantIds, name: name || null },
       }),
-    sendMessage: (threadId, { text, eventId, clientId } = {}) =>
+    sendMessage: (threadId, { text, eventId, postId, clientId } = {}) =>
       request(`/threads/${threadId}/messages`, {
         method: 'POST',
         body: {
           text: text || null,
           event_id: eventId || null,
+          post_id: postId || null,
           client_id: clientId || null,
         },
       }),

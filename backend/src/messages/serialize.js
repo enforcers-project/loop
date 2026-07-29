@@ -40,6 +40,7 @@ export function toMessage(m, clientId = null) {
     sender_id: m.senderId,
     text: m.text ?? null,
     attached_event: m.attachedEvent ?? null,
+    attached_post: m.attachedPost ?? null,
     created_at: m.createdAt,
     // Echoed only on the sender's own send response + SSE frame so the client
     // can dedupe an optimistic bubble against the confirmed row.

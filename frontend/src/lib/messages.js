@@ -11,7 +11,7 @@
 //     partner: {id,name,handle,avatar,verified}?  // dm only, computed
 //     participants: [...same shape]?     // group only, computed (excludes me)
 //     name: string|null,
-//     messages: [{id, from, senderId, text?, event?, at, status?, clientId?}]
+//     messages: [{id, from, senderId, text?, event?, post?, at, status?, clientId?}]
 //     updatedAt,
 //     lastReadByUser: { [userId]: ISO|null },  // per-participant lastReadAt
 //     unread: bool,                      // for the current viewer
@@ -151,9 +151,36 @@ function normalizeServerMessage(row, meId) {
     senderId,
     text: row.text ?? null,
     event: row.attached_event ?? null,
+    post: normalizeAttachedPost(row.attached_post),
     at: row.created_at,
     status: senderId === meId ? 'delivered' : undefined,
     reactions,
+  }
+}
+
+// Snapshotted post attachment — shape mirrors the backend snake_case snapshot,
+// but the client renders it in camelCase like the rest of the store. The
+// author sub-object is nullable (the source post's author may have been
+// deleted since the share happened).
+function normalizeAttachedPost(raw) {
+  if (!raw || !raw.id) return null
+  const author = raw.author
+    ? {
+        id: raw.author.id,
+        name: raw.author.display_name || raw.author.name || 'Someone',
+        handle: typeof raw.author.handle === 'string' ? raw.author.handle.replace(/^@/, '') : '',
+        avatar: raw.author.avatar_url || raw.author.avatar || '',
+        verified: !!(raw.author.is_verified ?? raw.author.verified),
+      }
+    : null
+  return {
+    id: raw.id,
+    eventId: raw.event_id ?? null,
+    kind: raw.kind ?? 'update',
+    image: raw.image_url || raw.image || '',
+    caption: raw.caption || '',
+    createdAt: raw.created_at || null,
+    author,
   }
 }
 
@@ -798,6 +825,24 @@ export function sendEventShare(userId, threadIdRaw, event, note, opts = {}) {
   )
 }
 
+/** Send a post share (optional note + slim post card). Backend snapshots a
+ *  full author + image + caption at send-time; the optimistic slim carries
+ *  the same fields so the bubble renders correctly before the SSE echo. */
+export function sendPostShare(userId, threadIdRaw, post, note, opts = {}) {
+  const slim = slimPost(post)
+  if (!slim || !userId || !threadIdRaw) return null
+  const trimmedNote = typeof note === 'string' ? note.trim() : ''
+  return appendOptimistic(
+    userId,
+    threadIdRaw,
+    {
+      text: trimmedNote || null,
+      post: slim,
+    },
+    opts,
+  )
+}
+
 function slimEvent(event) {
   if (!event || !event.id) return null
   return {
@@ -810,6 +855,31 @@ function slimEvent(event) {
     price: event.price || '',
     isFree: !!event.isFree,
     isSports: !!event.isSports,
+  }
+}
+
+// Optimistic post attachment — same shape normalizeAttachedPost produces, so
+// the render path can't tell an optimistic bubble from an SSE-confirmed one.
+function slimPost(post) {
+  if (!post || !post.id) return null
+  const organizer = post.organizer || post.author || null
+  const author = organizer
+    ? {
+        id: organizer.id,
+        name: organizer.name || 'Someone',
+        handle: typeof organizer.handle === 'string' ? organizer.handle.replace(/^@/, '') : '',
+        avatar: organizer.avatar || '',
+        verified: !!organizer.verified,
+      }
+    : null
+  return {
+    id: post.id,
+    eventId: post.eventId ?? null,
+    kind: post.kind || 'update',
+    image: post.image || '',
+    caption: post.caption || '',
+    createdAt: post.timeAgo || post.createdAt || null,
+    author,
   }
 }
 
@@ -843,6 +913,7 @@ function appendOptimistic(userId, threadIdRaw, payload, opts = {}) {
     senderId: userId,
     text: payload.text ?? null,
     event: payload.event ?? undefined,
+    post: payload.post ?? undefined,
     at,
     status: 'sending',
   }
@@ -878,12 +949,14 @@ async function doSend(thread, message, payload, opts = {}) {
     }
   }
   const eventId = payload.event?.id ?? null
+  const postId = payload.post?.id ?? null
   let res = null
   let sendErr = null
   try {
     res = await api.messages.sendMessage(serverId, {
       text: payload.text,
       eventId,
+      postId,
       clientId: message.clientId,
     })
   } catch (err) {

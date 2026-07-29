@@ -19,7 +19,7 @@ const STORAGE_KEY = 'loop.assistantConversationId'
 const WELCOME_MESSAGE = {
   role: 'assistant',
   content:
-    "Hey! I'm Loop AI. Ask me anything — find events near you, get recommendations, or figure out how the app works.",
+    "Hey! I'm Loopy — Loop's event assistant. Ask me to find events near you, get recommendations, or explain how the app works.",
 }
 
 /* Mini event result card rendered inline in the drawer. */
@@ -133,8 +133,8 @@ export function AIAssistant() {
               ? 'bottom-[calc(9rem+env(safe-area-inset-bottom))]'
               : 'bottom-[calc(5rem+env(safe-area-inset-bottom))]',
           )}
-          aria-label="Ask Loop AI"
-          title="Ask Loop AI"
+          aria-label="Ask Loopy"
+          title="Ask Loopy"
         >
           <Sparkles size={24} />
         </button>
@@ -160,7 +160,7 @@ export function AIAssistant() {
         {/* gradient header */}
         <div className="flex items-center justify-between bg-gradient-to-r from-primary to-accent px-4 py-4 text-white">
           <span className="flex items-center gap-2 font-display text-lg font-bold">
-            <Sparkles size={20} /> Ask Loop
+            <Sparkles size={20} /> Loopy
           </span>
           <button onClick={() => setOpen(false)} aria-label="Close">
             <X size={22} />
@@ -231,7 +231,7 @@ export function AIAssistant() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && ask(input)}
-            placeholder="Ask about events…"
+            placeholder="Ask Loopy about events…"
             className="loop-input flex-1 rounded-pill border border-border-light bg-white px-4 py-2.5 text-sm placeholder:text-placeholder"
           />
           <button

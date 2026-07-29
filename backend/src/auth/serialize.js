@@ -36,21 +36,3 @@ export function toSelfUser(u) {
     updated_at: u.updatedAt,
   }
 }
-
-/** The compact user object returned by signup/login. */
-export function toAuthUser(u) {
-  return {
-    id: u.id,
-    email: u.email,
-    role: u.role,
-    organizer_kind: u.organizerKind,
-    is_host: u.isHost,
-    display_name: u.displayName,
-    handle: u.handle,
-    is_verified: u.isVerified,
-    follower_count: u.followerCount,
-    following_count: u.followingCount,
-    onboarding_completed_at: u.onboardingCompletedAt,
-    created_at: u.createdAt,
-  }
-}

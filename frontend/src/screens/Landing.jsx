@@ -586,6 +586,14 @@ export function Landing() {
           </MotionLink>
         </m.div>
       </section>
+
+      {/* footer — centered copyright + the team behind Loop */}
+      <footer className="border-t border-border-light px-5 py-8 text-center">
+        <p className="text-sm text-text-secondary">© 2026 Loop</p>
+        <p className="mt-1 text-xs text-text-muted">
+          Heartwill Gbekle, Benjamin Nketia, Mussie Aregay
+        </p>
+      </footer>
     </div>
   )
 }

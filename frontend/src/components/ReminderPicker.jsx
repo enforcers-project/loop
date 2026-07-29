@@ -117,7 +117,7 @@ export function ReminderPicker({ eventId, startsAt }) {
 
   // No reminder yet — offer the presets.
   return (
-    <div className="mt-4 rounded-card border border-border-light bg-white px-4 py-3">
+    <div className="mt-4 rounded-card border border-border-light bg-card-bg px-4 py-3">
       <div className="flex items-center gap-2 text-sm font-semibold text-ink">
         <Bell size={16} className="text-text-secondary" />
         Remind me before this event

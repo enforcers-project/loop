@@ -30,7 +30,7 @@ function Thumb({ event, size }) {
 
 function SidebarCard({ title, children }) {
   return (
-    <section className="rounded-card border border-border-light bg-white p-5 shadow-card">
+    <section className="rounded-card border border-border-light bg-card-bg p-5 shadow-card">
       <h3 className="mb-4 text-sm font-bold text-ink">{title}</h3>
       {children}
     </section>
@@ -175,7 +175,7 @@ function PeopleSearch() {
         onFocus={() => setOpen(true)}
         placeholder="Search people"
         aria-label="Search people"
-        className="h-9 w-full rounded-pill border border-border-light bg-surface pl-8 pr-8 text-[13px] text-ink placeholder:text-text-muted focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+        className="h-9 w-full rounded-pill border border-border-light bg-surface pl-8 pr-8 text-[13px] text-ink placeholder:text-text-muted focus:border-primary focus:bg-card-bg focus:outline-none focus:ring-2 focus:ring-primary/20"
       />
       {loading ? (
         <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
@@ -195,7 +195,7 @@ function PeopleSearch() {
       )}
 
       {showPanel && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1.5 overflow-hidden rounded-card border border-border-light bg-white py-1 shadow-hero">
+        <div className="absolute left-0 right-0 top-full z-30 mt-1.5 overflow-hidden rounded-card border border-border-light bg-card-bg py-1 shadow-hero">
           {results.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-text-muted">No people found</p>
           ) : (
@@ -484,7 +484,7 @@ export function SocialFeed() {
           <PeopleSearch />
 
           {/* stories scroll horizontally *inside* this column */}
-          <div className="mt-4 rounded-card border border-border-light bg-white p-4 shadow-card">
+          <div className="mt-4 rounded-card border border-border-light bg-card-bg p-4 shadow-card">
             <StoriesRow
               stories={stories}
               onOpen={openStory}
@@ -496,7 +496,7 @@ export function SocialFeed() {
           <button
             type="button"
             onClick={() => openComposer('post')}
-            className="mt-6 flex w-full items-center gap-3 rounded-card border border-border-light bg-white px-4 py-3.5 text-left shadow-card transition-colors hover:border-primary"
+            className="mt-6 flex w-full items-center gap-3 rounded-card border border-border-light bg-card-bg px-4 py-3.5 text-left shadow-card transition-colors hover:border-primary"
           >
             <img
               src={user?.avatar ?? 'https://i.pravatar.cc/150?img=1'}
@@ -562,7 +562,7 @@ export function SocialFeed() {
               </p>
               <Link
                 to="/discover"
-                className="mt-4 inline-flex h-10 items-center rounded-button bg-white px-4 text-sm font-semibold text-primary transition-transform active:scale-95"
+                className="mt-4 inline-flex h-10 items-center rounded-button bg-[#ffffff] px-4 text-sm font-semibold text-primary transition-transform active:scale-95"
               >
                 See them all
               </Link>

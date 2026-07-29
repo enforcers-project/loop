@@ -161,7 +161,7 @@ export function AddressPicker({ value, onChange, placeholder = 'Search any addre
 
   return (
     <div>
-      <div className="flex items-center gap-2 rounded-input border border-border-light bg-white px-4 py-3 focus-within:border-primary">
+      <div className="flex items-center gap-2 rounded-input border border-border-light bg-card-bg px-4 py-3 focus-within:border-primary">
         <Search size={18} className="flex-shrink-0 text-text-muted" />
         <input
           value={query}
@@ -201,7 +201,7 @@ export function AddressPicker({ value, onChange, placeholder = 'Search any addre
                     'flex w-full items-center gap-2 rounded-button border px-4 py-2.5 text-left text-sm transition-colors',
                     value?.placeId === p.place_id
                       ? 'border-primary bg-primary text-white'
-                      : 'border-border-light bg-white text-text-primary hover:border-text-muted',
+                      : 'border-border-light bg-card-bg text-text-primary hover:border-text-muted',
                   )}
                 >
                   <MapPin
@@ -220,7 +220,7 @@ export function AddressPicker({ value, onChange, placeholder = 'Search any addre
                     'flex w-full items-center gap-2 rounded-button border px-4 py-2.5 text-left text-sm transition-colors',
                     value?.city === c
                       ? 'border-primary bg-primary text-white'
-                      : 'border-border-light bg-white text-text-primary hover:border-text-muted',
+                      : 'border-border-light bg-card-bg text-text-primary hover:border-text-muted',
                   )}
                 >
                   <MapPin

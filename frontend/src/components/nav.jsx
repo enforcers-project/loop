@@ -151,7 +151,7 @@ function ProfileMenu({ user, role, onLogout }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-12 z-40 w-56 overflow-hidden rounded-card border border-border-light bg-white shadow-card-hover"
+          className="absolute right-0 top-12 z-40 w-56 overflow-hidden rounded-card border border-border-light bg-card-bg shadow-card-hover"
         >
           <div className="border-b border-border-light px-3 py-3">
             <div className="truncate text-sm font-semibold text-ink">
@@ -202,7 +202,10 @@ function ProfileMenu({ user, role, onLogout }) {
             >
               <span
                 className={cn(
-                  'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                  // Literal white so the knob reads consistently on both the
+                  // primary (dark) and border-light (light) track. `bg-white`
+                  // would invert with the theme and disappear on the track.
+                  'inline-block h-4 w-4 transform rounded-full bg-[#ffffff] transition-transform',
                   theme === 'dark' ? 'translate-x-4' : 'translate-x-0.5',
                 )}
               />

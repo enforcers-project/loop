@@ -189,13 +189,13 @@ export function EventDetail() {
       {isCancelled && (
         <div
           role="alert"
-          className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-800"
+          className="border-b border-accent/30 bg-accent/10 px-5 py-3 text-sm text-accent"
         >
           <div className="mx-auto flex max-w-[1140px] items-start gap-2">
             <AlertTriangle size={18} className="mt-0.5 flex-shrink-0" />
             <div>
               <p className="font-semibold">This event was cancelled by the organizer.</p>
-              {event.cancelReason && <p className="mt-0.5 text-red-700">{event.cancelReason}</p>}
+              {event.cancelReason && <p className="mt-0.5 text-accent/85">{event.cancelReason}</p>}
             </div>
           </div>
         </div>
@@ -203,8 +203,12 @@ export function EventDetail() {
       {/* dark immersive header. The backdrop fades up and the poster settles in
           from a slight scale on mount, so arriving from a Landing/feed preview
           card reads as a continuous "handoff" into the event rather than a hard
-          cut. (Lightweight continuity — no cross-route layout morph.) */}
-      <div className="relative overflow-hidden bg-ink">
+          cut. (Lightweight continuity — no cross-route layout morph.)
+
+          Uses a literal near-black rather than `bg-ink`, because `--color-ink`
+          inverts in dark mode — flipping this hero to light would break every
+          `text-white*` inside it. The hero stays dark in both themes. */}
+      <div className="relative overflow-hidden bg-[#0b0b0f]">
         <m.img
           src={event.poster}
           alt=""
@@ -413,7 +417,7 @@ export function EventDetail() {
                 {event.tags.map((t) => (
                   <span
                     key={t}
-                    className="rounded-pill border border-border-light bg-white px-3 py-1 text-xs font-medium text-text-secondary"
+                    className="rounded-pill border border-border-light bg-card-bg px-3 py-1 text-xs font-medium text-text-secondary"
                   >
                     {t}
                   </span>

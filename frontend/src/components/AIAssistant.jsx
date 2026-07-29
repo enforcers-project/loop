@@ -27,7 +27,7 @@ function MiniEventCard({ event, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-2xl border border-border-light bg-white p-2 text-left transition-shadow hover:shadow-card"
+      className="flex w-full items-center gap-3 rounded-2xl border border-border-light bg-card-bg p-2 text-left transition-shadow hover:shadow-card"
     >
       <img src={event.poster} alt="" className="h-14 w-14 flex-shrink-0 rounded-xl object-cover" />
       <div className="min-w-0 flex-1">
@@ -153,7 +153,7 @@ export function AIAssistant() {
           for the persistent MessagesWidget. */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-full w-[320px] max-w-[90vw] flex-col bg-white shadow-card-hover transition-transform duration-300',
+          'fixed left-0 top-0 z-50 flex h-full w-[320px] max-w-[90vw] flex-col bg-card-bg shadow-card-hover transition-transform duration-300',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -216,7 +216,7 @@ export function AIAssistant() {
                 <button
                   key={s}
                   onClick={() => ask(s)}
-                  className="block w-full rounded-pill border border-border-light bg-white px-3 py-2 text-left text-sm text-text-secondary hover:border-primary hover:text-primary"
+                  className="block w-full rounded-pill border border-border-light bg-card-bg px-3 py-2 text-left text-sm text-text-secondary hover:border-primary hover:text-primary"
                 >
                   {s}
                 </button>
@@ -232,7 +232,7 @@ export function AIAssistant() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && ask(input)}
             placeholder="Ask Loopy about events…"
-            className="loop-input flex-1 rounded-pill border border-border-light bg-white px-4 py-2.5 text-sm placeholder:text-placeholder"
+            className="loop-input flex-1 rounded-pill border border-border-light bg-card-bg px-4 py-2.5 text-sm placeholder:text-placeholder"
           />
           <button
             onClick={() => ask(input)}

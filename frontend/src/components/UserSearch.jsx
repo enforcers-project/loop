@@ -198,7 +198,7 @@ function AttendeeModal({ eventId, open, onClose, initialPage, total }) {
           <m.div
             variants={dialog}
             onClick={(e) => e.stopPropagation()}
-            className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-card bg-white shadow-hero"
+            className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-card bg-card-bg shadow-hero"
           >
             <div className="flex items-center justify-between border-b border-border-light px-5 py-4">
               <h2 className="font-display text-lg font-bold text-ink">
@@ -312,7 +312,7 @@ export function FollowListModal({ userId, edge, open, onClose }) {
           <m.div
             variants={dialog}
             onClick={(e) => e.stopPropagation()}
-            className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-card bg-white shadow-hero"
+            className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-card bg-card-bg shadow-hero"
           >
             <div className="flex items-center justify-between border-b border-border-light px-5 py-4">
               <h2 className="font-display text-lg font-bold text-ink">{title}</h2>

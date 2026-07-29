@@ -110,7 +110,7 @@ export function EventComments({ eventId, organizerId }) {
 
       {/* Composer — always on top so the primary action sits above the fold of
           the section. requireAuth() gates the actual post. */}
-      <div className="mt-4 flex items-center gap-2 rounded-card border border-border-light bg-white px-4 py-2.5">
+      <div className="mt-4 flex items-center gap-2 rounded-card border border-border-light bg-card-bg px-4 py-2.5">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

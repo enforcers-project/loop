@@ -144,7 +144,7 @@ function ReviewComposer({ hasOrganizer, existing, onSubmit, onDelete, saving }) 
   }
 
   return (
-    <div className="rounded-card border border-border-light bg-white">
+    <div className="rounded-card border border-border-light bg-card-bg">
       <div className="border-b border-border-light px-5 py-4">
         <p className="font-display text-lg font-semibold text-ink">
           {isEdit ? 'Your review' : 'You were there'}
@@ -204,7 +204,7 @@ function ReviewComposer({ hasOrganizer, existing, onSubmit, onDelete, saving }) 
             rows={3}
             maxLength={2000}
             placeholder="What stood out? What would you tell someone thinking of going?"
-            className="w-full resize-y rounded-input border border-border-light bg-white px-4 py-3 text-sm text-text-primary outline-none transition-colors placeholder:text-placeholder focus:border-primary"
+            className="w-full resize-y rounded-input border border-border-light bg-card-bg px-4 py-3 text-sm text-text-primary outline-none transition-colors placeholder:text-placeholder focus:border-primary"
           />
           <span className="mt-1 block text-right text-[11px] tabular-nums text-text-muted">
             {body.length}/2000
@@ -379,7 +379,7 @@ export function EventReviews({ eventId, organizerId }) {
           shrinks to a single quiet line so the empty page doesn't feel like
           a broken chart. */}
       {hasScore ? (
-        <div className="mt-5 rounded-card border border-border-light bg-white p-6">
+        <div className="mt-5 rounded-card border border-border-light bg-card-bg p-6">
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
               <div className="flex items-baseline gap-2">

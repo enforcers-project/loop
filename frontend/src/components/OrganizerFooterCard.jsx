@@ -15,7 +15,7 @@ export function OrganizerFooterCard({ organizer, eventCount }) {
   const following = followingIds.has(organizer.id)
 
   return (
-    <section className="rounded-card border border-border-light bg-white p-6 shadow-card md:p-8">
+    <section className="rounded-card border border-border-light bg-card-bg p-6 shadow-card md:p-8">
       <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">Hosted by</p>
       <div className="mt-4 flex flex-col items-start gap-4 sm:flex-row sm:gap-5">
         <img

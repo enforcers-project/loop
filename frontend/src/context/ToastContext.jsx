@@ -71,7 +71,7 @@ export function ToastProvider({ children }) {
               key={t.id}
               role="status"
               className={cn(
-                'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-card bg-white px-4 py-3 shadow-card-hover ring-1',
+                'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-card bg-card-bg px-4 py-3 shadow-card-hover ring-1',
                 ring,
               )}
             >

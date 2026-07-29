@@ -4,6 +4,7 @@ import { MapPin, Navigation, Search } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
+import { useForceLight } from '../context/ThemeContext'
 import { cn } from '../lib/utils'
 import { InlineAlert } from '../components/primitives'
 import { InterestBlobs } from '../components/InterestBlobs'
@@ -70,6 +71,11 @@ function pad2(v) {
 }
 
 export function Onboarding() {
+  // Onboarding is a light-only experience — the interest blobs, the deep-purple
+  // gradient CTAs and the fallback maps illustrations are all designed against
+  // a bright surface. Force light while this screen is mounted; the user's real
+  // theme choice takes over once they land on /feed.
+  useForceLight()
   const navigate = useNavigate()
   const { user, setInterests, saveBirthDate, saveLocation } = useApp()
   const toast = useToast()

@@ -300,7 +300,7 @@ function World({
     <div
       className={cn(
         'relative rounded-card border transition-colors',
-        isOpen ? 'border-border-light bg-white shadow-card' : 'border-transparent bg-transparent',
+        isOpen ? 'border-border-light bg-card-bg shadow-card' : 'border-transparent bg-transparent',
       )}
       style={isOpen ? { boxShadow: `0 12px 32px -20px ${meta.accent}` } : undefined}
     >

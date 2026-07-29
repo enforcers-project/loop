@@ -316,7 +316,7 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* header */}
-      <div className="flex items-center gap-2.5 border-b border-border-light bg-white px-3 py-2.5">
+      <div className="flex items-center gap-2.5 border-b border-border-light bg-card-bg px-3 py-2.5">
         {showBack && (
           <button
             type="button"
@@ -527,7 +527,7 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
       </div>
 
       {/* composer — Enter to send, Shift+Enter for newline */}
-      <div className="border-t border-border-light bg-white px-2.5 py-2.5">
+      <div className="border-t border-border-light bg-card-bg px-2.5 py-2.5">
         <div className="flex items-end gap-2">
           <textarea
             value={draft}
@@ -631,7 +631,7 @@ function ReactionsBadge({ message, meId, onToggle }) {
         onToggle?.()
       }}
       aria-label={groups[0]?.mine ? 'Remove reaction' : 'Add reaction'}
-      className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-border-light bg-white px-2 py-0.5 text-xs shadow-card transition-transform active:scale-95"
+      className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-border-light bg-card-bg px-2 py-0.5 text-xs shadow-card transition-transform active:scale-95"
     >
       {groups.map((g) => (
         <span key={g.emoji} className="inline-flex items-center gap-1">
@@ -667,7 +667,7 @@ function MessageBubble({ message, mine, onOpenEvent, onOpenPost }) {
           <span
             className={cn(
               'rounded-2xl px-3 py-2 text-sm leading-relaxed',
-              mine ? 'bg-primary text-white' : 'bg-white text-text-primary shadow-card',
+              mine ? 'bg-primary text-white' : 'bg-card-bg text-text-primary shadow-card',
             )}
           >
             {message.text}
@@ -680,7 +680,7 @@ function MessageBubble({ message, mine, onOpenEvent, onOpenPost }) {
     <span
       className={cn(
         'rounded-2xl px-3 py-2 text-sm leading-relaxed',
-        mine ? 'bg-primary text-white' : 'bg-white text-text-primary shadow-card',
+        mine ? 'bg-primary text-white' : 'bg-card-bg text-text-primary shadow-card',
       )}
     >
       {message.text}
@@ -703,7 +703,7 @@ function SharedEventCard({ event, mine, onOpen }) {
         'group flex w-[240px] flex-col overflow-hidden rounded-2xl text-left transition-transform active:scale-[0.98]',
         mine
           ? 'bg-primary text-white shadow-card'
-          : 'border border-border-light bg-white text-text-primary shadow-card',
+          : 'border border-border-light bg-card-bg text-text-primary shadow-card',
       )}
     >
       {event.poster && (
@@ -769,7 +769,7 @@ function SharedPostCard({ post, mine, onOpen }) {
         'group flex w-[240px] flex-col overflow-hidden rounded-2xl text-left transition-transform active:scale-[0.98]',
         mine
           ? 'bg-primary text-white shadow-card'
-          : 'border border-border-light bg-white text-text-primary shadow-card',
+          : 'border border-border-light bg-card-bg text-text-primary shadow-card',
       )}
     >
       {author && (
@@ -838,7 +838,7 @@ function TypingBubble({ typing, desc, thread }) {
       ) : (
         <span className="h-7 w-7 flex-shrink-0" aria-hidden />
       )}
-      <div className="flex items-center gap-1 rounded-2xl bg-white px-3 py-2.5 shadow-card">
+      <div className="flex items-center gap-1 rounded-2xl bg-card-bg px-3 py-2.5 shadow-card">
         <span
           className="h-1.5 w-1.5 animate-bounce rounded-full bg-text-muted"
           style={{ animationDelay: '0ms' }}
@@ -1000,7 +1000,7 @@ export function NewMessagePicker({ onPick, onClose }) {
         aria-modal="true"
         aria-label="New message"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-w-md sm:rounded-card"
+        className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-card bg-card-bg shadow-hero sm:max-w-md sm:rounded-card"
       >
         <div className="border-b border-border-light px-5 py-3.5">
           <div className="flex items-center justify-between">
@@ -1330,7 +1330,7 @@ function ShareTargetSheet({ title, preview, shareUrl, canSend, onSendTo, onClose
         aria-modal="true"
         aria-label={title}
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-w-md sm:rounded-card"
+        className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-card bg-card-bg shadow-hero sm:max-w-md sm:rounded-card"
       >
         <div className="border-b border-border-light px-5 py-3.5">
           <div className="flex items-center justify-between">
@@ -1496,7 +1496,7 @@ function ShareTargetSheet({ title, preview, shareUrl, canSend, onSendTo, onClose
           )}
         </div>
 
-        <div className="border-t border-border-light bg-white px-4 py-3">
+        <div className="border-t border-border-light bg-card-bg px-4 py-3">
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -1537,10 +1537,10 @@ function SelectDot({ on }) {
       aria-hidden
       className={cn(
         'grid h-5 w-5 flex-shrink-0 place-items-center rounded-full border transition-colors',
-        on ? 'border-primary bg-primary text-white' : 'border-border-light bg-white',
+        on ? 'border-primary bg-primary text-white' : 'border-border-light bg-card-bg',
       )}
     >
-      {on && <span className="h-2 w-2 rounded-full bg-white" />}
+      {on && <span className="h-2 w-2 rounded-full bg-card-bg" />}
     </span>
   )
 }

@@ -28,7 +28,7 @@ export function MessagesPage() {
 
   return (
     <div className="loop-container pb-24 pt-6 md:pb-12">
-      <div className="mx-auto flex h-[calc(100vh-9rem)] max-w-[1080px] overflow-hidden rounded-card border border-border-light bg-white shadow-card">
+      <div className="mx-auto flex h-[calc(100vh-9rem)] max-w-[1080px] overflow-hidden rounded-card border border-border-light bg-card-bg shadow-card">
         {/* left pane — conversation list */}
         <aside
           className={`flex w-full flex-col border-r border-border-light md:w-[340px] md:flex-shrink-0 ${

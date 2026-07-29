@@ -218,14 +218,14 @@ export function OrganizerDashboard() {
         </Link>
         <Link
           to={`/event/${event.id}`}
-          className="inline-flex items-center gap-1 rounded-button border border-border-light bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface"
+          className="inline-flex items-center gap-1 rounded-button border border-border-light bg-card-bg px-3 py-2 text-sm font-medium text-ink hover:bg-surface"
         >
           View event <ExternalLink size={14} />
         </Link>
       </div>
 
       {/* Event header */}
-      <header className="flex flex-wrap items-start gap-4 rounded-card border border-border-light bg-white p-5 shadow-card">
+      <header className="flex flex-wrap items-start gap-4 rounded-card border border-border-light bg-card-bg p-5 shadow-card">
         <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-surface">
           {event.poster ? (
             <img src={event.poster} alt="" className="h-full w-full object-cover" />
@@ -258,7 +258,7 @@ export function OrganizerDashboard() {
       <div
         role="tablist"
         aria-label="RSVP status"
-        className="inline-flex rounded-pill border border-border-light bg-white p-1 shadow-card"
+        className="inline-flex rounded-pill border border-border-light bg-card-bg p-1 shadow-card"
       >
         {STATUS_TABS.map((t) => {
           const active = t.key === status
@@ -280,7 +280,7 @@ export function OrganizerDashboard() {
       </div>
 
       {/* Roster */}
-      <section className="overflow-hidden rounded-card border border-border-light bg-white shadow-card">
+      <section className="overflow-hidden rounded-card border border-border-light bg-card-bg shadow-card">
         {rosterLoading ? (
           <div className="grid place-items-center py-16">
             <Spinner label="Loading attendees" />
@@ -309,7 +309,7 @@ export function OrganizerDashboard() {
           <button
             onClick={() => fetchNextPage()}
             disabled={isFetchingNextPage}
-            className="inline-flex items-center gap-2 rounded-button border border-border-light bg-white px-4 py-2 text-sm font-medium text-ink hover:bg-surface disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-button border border-border-light bg-card-bg px-4 py-2 text-sm font-medium text-ink hover:bg-surface disabled:opacity-50"
           >
             {isFetchingNextPage && <Spinner size="sm" />}
             {isFetchingNextPage ? 'Loading…' : 'Load more'}

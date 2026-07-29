@@ -81,7 +81,7 @@ function fmtDay(iso) {
 function CustomTooltip({ active, payload, label, series }) {
   if (!active || !payload || !payload.length) return null
   return (
-    <div className="rounded-card border border-border-light bg-white p-3 shadow-card-hover">
+    <div className="rounded-card border border-border-light bg-card-bg p-3 shadow-card-hover">
       <div className="mb-1 text-xs font-medium text-text-secondary">{fmtDay(label)}</div>
       <ul className="space-y-1">
         {series.map((s) => {

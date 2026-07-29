@@ -81,7 +81,9 @@
   --color-ink: #f5f5f7;
   --color-white: #0b0b0f;
   --color-surface: #17171d;
-  --color-primary-light: #2a2440;
+  /* Bumped from #2a2440 → #35305a so `text-primary` (#6d5efc) on
+     `bg-primary-light` clears WCAG AA for small text (was ~4.9:1). */
+  --color-primary-light: #35305a;
 
   --color-text-primary: #f5f5f7;
   --color-text-secondary: #b7b7c1;
@@ -98,6 +100,131 @@
 .dark body {
   background: var(--color-white);
   color: var(--color-text-primary);
+}
+
+/* ---------------------------------------------------------------------------
+   Dark-mode targeted overrides for surfaces that CAN'T be flipped via tokens
+   alone — Tailwind's opacity variants (`bg-white/95`, etc.) expand to literal
+   `rgba(255,255,255,0.95)` and bypass `--color-white`, so a translucent white
+   nav stays bright even in dark mode. These rules translate those blocks into
+   the dark card surface without touching the JSX.
+--------------------------------------------------------------------------- */
+.dark .bg-white\/95 {
+  background-color: rgb(31 31 39 / 0.95); /* --color-card-bg @ 95% */
+}
+.dark .bg-white\/70 {
+  background-color: rgb(31 31 39 / 0.85);
+}
+.dark .bg-white\/85 {
+  background-color: rgb(31 31 39 / 0.9);
+}
+
+/* ---------------------------------------------------------------------------
+   `text-white` / `border-white` / `ring-white` — Tailwind v4 compiles these to
+   `color: var(--color-white)`, so under `.dark` they FLIP to near-black. Every
+   usage across the app is on top of an image, a dark scrim, a colored brand
+   button, or the permanent-dark hero — contexts where white MUST stay white.
+   Pin them to literal white in dark mode. Opacity variants (text-white/90,
+   border-white/15, etc.) compile via `color-mix(..., var(--color-white), ...)`
+   so we pin those too — one rule per variant we actually use.
+--------------------------------------------------------------------------- */
+.dark :where(.text-white) {
+  color: #ffffff;
+}
+.dark :where(.text-white\/95) {
+  color: rgb(255 255 255 / 0.95);
+}
+.dark :where(.text-white\/90) {
+  color: rgb(255 255 255 / 0.9);
+}
+.dark :where(.text-white\/85) {
+  color: rgb(255 255 255 / 0.85);
+}
+.dark :where(.text-white\/80) {
+  color: rgb(255 255 255 / 0.8);
+}
+.dark :where(.text-white\/70) {
+  color: rgb(255 255 255 / 0.7);
+}
+.dark :where(.text-white\/60) {
+  color: rgb(255 255 255 / 0.6);
+}
+.dark :where(.text-white\/55) {
+  color: rgb(255 255 255 / 0.55);
+}
+.dark :where(.text-white\/50) {
+  color: rgb(255 255 255 / 0.5);
+}
+.dark :where(.text-white\/40) {
+  color: rgb(255 255 255 / 0.4);
+}
+.dark :where(.text-white\/30) {
+  color: rgb(255 255 255 / 0.3);
+}
+.dark :where(.hover\:text-white:hover) {
+  color: #ffffff;
+}
+
+.dark :where(.border-white) {
+  border-color: #ffffff;
+}
+.dark :where(.border-white\/40) {
+  border-color: rgb(255 255 255 / 0.4);
+}
+.dark :where(.border-white\/20) {
+  border-color: rgb(255 255 255 / 0.2);
+}
+.dark :where(.border-white\/15) {
+  border-color: rgb(255 255 255 / 0.15);
+}
+.dark :where(.border-white\/10) {
+  border-color: rgb(255 255 255 / 0.1);
+}
+
+.dark :where(.ring-white) {
+  --tw-ring-color: #ffffff;
+}
+.dark :where(.divide-white\/10 > :not([hidden]) ~ :not([hidden])) {
+  border-color: rgb(255 255 255 / 0.1);
+}
+
+/* Translucent-white pills over dark scrims / hero / brand buttons. These are
+   always on top of a dark or brand-colored surface (story viewer, event hero,
+   primary buttons), so the low-alpha WHITE veil is the whole point — flipping
+   to a near-black veil makes the pill vanish. Keep them literal white in dark. */
+.dark :where(.bg-white\/10) {
+  background-color: rgb(255 255 255 / 0.1);
+}
+.dark :where(.bg-white\/15) {
+  background-color: rgb(255 255 255 / 0.15);
+}
+.dark :where(.bg-white\/20) {
+  background-color: rgb(255 255 255 / 0.2);
+}
+.dark :where(.bg-white\/25) {
+  background-color: rgb(255 255 255 / 0.25);
+}
+.dark :where(.bg-white\/30) {
+  background-color: rgb(255 255 255 / 0.3);
+}
+.dark :where(.hover\:bg-white\/10:hover) {
+  background-color: rgb(255 255 255 / 0.1);
+}
+.dark :where(.hover\:bg-white\/20:hover) {
+  background-color: rgb(255 255 255 / 0.2);
+}
+.dark :where(.hover\:bg-white\/25:hover) {
+  background-color: rgb(255 255 255 / 0.25);
+}
+
+/* Landing hero seam — the `bg-gradient-to-b from-ink to-white` band relies on
+   both stops being pinned to their light values. Under dark tokens it inverts
+   to a dark→light gradient and undoes the transition. Force the intended pair
+   so the seam always reads as hero-dark → page-white. Landing itself is
+   force-light (see ThemeContext), so this is a defense-in-depth guard for any
+   future reuse of the seam pattern. */
+.landing-seam {
+  background: linear-gradient(to bottom, #0b0b0f, #ffffff);
 }
 
 * {

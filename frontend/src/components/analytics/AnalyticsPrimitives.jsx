@@ -48,7 +48,7 @@ export function StatTile({ label, value, delta, hint }) {
           : 'text-text-muted bg-surface'
 
   return (
-    <div className="rounded-card border border-border-light bg-white p-4 shadow-card">
+    <div className="rounded-card border border-border-light bg-card-bg p-4 shadow-card">
       <div className="text-xs font-medium uppercase tracking-wide text-text-muted">{label}</div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-2xl font-semibold text-ink tabular-nums">{formatCount(value)}</span>
@@ -83,7 +83,7 @@ export function RangePicker({ value, onChange }) {
     <div
       role="tablist"
       aria-label="Date range"
-      className="inline-flex rounded-pill border border-border-light bg-white p-1 shadow-card"
+      className="inline-flex rounded-pill border border-border-light bg-card-bg p-1 shadow-card"
     >
       {RANGES.map((r) => {
         const active = r.key === value
@@ -113,7 +113,7 @@ export function RangePicker({ value, onChange }) {
 export function FunnelCard({ stages }) {
   const top = Math.max(1, ...stages.map((s) => s.count))
   return (
-    <div className="rounded-card border border-border-light bg-white p-5 shadow-card">
+    <div className="rounded-card border border-border-light bg-card-bg p-5 shadow-card">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-ink">Conversion funnel</h3>
         <span className="text-xs text-text-muted">
@@ -168,7 +168,7 @@ const FUNNEL_COLORS = ['#6d5efc', '#8a7dfd', '#ff5e91', '#ff2e74']
 // one so borders/padding/shadows match across the page.
 export function ChartCard({ title, subtitle, right, children }) {
   return (
-    <div className="rounded-card border border-border-light bg-white p-5 shadow-card">
+    <div className="rounded-card border border-border-light bg-card-bg p-5 shadow-card">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-ink">{title}</h3>

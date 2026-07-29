@@ -159,7 +159,7 @@ export function OrganizerProfile() {
             <img
               src={org.avatar}
               alt=""
-              className="-translate-y-10 h-24 w-24 rounded-full border-4 border-white bg-white object-cover shadow-card sm:-translate-y-12 sm:h-32 sm:w-32 md:h-36 md:w-36"
+              className="-translate-y-10 h-24 w-24 rounded-full border-4 border-card-bg bg-card-bg object-cover shadow-card sm:-translate-y-12 sm:h-32 sm:w-32 md:h-36 md:w-36"
             />
             <div className="min-w-0 sm:pt-4">
               <div className="flex flex-wrap items-center gap-2">

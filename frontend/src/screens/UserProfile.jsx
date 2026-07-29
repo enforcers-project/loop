@@ -93,7 +93,7 @@ function AvatarModal({ src, onClose, onUpload, uploading }) {
           cameraFacing="user"
           onFile={onUpload}
           disabled={uploading}
-          className="inline-flex h-11 items-center gap-2 rounded-button bg-white px-6 text-sm font-semibold text-ink transition-transform active:scale-95 hover:opacity-90 disabled:opacity-60"
+          className="inline-flex h-11 items-center gap-2 rounded-button bg-card-bg px-6 text-sm font-semibold text-ink transition-transform active:scale-95 hover:opacity-90 disabled:opacity-60"
         >
           <Camera size={18} />
           {uploading ? 'Uploading…' : 'Change picture'}
@@ -192,7 +192,7 @@ function EditProfileModal({
         aria-modal="true"
         aria-label="Edit profile"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-h-[85vh] sm:max-w-md sm:rounded-card"
+        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-card-bg shadow-hero sm:max-h-[85vh] sm:max-w-md sm:rounded-card"
       >
         {/* header */}
         <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
@@ -228,7 +228,7 @@ function EditProfileModal({
                 cameraFacing="user"
                 onFile={onUpload}
                 disabled={uploading}
-                className="inline-flex h-9 items-center gap-2 rounded-button border border-border-light bg-white px-4 text-sm font-semibold text-ink transition-colors hover:border-text-muted disabled:opacity-60"
+                className="inline-flex h-9 items-center gap-2 rounded-button border border-border-light bg-card-bg px-4 text-sm font-semibold text-ink transition-colors hover:border-text-muted disabled:opacity-60"
               >
                 <Camera size={16} />
                 {uploading ? 'Uploading…' : 'Change picture'}
@@ -400,7 +400,7 @@ function InterestsModal({ allInterests, selectedIds, onClose, onSave }) {
         aria-modal="true"
         aria-label="Edit interests"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-h-[85vh] sm:max-w-xl sm:rounded-card"
+        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-card-bg shadow-hero sm:max-h-[85vh] sm:max-w-xl sm:rounded-card"
       >
         <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
           <div>
@@ -714,7 +714,7 @@ export function UserProfile() {
                 type="button"
                 onClick={() => setAvatarOpen(true)}
                 aria-label="View profile picture"
-                className="group block rounded-full ring-4 ring-white focus:outline-none focus-visible:ring-primary"
+                className="group block rounded-full ring-4 ring-card-bg focus:outline-none focus-visible:ring-primary"
               >
                 <img
                   src={avatarSrc}
@@ -783,7 +783,7 @@ export function UserProfile() {
           <button
             type="button"
             onClick={() => setEditOpen(true)}
-            className="inline-flex h-11 flex-shrink-0 items-center rounded-button border border-border-light bg-white px-5 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted hover:text-ink"
+            className="inline-flex h-11 flex-shrink-0 items-center rounded-button border border-border-light bg-card-bg px-5 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted hover:text-ink"
           >
             Edit profile
           </button>
@@ -869,7 +869,7 @@ export function UserProfile() {
                   <button
                     type="button"
                     onClick={() => setInterestsOpen(true)}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-button border border-border-light bg-white px-3.5 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted hover:text-ink"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-button border border-border-light bg-card-bg px-3.5 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted hover:text-ink"
                   >
                     <Pencil size={14} /> Edit
                   </button>

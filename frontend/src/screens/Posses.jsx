@@ -67,7 +67,7 @@ function InvitePosseRow({ posse, onAccept, onDecline, busy }) {
           type="button"
           onClick={() => onDecline(posse)}
           disabled={busy}
-          className="inline-flex h-9 items-center rounded-button border border-border-light bg-white px-3 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted disabled:opacity-50"
+          className="inline-flex h-9 items-center rounded-button border border-border-light bg-card-bg px-3 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted disabled:opacity-50"
         >
           Decline
         </button>
@@ -242,7 +242,7 @@ export function Posses() {
                   type="button"
                   onClick={() => onJoin(p)}
                   disabled={joiningId === p.id}
-                  className="inline-flex h-9 items-center rounded-button border border-primary bg-white px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 disabled:opacity-50"
+                  className="inline-flex h-9 items-center rounded-button border border-primary bg-card-bg px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 disabled:opacity-50"
                 >
                   {joiningId === p.id ? '…' : p.join_policy === 'ask' ? 'Ask to join' : 'Join'}
                 </button>

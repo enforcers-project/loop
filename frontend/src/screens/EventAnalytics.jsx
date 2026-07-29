@@ -122,7 +122,7 @@ export function EventAnalytics() {
       </div>
 
       {/* Event header */}
-      <header className="flex flex-wrap items-start gap-4 rounded-card border border-border-light bg-white p-5 shadow-card">
+      <header className="flex flex-wrap items-start gap-4 rounded-card border border-border-light bg-card-bg p-5 shadow-card">
         <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-surface">
           {event.flyerUrl ? (
             <img src={event.flyerUrl} alt="" className="h-full w-full object-cover" />
@@ -141,13 +141,13 @@ export function EventAnalytics() {
         <div className="flex flex-wrap items-center gap-2">
           <Link
             to={`/organizer/events/${event.id}/dashboard`}
-            className="inline-flex items-center gap-1 rounded-button border border-border-light bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface"
+            className="inline-flex items-center gap-1 rounded-button border border-border-light bg-card-bg px-3 py-2 text-sm font-medium text-ink hover:bg-surface"
           >
             <Users size={14} /> Attendees
           </Link>
           <Link
             to={`/event/${event.id}`}
-            className="inline-flex items-center gap-1 rounded-button border border-border-light bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-surface"
+            className="inline-flex items-center gap-1 rounded-button border border-border-light bg-card-bg px-3 py-2 text-sm font-medium text-ink hover:bg-surface"
           >
             View event <ExternalLink size={14} />
           </Link>

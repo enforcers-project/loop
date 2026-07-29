@@ -4,8 +4,6 @@ import { Search, Sparkles, Compass, Users } from 'lucide-react'
 import {
   m,
   AnimatePresence,
-  useScroll,
-  useTransform,
   useInView,
   useMotionValue,
   useAnimationFrame,
@@ -323,7 +321,6 @@ export function Landing() {
   const [q, setQ] = useState('')
   const [focused, setFocused] = useState(false)
   const navigate = useNavigate()
-  const reduce = useReducedMotion()
 
   useEffect(() => {
     api.events({ sort: 'popular' }).then((rows) => setEvents(rows ?? []))
@@ -340,14 +337,10 @@ export function Landing() {
   const categoryCount = new Set((events ?? []).map((e) => e.category).filter(Boolean)).size
   const showStats = !loading && (events?.length ?? 0) >= 3 && goingTotal > 0
 
-  // Scroll-linked parallax: the blurred hero backdrop drifts slower than the
-  // foreground as the hero scrolls away. Disabled under reduce-motion.
+  // The hero backdrop is now a fixed gradient (see the underlay below), so we
+  // no longer need a scroll-linked parallax hook or the reduce-motion gate that
+  // guarded it.
   const heroRef = useRef(null)
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    offset: ['start start', 'end start'],
-  })
-  const posterY = useTransform(scrollYProgress, [0, 1], ['-6%', '16%'])
 
   const showHint = q === '' && !focused
   const goSearch = () =>
@@ -355,17 +348,20 @@ export function Landing() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* dark hero */}
+      {/* dark hero — deterministic backdrop so the landing renders identically
+          every visit (previously used the top event's poster, which tinted the
+          page a different color depending on what came back from the feed). */}
       <div ref={heroRef} className="relative overflow-hidden bg-ink">
-        {/* blurred bg image (parallax) */}
-        {events?.[0] && (
-          <m.img
-            src={events[0].poster}
-            alt=""
-            style={{ y: reduce ? 0 : posterY }}
-            className="pointer-events-none absolute inset-x-0 -top-[10%] h-[120%] w-full scale-110 object-cover opacity-20 blur-md"
-          />
-        )}
+        {/* fixed gradient underlay: deep indigo → violet, matches the aurora
+            palette so the hero reads as one cohesive scene at any width. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(120% 90% at 50% 0%, #2a1e6b 0%, #1a1345 45%, #0d0a2b 100%)',
+          }}
+        />
         {/* living aurora glow behind the content (pure CSS, compositor-only) */}
         <div className="loop-aurora" aria-hidden="true" />
 
@@ -599,9 +595,9 @@ function LandingNav() {
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       className="border-b border-white/10"
     >
-      <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between px-5 md:h-24">
+      <div className="mx-auto flex h-24 max-w-[1440px] items-center justify-between px-5 md:h-32">
         <Link to="/" className="flex items-center">
-          <img src="/logo.png" alt="Loop" className="h-14 w-auto md:h-16" />
+          <img src="/logo.png" alt="Loop" className="h-20 w-auto md:h-28" />
         </Link>
         <div className="flex items-center gap-3">
           <MotionLink

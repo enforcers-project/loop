@@ -18,7 +18,7 @@ const TIMEOUT_MS = 12000
 const MAX_INPUT_LEN = 600
 const RATE_LIMIT_PER_HOUR = 10
 
-const SYSTEM_PROMPT = `You are Loop AI, a copywriter for event descriptions.
+const SYSTEM_PROMPT = `You are Loopy, Loop's copywriter for event descriptions.
 Write ONE short paragraph (3-5 sentences, ~60-90 words) that hypes the event
 without exaggeration. Warm, plain-spoken, second person. Mention what people
 will do and the vibe. Never invent facts the organizer didn't provide (no fake

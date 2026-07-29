@@ -84,14 +84,14 @@ export function MessagesWidget() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.85, y: 12 }}
               transition={{ type: 'spring', stiffness: 380, damping: 26 }}
-              className="pointer-events-auto relative flex h-14 items-center gap-2.5 rounded-full bg-primary pl-3.5 pr-4 text-white shadow-card-hover transition-shadow hover:shadow-hero"
+              className="pointer-events-auto relative flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-card-hover transition-shadow hover:shadow-hero sm:w-auto sm:justify-start sm:gap-2.5 sm:pl-3.5 sm:pr-4"
             >
               <span className="grid h-9 w-9 place-items-center rounded-full bg-white/15">
                 <MessageCircle size={20} />
               </span>
-              <span className="pr-1 text-sm font-semibold">Messages</span>
+              <span className="hidden pr-1 text-sm font-semibold sm:inline">Messages</span>
               {previewAvatars.length > 0 && (
-                <span className="flex items-center -space-x-2">
+                <span className="hidden items-center -space-x-2 sm:flex">
                   {previewAvatars.map((t) => (
                     <img
                       key={t.id}

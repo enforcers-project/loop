@@ -23,7 +23,10 @@ const profileHref = (id) => (id ? `/organizer/${id}` : null)
 //   remove(commentId)       → soft-delete (DELETE /api/comments/:id)
 // `canDelete(reply)` decides whether a reply shows the trash affordance (author
 // or content owner), matching the backend's auth rule.
-export function CommentReplies({ comment, api, canDelete, currentUserId }) {
+// `onCountChange(delta)` (optional) fires when a reply is added (+1) or deleted
+// (-1) so the parent can keep a post-wide comment total in sync — the backend
+// counts replies in comment_count, so the displayed total must too.
+export function CommentReplies({ comment, api, canDelete, currentUserId, onCountChange }) {
   const { requireAuth } = useApp()
   const toast = useToast()
   const [open, setOpen] = useState(false)
@@ -67,6 +70,7 @@ export function CommentReplies({ comment, api, canDelete, currentUserId }) {
       if (created?.id) {
         setReplies((prev) => [...prev, created])
         setCount((c) => c + 1)
+        onCountChange?.(1)
         setDraft('')
         setComposing(false)
         setOpen(true)
@@ -87,11 +91,13 @@ export function CommentReplies({ comment, api, canDelete, currentUserId }) {
     const prev = replies
     setReplies((list) => list.filter((r) => r.id !== reply.id))
     setCount((c) => Math.max(0, c - 1))
+    onCountChange?.(-1)
     try {
       await api.remove(reply.id)
     } catch {
       setReplies(prev)
       setCount((c) => c + 1)
+      onCountChange?.(1)
       toast.error('Could not delete that reply.')
     }
   }

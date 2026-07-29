@@ -403,7 +403,16 @@ export function StoryViewer({ groups, startIndex = 0, onClose, onViewed }) {
   if (!group || !story) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-0 sm:p-4">
+    // Click the dark backdrop (the margin around the story card) to close.
+    // Guarded on target===currentTarget so clicks that bubble up from the
+    // card, the tap zones, or the prev/next/close controls don't also trip it —
+    // only a click that lands on the backdrop itself dismisses the viewer.
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-0 sm:p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose?.()
+      }}
+    >
       <button
         type="button"
         aria-label="Close stories"

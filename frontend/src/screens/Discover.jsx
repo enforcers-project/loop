@@ -36,6 +36,29 @@ const EMPTY_FILTERS = {
  */
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
+// Quick-filter date predicates, shared so the "Today"/"This weekend" grid uses
+// the same day-of-week logic the weekend rail does (Sun=0, Fri=5, Sat=6).
+// Both guard against a missing/invalid isoDate so a bad row is simply excluded
+// rather than throwing.
+function isWeekendEvent(e) {
+  if (!e.isoDate) return false
+  const d = new Date(e.isoDate)
+  if (isNaN(d.getTime())) return false
+  const day = d.getDay()
+  return day === 0 || day === 5 || day === 6
+}
+
+function isTodayEvent(e, now = new Date()) {
+  if (!e.isoDate) return false
+  const d = new Date(e.isoDate)
+  if (isNaN(d.getTime())) return false
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  )
+}
+
 function buildRails(events, now = Date.now()) {
   // Rails only ever show upcoming events — a past event has no business in
   // "Trending" or "This weekend". Filter once up front so every rail inherits it.
@@ -99,16 +122,10 @@ function buildRails(events, now = Date.now()) {
   )
   if (pickup.length) rails.push({ title: 'Pickup runs', events: pickup })
 
-  // Fri/Sat/Sun by starts_at (0 = Sun, 5 = Fri, 6 = Sat).
+  // Fri/Sat/Sun by starts_at (see isWeekendEvent: Sun=0, Fri=5, Sat=6).
   const weekend = take(
     events
-      .filter((e) => {
-        if (!e.isoDate) return false
-        const d = new Date(e.isoDate)
-        if (isNaN(d.getTime())) return false
-        const day = d.getDay()
-        return day === 0 || day === 5 || day === 6
-      })
+      .filter(isWeekendEvent)
       .sort((a, b) => new Date(a.isoDate).getTime() - new Date(b.isoDate).getTime()),
     6,
   )
@@ -193,6 +210,8 @@ export function Discover() {
       if (cat !== 'All' && e.category !== cat) return false
       if (filters.free && !e.isFree) return false
       if (filters.sports && !e.isSports) return false
+      if (filters.today && !isTodayEvent(e)) return false
+      if (filters.weekend && !isWeekendEvent(e)) return false
       return true
     })
   }, [events, cat, filters])

@@ -564,6 +564,11 @@ export function PostCard({ post }) {
   const [liked, setLiked] = useState(!!post.likedByMe)
   const [likeCount, setLikeCount] = useState(post.likes ?? 0)
   const [comments, setComments] = useState(post.comments ?? [])
+  // The count shown to the user. Seeded from the backend's comment_count (which
+  // counts replies too), NOT comments.length — the feed only hydrates the first
+  // few top-level comments, and replies live inside CommentReplies. Bumped on
+  // every add/remove (top-level here, replies via onCountChange).
+  const [commentCount, setCommentCount] = useState(post.commentCount ?? post.comments?.length ?? 0)
   const [draft, setDraft] = useState('')
   const [posting, setPosting] = useState(false)
   // Instagram-style comment overlay — opened by the comment icon or the
@@ -595,10 +600,14 @@ export function PostCard({ post }) {
   const removeComment = async (comment) => {
     const prev = comments
     setComments((list) => list.filter((c) => c.id !== comment.id))
+    // The backend decrements comment_count by exactly 1 on a soft-delete (it
+    // doesn't cascade replies), so mirror that here.
+    setCommentCount((n) => Math.max(0, n - 1))
     try {
       await api.deleteComment(comment.id)
     } catch {
       setComments(prev)
+      setCommentCount((n) => n + 1)
       toast.error('Could not delete that comment.')
     }
   }
@@ -657,6 +666,7 @@ export function PostCard({ post }) {
         ...prev,
         created?.id ? created : { id: `local-${prev.length}`, author: user?.name ?? 'You', text },
       ])
+      setCommentCount((n) => n + 1)
       setDraft('')
     } catch (err) {
       // Leave the draft in place so the user can retry. Surface a filter-block
@@ -782,8 +792,8 @@ export function PostCard({ post }) {
           onClick={() => setCommentsOpen(true)}
           className="text-sm text-text-muted transition-colors hover:text-text-secondary"
         >
-          {comments.length > 0
-            ? `View ${comments.length === 1 ? '1 comment' : `all ${comments.length} comments`}`
+          {commentCount > 0
+            ? `View ${commentCount === 1 ? '1 comment' : `all ${commentCount} comments`}`
             : 'Add a comment…'}
         </button>
       </div>
@@ -800,6 +810,7 @@ export function PostCard({ post }) {
             replyApi={replyApi}
             canDeleteComment={canDeleteComment}
             removeComment={removeComment}
+            onReplyCountChange={(delta) => setCommentCount((n) => Math.max(0, n + delta))}
             currentUserId={user?.id}
           />
         )}
@@ -835,6 +846,7 @@ function CommentsModal({
   replyApi,
   canDeleteComment,
   removeComment,
+  onReplyCountChange,
   currentUserId,
 }) {
   // Close on Escape, matching the app's other overlays.
@@ -972,6 +984,7 @@ function CommentsModal({
                         api={replyApi}
                         canDelete={canDeleteComment}
                         currentUserId={currentUserId}
+                        onCountChange={onReplyCountChange}
                       />
                     )}
                   </div>

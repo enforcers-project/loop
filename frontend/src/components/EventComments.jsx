@@ -20,6 +20,10 @@ export function EventComments({ eventId, organizerId }) {
   const { user, requireAuth } = useApp()
   const toast = useToast()
   const [comments, setComments] = useState(null) // null = loading
+  // Reply tally kept alongside the top-level list so the header count includes
+  // replies (events have no denormalized comment_count, so we sum client-side:
+  // top-level comments + this running reply delta).
+  const [replyTally, setReplyTally] = useState(0)
   const [draft, setDraft] = useState('')
   const [posting, setPosting] = useState(false)
   // Ids the viewer has reported in this session — render the Undo placeholder
@@ -82,7 +86,11 @@ export function EventComments({ eventId, organizerId }) {
     }
   }
 
-  const count = comments?.length ?? 0
+  // Total = top-level comments + their replies (from each comment's replyCount)
+  // + this session's reply add/deletes, so the header matches the backend, which
+  // counts replies as comments too.
+  const baseReplies = (comments ?? []).reduce((sum, c) => sum + (c.replyCount ?? 0), 0)
+  const count = (comments?.length ?? 0) + baseReplies + replyTally
 
   // Reply adapter for CommentReplies — bound to this event's endpoints. Delete
   // is the shared DELETE /api/comments/:id (author or organizer).
@@ -190,6 +198,7 @@ export function EventComments({ eventId, organizerId }) {
                     api={replyApi}
                     canDelete={canDeleteReply}
                     currentUserId={user?.id}
+                    onCountChange={(delta) => setReplyTally((t) => t + delta)}
                   />
                 </div>
               </li>

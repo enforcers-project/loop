@@ -30,6 +30,7 @@ import {
   renameGroup,
   sendEventShare,
   sendMessage,
+  sendPostShare,
   statusFor,
   toggleReaction,
   useThread,
@@ -201,14 +202,18 @@ function previewOf(thread) {
     return '❤️ Liked your message'
   }
   if (!last) return 'Say hi 👋'
-  // Event shares: describe the share so the row summarises the attachment
-  // instead of an empty text field. If there's a note we still show it, with
-  // the shared event title tacked on afterwards.
-  const body = last.event
-    ? last.text
-      ? `${last.text} · shared ${last.event.title}`
-      : `Shared ${last.event.title}`
-    : last.text
+  // Event / post shares: describe the share so the row summarises the
+  // attachment instead of an empty text field. If there's a note we still show
+  // it, with the shared item tacked on afterwards.
+  let body
+  if (last.event) {
+    body = last.text ? `${last.text} · shared ${last.event.title}` : `Shared ${last.event.title}`
+  } else if (last.post) {
+    const label = last.post.author?.name ? `${last.post.author.name}'s post` : 'a post'
+    body = last.text ? `${last.text} · shared ${label}` : `Shared ${label}`
+  } else {
+    body = last.text
+  }
   if (!body) return 'Say hi 👋'
   // Groups: prefix with the sender's first name so "Yeah — see you Friday"
   // reads as "Kelly: Yeah — see you Friday". DMs stay compact.
@@ -489,6 +494,18 @@ export function ThreadView({ threadId, onBack, showBack = false, compact = false
                               if (!evt?.id) return
                               navigate(evt.isSports ? `/sports/${evt.id}` : `/event/${evt.id}`)
                             }}
+                            onOpenPost={(post) => {
+                              if (!post?.id) return
+                              // Posts don't have a standalone route — take the
+                              // reader to the underlying event when we have one,
+                              // else fall back to the author's public profile so
+                              // the tap is never a no-op.
+                              if (post.eventId) {
+                                navigate(`/event/${post.eventId}`)
+                              } else if (post.author?.id) {
+                                navigate(`/organizer/${post.author.id}`)
+                              }
+                            }}
                           />
                         </TappableBubble>
                       </div>
@@ -634,14 +651,17 @@ function ReactionsBadge({ message, meId, onToggle }) {
 
 /* --------------------------------------------------------------------------
    MessageBubble — picks the right visual for one message: a text bubble, an
-   attached event mini-card, or (when both are present on a share) a mini-card
-   with the sender's note tucked below it.
+   attached event mini-card, an attached post mini-card, or (when both are
+   present on a share) a mini-card with the sender's note tucked below it.
 -------------------------------------------------------------------------- */
-function MessageBubble({ message, mine, onOpenEvent }) {
-  if (message.event) {
+function MessageBubble({ message, mine, onOpenEvent, onOpenPost }) {
+  if (message.event || message.post) {
     return (
       <div className={cn('flex flex-col gap-1', mine ? 'items-end' : 'items-start')}>
-        <SharedEventCard event={message.event} mine={mine} onOpen={onOpenEvent} />
+        {message.event && (
+          <SharedEventCard event={message.event} mine={mine} onOpen={onOpenEvent} />
+        )}
+        {message.post && <SharedPostCard post={message.post} mine={mine} onOpen={onOpenPost} />}
         {message.text && (
           <span
             className={cn(
@@ -727,6 +747,69 @@ function SharedEventCard({ event, mine, onOpen }) {
             Open
           </span>
         </div>
+      </div>
+    </button>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   SharedPostCard — Instagram-style attachment for a shared social post. Same
+   colour-by-side rule as SharedEventCard: primary tint for "me", white for
+   "them" so it still reads as owned by the sender.
+-------------------------------------------------------------------------- */
+function SharedPostCard({ post, mine, onOpen }) {
+  const author = post.author
+  const caption = post.caption || ''
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen?.(post)}
+      className={cn(
+        'group flex w-[240px] flex-col overflow-hidden rounded-2xl text-left transition-transform active:scale-[0.98]',
+        mine
+          ? 'bg-primary text-white shadow-card'
+          : 'border border-border-light bg-white text-text-primary shadow-card',
+      )}
+    >
+      {author && (
+        <div className="flex items-center gap-2 px-3 py-2">
+          {author.avatar && (
+            <img
+              src={author.avatar}
+              alt=""
+              className="h-6 w-6 flex-shrink-0 rounded-full bg-surface object-cover"
+            />
+          )}
+          <span className={cn('truncate text-xs font-semibold', mine ? 'text-white' : 'text-ink')}>
+            {author.name}
+          </span>
+        </div>
+      )}
+      {post.image && (
+        <img src={post.image} alt="" className="aspect-square w-full flex-shrink-0 object-cover" />
+      )}
+      {caption && (
+        <p
+          className={cn(
+            'line-clamp-2 px-3 py-2 text-xs',
+            mine ? 'text-white/90' : 'text-text-secondary',
+          )}
+        >
+          {caption}
+        </p>
+      )}
+      <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
+        <span className={cn('text-xs font-semibold', mine ? 'text-white' : 'text-primary')}>
+          View post
+        </span>
+        <span
+          className={cn(
+            'rounded-pill px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider',
+            mine ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary',
+          )}
+        >
+          Open
+        </span>
       </div>
     </button>
   )
@@ -1055,9 +1138,11 @@ export function NewMessagePicker({ onPick, onClose }) {
 }
 
 /* --------------------------------------------------------------------------
-   ShareEventSheet — Instagram-style "share this event to a DM/group" modal.
-   Lists the caller's existing threads at the top and a live-search field for
-   picking new people (which resolves to a fresh DM). Any number of targets
+   ShareEventSheet / SharePostSheet — Instagram-style "share this to a DM/
+   group" modal. Two thin wrappers that hand the shared item and a per-item
+   send strategy to the shared ShareTargetSheet below. The sheet lists the
+   caller's existing threads at the top and a live-search field for picking
+   new people (a fresh DM auto-materializes on send). Any number of targets
    can be selected in one shot; a single "Send" fires the share into each of
    them with an optional note attached.
 
@@ -1066,6 +1151,42 @@ export function NewMessagePicker({ onPick, onClose }) {
      - person references (search hits — a DM thread is auto-created on send)
 -------------------------------------------------------------------------- */
 export function ShareEventSheet({ event, onClose, onSent }) {
+  const preview = event
+    ? { image: event.poster || '', title: event.title || 'Event', subtitle: event.date || '' }
+    : null
+  return (
+    <ShareTargetSheet
+      title="Share event"
+      preview={preview}
+      canSend={!!event?.id}
+      onSendTo={(userId, threadId, note) => sendEventShare(userId, threadId, event, note)}
+      onClose={onClose}
+      onSent={onSent}
+    />
+  )
+}
+
+export function SharePostSheet({ post, onClose, onSent }) {
+  const preview = post
+    ? {
+        image: post.image || '',
+        title: post.organizer?.name ? `${post.organizer.name}'s post` : 'Post',
+        subtitle: post.caption || '',
+      }
+    : null
+  return (
+    <ShareTargetSheet
+      title="Share post"
+      preview={preview}
+      canSend={!!post?.id}
+      onSendTo={(userId, threadId, note) => sendPostShare(userId, threadId, post, note)}
+      onClose={onClose}
+      onSent={onSent}
+    />
+  )
+}
+
+function ShareTargetSheet({ title, preview, canSend, onSendTo, onClose, onSent }) {
   const { user } = useApp()
   const threads = useThreads(user?.id)
   const [q, setQ] = useState('')
@@ -1138,7 +1259,7 @@ export function ShareEventSheet({ event, onClose, onSent }) {
   const visibleResults = results.filter((p) => p.id !== user?.id && !existingDmPartnerIds.has(p.id))
 
   const send = async () => {
-    if (!user?.id || !event?.id || selectedList.length === 0 || sending) return
+    if (!user?.id || !canSend || selectedList.length === 0 || sending) return
     setSending(true)
     setError('')
     try {
@@ -1151,7 +1272,7 @@ export function ShareEventSheet({ event, onClose, onSent }) {
           threadId = ensureThread(user.id, target.person)
         }
         if (threadId) {
-          sendEventShare(user.id, threadId, event, note)
+          onSendTo(user.id, threadId, note)
           threadIds.push(threadId)
         }
       }
@@ -1174,13 +1295,13 @@ export function ShareEventSheet({ event, onClose, onSent }) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Share event"
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
         className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-w-md sm:rounded-card"
       >
         <div className="border-b border-border-light px-5 py-3.5">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-ink">Share event</h2>
+            <h2 className="text-base font-bold text-ink">{title}</h2>
             <button
               type="button"
               onClick={onClose}
@@ -1191,19 +1312,22 @@ export function ShareEventSheet({ event, onClose, onSent }) {
             </button>
           </div>
 
-          {/* Poster preview so the user always sees what they're forwarding. */}
-          {event && (
+          {/* Preview of what's being forwarded so the user has a persistent
+              reminder while they pick chats. */}
+          {preview && (
             <div className="mt-3 flex items-center gap-3 rounded-input border border-border-light bg-surface px-3 py-2">
-              {event.poster && (
+              {preview.image && (
                 <img
-                  src={event.poster}
+                  src={preview.image}
                   alt=""
                   className="h-10 w-10 flex-shrink-0 rounded-md object-cover"
                 />
               )}
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-ink">{event.title}</p>
-                {event.date && <p className="truncate text-xs text-text-muted">{event.date}</p>}
+                <p className="truncate text-sm font-semibold text-ink">{preview.title}</p>
+                {preview.subtitle && (
+                  <p className="truncate text-xs text-text-muted">{preview.subtitle}</p>
+                )}
               </div>
             </div>
           )}
@@ -1353,7 +1477,7 @@ export function ShareEventSheet({ event, onClose, onSent }) {
   )
 }
 
-/* Small pill dot used as the "selected" indicator on ShareEventSheet rows. */
+/* Small pill dot used as the "selected" indicator on ShareTargetSheet rows. */
 function SelectDot({ on }) {
   return (
     <span

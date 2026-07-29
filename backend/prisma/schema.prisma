@@ -978,6 +978,7 @@ model Message {
   text          String?  @db.VarChar(4000)
   flagged       Boolean  @default(false)
   attachedEvent Json?    @map("attached_event")
+  attachedPost  Json?    @map("attached_post")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   thread    MessageThread     @relation(fields: [threadId], references: [id], onDelete: Cascade)

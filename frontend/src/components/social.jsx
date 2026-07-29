@@ -20,7 +20,7 @@ import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { ImageSourcePicker, inputClass, Spinner } from './primitives'
 import { EventImage } from './EventImage'
-import { ShareEventSheet } from './messages'
+import { SharePostSheet } from './messages'
 import { CommentReplies } from './CommentReplies'
 import { HiddenPlaceholder, ReportButton } from './ReportMenu'
 
@@ -575,11 +575,10 @@ export function PostCard({ post }) {
   // "View all comments" link, closed by the backdrop or the X. Scoped to the
   // feed's PostCard; EventDetail keeps its own inline EventComments section.
   const [commentsOpen, setCommentsOpen] = useState(false)
-  // Share-to-DM sheet. A post shares the event it's about, so the sheet is only
-  // reachable when post.eventId is set. We lazily fetch the full event on open
-  // (the feed post only carries the id) and mount the sheet once it resolves.
+  // Share-to-DM sheet for the post itself. Available on every post — a shared
+  // bubble carries a slim snapshot of the post (image, caption, author) so the
+  // recipient sees what was forwarded even if the source post is later deleted.
   const [shareOpen, setShareOpen] = useState(false)
-  const [shareEvent, setShareEvent] = useState(null)
   const org = post.organizer
 
   const iconBtn =
@@ -629,20 +628,15 @@ export function PostCard({ post }) {
     }
   }
 
-  // Share = open the Instagram-style share-to-DM sheet for the post's event.
-  // Fire the share signal up-front (matches EventDetail) so organizer analytics
-  // reflect the intent even if the user cancels. The full event is fetched
-  // lazily; the sheet mounts only once it resolves.
-  const onShare = async () => {
+  // Share = open the Instagram-style share-to-DM sheet for the post itself.
+  // Fire the share signal up-front (matches EventDetail) so — when the post
+  // is tied to an event — organizer analytics still reflect the intent even
+  // if the user later cancels. Event-less posts don't get an interaction row.
+  const onShare = () => {
     if (!requireAuth()) return
-    if (!post.eventId) return
-    api.interactions([{ interaction_type: 'share', surface: 'social', event_id: post.eventId }])
-    const evt = shareEvent ?? (await api.event(post.eventId))
-    if (!evt) {
-      toast.error('Could not open share. Please try again.')
-      return
+    if (post.eventId) {
+      api.interactions([{ interaction_type: 'share', surface: 'social', event_id: post.eventId }])
     }
-    setShareEvent(evt)
     setShareOpen(true)
   }
 
@@ -758,13 +752,12 @@ export function PostCard({ post }) {
         <button onClick={() => setCommentsOpen(true)} className={iconBtn} aria-label="Comment">
           <MessageCircle size={22} className="text-ink" />
         </button>
-        {/* Share only appears for posts about an event — that's what the sheet
-            forwards into a DM. Event-less recaps have nothing to share. */}
-        {post.eventId && (
-          <button onClick={onShare} className={iconBtn} aria-label="Share">
-            <Send size={20} className="text-ink" />
-          </button>
-        )}
+        {/* Share forwards the post itself into a DM. Available on every post,
+            including event-less recaps — the recipient sees a snapshot of the
+            image, caption, and author. */}
+        <button onClick={onShare} className={iconBtn} aria-label="Share">
+          <Send size={20} className="text-ink" />
+        </button>
       </div>
 
       {/* likes + caption + comments */}
@@ -816,14 +809,10 @@ export function PostCard({ post }) {
         )}
       </AnimatePresence>
 
-      {/* Share-to-DM sheet — only mounted while open (and once the event has
-          resolved) so its useThreads subscription doesn't run per card. */}
-      {shareOpen && shareEvent && (
-        <ShareEventSheet
-          event={shareEvent}
-          onClose={() => setShareOpen(false)}
-          onSent={handleShareSent}
-        />
+      {/* Share-to-DM sheet — only mounted while open so its useThreads
+          subscription doesn't run per card. */}
+      {shareOpen && (
+        <SharePostSheet post={post} onClose={() => setShareOpen(false)} onSent={handleShareSent} />
       )}
     </article>
   )

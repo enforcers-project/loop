@@ -1,21 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { LayoutGrid, MapPin, Map as MapIcon } from 'lucide-react'
+import { LayoutGrid, Map as MapIcon } from 'lucide-react'
 import { api, nearForUser } from '../lib/api'
 import { useApp } from '../context/AppContext'
-import { CatRow, FilterBar, SearchBar } from '../components/rows'
+import { CatRow, FilterBar, SearchBar, WhenRow } from '../components/rows'
 import { EventGrid } from '../components/EventCard'
 import { EventsMap } from '../components/EventsMap'
-import { NearMeChip } from '../components/NearMeChip'
+import { NearMePopover } from '../components/NearMePopover'
 import { LoadMore, PageLoader } from '../components/primitives'
 import { cn, isEventPast, pluralize } from '../lib/utils'
 import { useEventFeed } from '../lib/useEventFeed'
 
 const EMPTY_FILTERS = {
   free: false,
-  today: false,
-  weekend: false,
   sports: false,
+  when: 'any', // date-span preset — see WHEN_OPTIONS / eventInWhen
 }
+
+// Date-span presets for the "When" filter row. Each is matched against an
+// event's isoDate by eventInWhen(); 'any' means no date constraint.
+const WHEN_OPTIONS = [
+  { key: 'any', label: 'Any time' },
+  { key: 'today', label: 'Today' },
+  { key: 'weekend', label: 'This weekend' },
+  { key: 'week', label: 'This week' },
+  { key: 'next7', label: 'Next 7 days' },
+  { key: 'month', label: 'This month' },
+]
 
 /**
  * Build editorial rails for the default browse state (no category, no
@@ -57,6 +67,49 @@ function isTodayEvent(e, now = new Date()) {
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate()
   )
+}
+
+// Start of `now`'s day (local midnight) — the lower bound for every span so a
+// past-earlier-today event isn't matched.
+function startOfDay(now = new Date()) {
+  const d = new Date(now)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+// Does an event fall within the selected date-span preset? Spans are inclusive
+// of today and bounded to the upper edge of the window ('any' → always true).
+// A missing/invalid isoDate never matches a dated span (but does match 'any').
+function eventInWhen(e, when, now = new Date()) {
+  if (when === 'any') return true
+  if (!e.isoDate) return false
+  const d = new Date(e.isoDate)
+  if (isNaN(d.getTime())) return false
+  const start = startOfDay(now)
+  if (d < start) return false // already passed earlier today / before
+
+  switch (when) {
+    case 'today':
+      return isTodayEvent(e, now)
+    case 'weekend':
+      return isWeekendEvent(e)
+    case 'week': {
+      // Through the end of the current week (Saturday night), matching the
+      // Sun–Sat week the rest of the app uses.
+      const end = new Date(start)
+      end.setDate(end.getDate() + (6 - start.getDay()) + 1) // exclusive next-Sun 00:00
+      return d < end
+    }
+    case 'next7': {
+      const end = new Date(start)
+      end.setDate(end.getDate() + 7)
+      return d < end
+    }
+    case 'month':
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+    default:
+      return true
+  }
 }
 
 function buildRails(events, now = Date.now()) {
@@ -140,10 +193,12 @@ export function Discover() {
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [view, setView] = useState('list') // 'list' | 'map'
-  // Non-null when the user picked a place from the map's search box. Takes
-  // priority over the profile's home location so "events near X" reflects the
-  // search. Null → fall back to nearForUser(user).
-  const [locationOverride, setLocationOverride] = useState(null) // { lat, lng, city }
+  // Session-only location/radius override, set via the near-me popover or the
+  // map's search box. Takes priority over the profile's saved home so "events
+  // near X" reflects the search; it's never persisted, so a reload reverts to
+  // the profile's settings. Null → fall back to nearForUser(user).
+  // Shape: { lat, lng, city, radiusKm? } — radiusKm optional (map picks omit it).
+  const [locationOverride, setLocationOverride] = useState(null)
 
   // Title search state. `nlResults` is null while a search is in flight and
   // becomes the ranked title-match array once it resolves; that flip drives the
@@ -154,8 +209,18 @@ export function Discover() {
   // rather than on every keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
-  const near = locationOverride ?? nearForUser(user)
-  const nearKey = near?.lat != null ? `${near.lat},${near.lng}` : (near?.city ?? '')
+  // Merge the override onto the profile's near settings: an override always
+  // wins on place, and its radiusKm (if set) overrides the profile radius —
+  // otherwise the profile's saved radius still applies to the searched place.
+  const profileNear = nearForUser(user)
+  const near = locationOverride
+    ? {
+        ...locationOverride,
+        radiusKm: locationOverride.radiusKm ?? profileNear?.radiusKm ?? 40,
+      }
+    : profileNear
+  const nearKey =
+    near?.lat != null ? `${near.lat},${near.lng},${near.radiusKm ?? ''}` : (near?.city ?? '')
 
   // Cursor-paginated browse feed (Load more + infinite scroll on the filtered
   // grid). `events` is null while page 1 is in flight. Keyed on the location so
@@ -172,6 +237,7 @@ export function Discover() {
   }, [query])
 
   const toggle = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }))
+  const setWhen = (when) => setFilters((f) => ({ ...f, when }))
 
   // Monotonic request id so a slow earlier search can't overwrite a newer one's
   // results (last-typed wins, regardless of which response lands first).
@@ -210,8 +276,7 @@ export function Discover() {
       if (cat !== 'All' && e.category !== cat) return false
       if (filters.free && !e.isFree) return false
       if (filters.sports && !e.isSports) return false
-      if (filters.today && !isTodayEvent(e)) return false
-      if (filters.weekend && !isWeekendEvent(e)) return false
+      if (!eventInWhen(e, filters.when)) return false
       return true
     })
   }, [events, cat, filters])
@@ -220,8 +285,7 @@ export function Discover() {
   // filter/category flips to a single filtered grid so the user sees exactly
   // what they asked for without the rails muddying the view. (Query no longer
   // counts — it drives NL search on Enter, not the local browse grid.)
-  const filtersActive =
-    cat !== 'All' || filters.free || filters.today || filters.weekend || filters.sports
+  const filtersActive = cat !== 'All' || filters.free || filters.sports || filters.when !== 'any'
 
   const rails = useMemo(
     () => (!filtersActive ? buildRails(events ?? []) : []),
@@ -276,19 +340,26 @@ export function Discover() {
       ) : (
         /* ---- Browse mode: near-me chip, filters, rails / grid / map ------ */
         <>
-          {/* "Near me" chip — surfaces the saved home + radius that's driving
-              the near-you filter, and links to Settings to change it. Hidden
-              when the user has an active locationOverride pick (the search-chip
-              below takes over the same role). */}
-          {!locationOverride && (
-            <div className="mt-3">
-              <NearMeChip />
-            </div>
-          )}
+          {/* "Near me" control — surfaces the location + radius driving the
+              near-you filter and opens an inline popover to adjust both for this
+              search only (a reload reverts to the profile's saved settings). */}
+          <div className="mt-3">
+            <NearMePopover
+              override={locationOverride}
+              onApply={setLocationOverride}
+              onReset={() => setLocationOverride(null)}
+            />
+          </div>
 
-          {/* filters — first row categories, second row quick filters */}
+          {/* filters — categories, then a date-span row, then quick filters */}
           <div className="mt-4">
             <CatRow active={cat} onChange={setCat} />
+          </div>
+          <div className="mt-3">
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-text-muted">
+              When
+            </span>
+            <WhenRow options={WHEN_OPTIONS} value={filters.when} onChange={setWhen} />
           </div>
           <div className="mt-2">
             <span className="mb-1 block text-xs font-medium uppercase tracking-wider text-text-muted">
@@ -296,20 +367,6 @@ export function Discover() {
             </span>
             <FilterBar filters={filters} onToggle={toggle} />
           </div>
-
-          {locationOverride && (
-            <div className="mt-3 flex items-center gap-2 rounded-pill border border-primary/30 bg-primary-light px-3 py-1.5 text-xs font-medium text-primary">
-              <MapPin size={12} />
-              <span>Showing events near {locationOverride.city}</span>
-              <button
-                type="button"
-                onClick={() => setLocationOverride(null)}
-                className="ml-auto font-semibold underline-offset-2 hover:underline"
-              >
-                Reset
-              </button>
-            </div>
-          )}
 
           {events === null ? (
             <PageLoader label="Loading events" />

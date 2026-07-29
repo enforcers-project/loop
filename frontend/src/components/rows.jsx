@@ -46,10 +46,11 @@ export function CatRow({ active, onChange, leading }) {
 /* --------------------------------------------------------------------------
    FilterBar — horizontal scrollable filter pills (multi-select)
 -------------------------------------------------------------------------- */
+// Boolean quick-filters. The date span moved to its own single-select WhenRow
+// (Discover owns the option list) so a user can pick a range, not just toggle
+// "today"/"weekend".
 const FILTER_DEFS = [
   { key: 'free', label: 'Free' },
-  { key: 'today', label: 'Today' },
-  { key: 'weekend', label: 'This weekend' },
   { key: 'sports', label: 'Pickup runs' },
 ]
 
@@ -64,6 +65,27 @@ export function FilterBar({ filters, onToggle }) {
           className={cn(pillBase, filters[f.key] ? pillSelected : pillFilterUnselected)}
         >
           {f.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   WhenRow — single-select date-span pills (Any time / Today / This week / …).
+   `options` is [{ key, label }]; `value` is the active key; `onChange(key)`.
+-------------------------------------------------------------------------- */
+export function WhenRow({ options, value, onChange }) {
+  return (
+    <div className="scrollbar-hide -mx-4 flex snap-x snap-proximity gap-2 overflow-x-auto px-4 py-1 md:-mx-6 md:px-6">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          aria-pressed={value === o.key}
+          className={cn(pillBase, value === o.key ? pillSelected : pillFilterUnselected)}
+        >
+          {o.label}
         </button>
       ))}
     </div>

@@ -80,6 +80,9 @@ function FollowRow({ user, following, onToggle, onNavigate }) {
 
 // How many result rows the dropdown shows before "See more" is tapped.
 const PEOPLE_PREVIEW_COUNT = 3
+// Don't search until the query is at least this long — a single letter matches
+// almost everyone and isn't a useful result set.
+const PEOPLE_MIN_QUERY = 2
 
 // Debounced people-search with an inline results dropdown. Matches surface in a
 // panel *below* the input (absolutely positioned, so the feed underneath — the
@@ -98,7 +101,8 @@ function PeopleSearch() {
   const term = query.trim()
 
   useEffect(() => {
-    if (!term) return // empty query is handled in onChange, not here
+    // Wait for a meaningful query; shorter terms are handled in onChange.
+    if (term.length < PEOPLE_MIN_QUERY) return
     let cancelled = false
     const t = setTimeout(() => {
       setLoading(true)
@@ -139,8 +143,9 @@ function PeopleSearch() {
     const next = e.target.value
     setQuery(next)
     setShowAll(false) // a new query collapses back to the preview
-    if (!next.trim()) {
-      // Clearing the box drops results immediately, without waiting on a fetch.
+    if (next.trim().length < PEOPLE_MIN_QUERY) {
+      // Below the search threshold: drop stale results immediately, without
+      // waiting on a fetch that won't fire.
       setResults(null)
       setLoading(false)
     }
@@ -152,12 +157,12 @@ function PeopleSearch() {
     setShowAll(false)
   }
 
-  const showPanel = open && term.length > 0 && results !== null
+  const showPanel = open && term.length >= PEOPLE_MIN_QUERY && results !== null
   const visible = results ? (showAll ? results : results.slice(0, PEOPLE_PREVIEW_COUNT)) : []
   const hiddenCount = results ? results.length - visible.length : 0
 
   return (
-    <div ref={wrapRef} className="relative z-30 mb-3.5">
+    <div ref={wrapRef} className="relative z-20 mb-3.5">
       <Search
         size={14}
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
@@ -190,7 +195,7 @@ function PeopleSearch() {
       )}
 
       {showPanel && (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1.5 overflow-hidden rounded-card border border-border-light bg-white py-1 shadow-hero">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1.5 overflow-hidden rounded-card border border-border-light bg-white py-1 shadow-hero">
           {results.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-text-muted">No people found</p>
           ) : (

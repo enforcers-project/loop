@@ -28,9 +28,11 @@ export function FormField({ label, children }) {
   )
 }
 
-/* Shared input styling (Figma inputSpec). */
+/* Shared input styling (Figma inputSpec). Uses `bg-card-bg` so the input reads
+   as an elevated surface in both themes — under `.dark` it becomes the raised
+   card color rather than the page background. */
 export const inputClass =
-  'loop-input w-full rounded-input border border-border-light bg-white px-4 py-3 text-sm text-text-primary placeholder:text-placeholder transition-colors'
+  'loop-input w-full rounded-input border border-border-light bg-card-bg px-4 py-3 text-sm text-text-primary placeholder:text-placeholder transition-colors'
 
 /* --------------------------------------------------------------------------
    ImageSourcePicker — a trigger button that lets the user either take a photo
@@ -166,7 +168,7 @@ function ImageSourceSheet({ onClose, onCamera, onLibrary }) {
         aria-modal="true"
         aria-label="Add a photo"
         onClick={(e) => e.stopPropagation()}
-        className="w-full overflow-hidden rounded-t-card bg-white p-2 shadow-hero sm:max-w-xs sm:rounded-card"
+        className="w-full overflow-hidden rounded-t-card bg-card-bg p-2 shadow-hero sm:max-w-xs sm:rounded-card"
       >
         <button type="button" onClick={onCamera} className={action}>
           <span className={icon}>
@@ -271,7 +273,7 @@ export function RoleSelector({ user, onSelect, busy }) {
               'flex items-start gap-3 rounded-card border px-4 py-3 text-left transition-colors disabled:opacity-60',
               active
                 ? 'border-primary bg-primary-light'
-                : 'border-border-light bg-white hover:border-text-muted',
+                : 'border-border-light bg-card-bg hover:border-text-muted',
             )}
           >
             <span
@@ -317,7 +319,7 @@ export function RSVPBtn({
           ? 'cursor-not-allowed border border-border-light bg-surface text-text-muted'
           : variant === 'filled'
             ? 'bg-accent text-white shadow-sm hover:opacity-90'
-            : 'border border-accent bg-white text-accent hover:bg-accent/5',
+            : 'border border-accent bg-card-bg text-accent hover:bg-accent/5',
       )}
     >
       {children}
@@ -369,7 +371,7 @@ export function SaveBtn({ saved, onToggle, sm = false }) {
         sm ? 'h-10 w-10' : 'h-11 w-11',
         saved
           ? 'border-primary bg-primary-light text-primary'
-          : 'border-border-light bg-white text-text-secondary hover:border-primary hover:text-primary',
+          : 'border-border-light bg-card-bg text-text-secondary hover:border-primary hover:text-primary',
       )}
     >
       {/* Icon "pops" when the event becomes saved: a quick overshoot keyed on
@@ -395,7 +397,7 @@ export function FollowBtn({ following = false, onToggle, sm = false }) {
         'inline-flex items-center justify-center overflow-hidden rounded-button font-semibold transition-colors',
         sm ? 'h-10 min-w-[84px] px-4 text-sm' : 'h-11 min-w-[100px] px-5 text-sm',
         following
-          ? 'border border-border-light bg-white text-text-secondary hover:border-text-muted'
+          ? 'border border-border-light bg-card-bg text-text-secondary hover:border-text-muted'
           : 'bg-primary text-white hover:opacity-90',
       )}
     >
@@ -555,7 +557,7 @@ export function LoadMore({ hasMore, loading, onClick, sentinelRef, label = 'Load
         type="button"
         onClick={onClick}
         disabled={loading}
-        className="inline-flex items-center gap-2 rounded-button border border-border-light bg-white px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-button border border-border-light bg-card-bg px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-50"
       >
         {loading && <Spinner size="sm" />}
         {loading ? 'Loading…' : label}
@@ -577,7 +579,7 @@ export function IconButton({ onClick, label, sm = false, children, className }) 
       onClick={onClick}
       aria-label={label}
       className={cn(
-        'grid flex-shrink-0 place-items-center rounded-full border border-border-light bg-white text-text-secondary transition-colors hover:border-primary hover:text-primary',
+        'grid flex-shrink-0 place-items-center rounded-full border border-border-light bg-card-bg text-text-secondary transition-colors hover:border-primary hover:text-primary',
         sm ? 'h-10 w-10' : 'h-11 w-11',
         className,
       )}
@@ -625,7 +627,7 @@ export function StickyRsvpBar({
         visible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0',
       )}
     >
-      <div className="flex items-center gap-3 rounded-pill border border-border-light bg-white px-3 py-2 shadow-card-hover">
+      <div className="flex items-center gap-3 rounded-pill border border-border-light bg-card-bg px-3 py-2 shadow-card-hover">
         <img
           src={poster}
           alt=""

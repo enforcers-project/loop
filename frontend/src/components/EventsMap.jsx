@@ -309,7 +309,7 @@ function MapSearchBox({ onPick }) {
       <div className="w-full max-w-md">
         <div
           className={cn(
-            'flex items-center gap-2 rounded-pill border border-border-light bg-white px-4 py-2.5 shadow-card',
+            'flex items-center gap-2 rounded-pill border border-border-light bg-card-bg px-4 py-2.5 shadow-card',
             'focus-within:border-primary',
           )}
         >
@@ -342,7 +342,7 @@ function MapSearchBox({ onPick }) {
           )}
         </div>
         {open && predictions.length > 0 && (
-          <div className="mt-2 overflow-hidden rounded-card border border-border-light bg-white shadow-card">
+          <div className="mt-2 overflow-hidden rounded-card border border-border-light bg-card-bg shadow-card">
             {predictions.map((p) => (
               <button
                 key={p.place_id}
@@ -419,7 +419,7 @@ function MapEventCard({ event, onDismiss, onOpen }) {
         type="button"
         onClick={onDismiss}
         aria-label="Close preview"
-        className="pointer-events-auto absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-ink shadow-card hover:bg-white"
+        className="pointer-events-auto absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-ink shadow-card hover:bg-card-bg"
       >
         <X size={16} />
       </button>

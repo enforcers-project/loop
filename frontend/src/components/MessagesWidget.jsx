@@ -122,10 +122,10 @@ export function MessagesWidget() {
               exit={{ opacity: 0, scale: 0.9, y: 24 }}
               transition={{ type: 'spring', stiffness: 320, damping: 28 }}
               style={{ transformOrigin: 'bottom right' }}
-              className="pointer-events-auto flex h-[min(600px,calc(100vh-6rem))] w-[min(400px,calc(100vw-24px))] flex-col overflow-hidden rounded-card border border-border-light bg-white shadow-hero"
+              className="pointer-events-auto flex h-[min(600px,calc(100vh-6rem))] w-[min(400px,calc(100vw-24px))] flex-col overflow-hidden rounded-card border border-border-light bg-card-bg shadow-hero"
             >
               {/* header */}
-              <div className="flex items-center justify-between border-b border-border-light bg-white px-3 py-2.5">
+              <div className="flex items-center justify-between border-b border-border-light bg-card-bg px-3 py-2.5">
                 <div className="flex items-center gap-2">
                   <h2 className="font-display text-base font-bold text-ink">
                     {selectedId ? '' : 'Messages'}

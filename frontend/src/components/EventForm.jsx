@@ -51,7 +51,7 @@ function RequireToggle({ on, onToggle }) {
       <span
         className={cn(
           'inline-block h-3 w-3 rounded-full border transition-colors',
-          on ? 'border-primary bg-primary' : 'border-text-muted bg-white',
+          on ? 'border-primary bg-primary' : 'border-text-muted bg-card-bg',
         )}
       />
       {on ? 'Required' : 'Recommended'}
@@ -444,7 +444,7 @@ export function EventForm({
           )}
 
           {aiOpen && (
-            <div className="mt-3 space-y-3 rounded-card border border-border-light bg-white p-4">
+            <div className="mt-3 space-y-3 rounded-card border border-border-light bg-card-bg p-4">
               <div>
                 <span className="mb-1.5 block text-[13px] font-medium text-text-secondary">
                   Describe your flyer
@@ -475,7 +475,7 @@ export function EventForm({
                         'rounded-pill border px-3 py-1.5 text-xs font-medium transition-colors',
                         aiStyle === s.key
                           ? 'border-primary bg-primary text-white'
-                          : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
+                          : 'border-border-light bg-card-bg text-text-secondary hover:border-text-muted',
                       )}
                     >
                       {s.label}
@@ -505,7 +505,7 @@ export function EventForm({
                       type="button"
                       onClick={onGenerateFlyer}
                       disabled={generateFlyer.isPending || aiCount >= MAX_FLYER_GENERATIONS}
-                      className="flex items-center gap-1.5 rounded-button border border-border-light bg-white px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex items-center gap-1.5 rounded-button border border-border-light bg-card-bg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-text-muted disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <RefreshCw size={14} /> Regenerate
                     </button>
@@ -554,7 +554,7 @@ export function EventForm({
                   'rounded-pill border px-4 py-2 text-sm font-medium transition-colors',
                   category === c
                     ? 'border-primary bg-primary text-white'
-                    : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
+                    : 'border-border-light bg-card-bg text-text-secondary hover:border-text-muted',
                 )}
                 style={
                   category === c
@@ -716,7 +716,7 @@ export function EventForm({
                   'rounded-pill border px-2.5 py-0.5 text-[11px] font-medium transition-colors',
                   descTone === t.key
                     ? 'border-primary bg-primary text-white'
-                    : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
+                    : 'border-border-light bg-card-bg text-text-secondary hover:border-text-muted',
                 )}
               >
                 {t.label}
@@ -758,7 +758,7 @@ export function EventForm({
               <span className="relative h-6 w-11 rounded-full bg-border-light transition-colors peer-checked:bg-primary">
                 <span
                   className={cn(
-                    'absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform',
+                    'absolute top-0.5 h-5 w-5 rounded-full bg-card-bg transition-transform',
                     isSports ? 'translate-x-5' : 'translate-x-0.5',
                   )}
                 />
@@ -891,13 +891,13 @@ function AutoTagPreview({ autotags }) {
           {hasVibe && (
             <span
               title={`Matched: ${autotags.vibe.matched_keywords.join(', ')}`}
-              className="inline-flex items-center gap-1 rounded-pill bg-white px-2.5 py-1 text-xs font-medium text-text-secondary ring-1 ring-inset ring-border-light"
+              className="inline-flex items-center gap-1 rounded-pill bg-card-bg px-2.5 py-1 text-xs font-medium text-text-secondary ring-1 ring-inset ring-border-light"
             >
               Vibe: {autotags.vibe.slug}
             </span>
           )}
           {hasPriceTier && (
-            <span className="inline-flex items-center gap-1 rounded-pill bg-white px-2.5 py-1 text-xs font-medium text-text-secondary ring-1 ring-inset ring-border-light">
+            <span className="inline-flex items-center gap-1 rounded-pill bg-card-bg px-2.5 py-1 text-xs font-medium text-text-secondary ring-1 ring-inset ring-border-light">
               Price: {autotags.price_tier}
             </span>
           )}

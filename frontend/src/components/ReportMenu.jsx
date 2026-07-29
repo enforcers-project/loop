@@ -89,7 +89,7 @@ export function ReportSheet({ targetType, targetId, onClose, onReported }) {
         aria-modal="true"
         aria-label={`Report this ${label}`}
         onClick={(e) => e.stopPropagation()}
-        className="w-full overflow-hidden rounded-t-card bg-white p-4 shadow-hero sm:max-w-sm sm:rounded-card"
+        className="w-full overflow-hidden rounded-t-card bg-card-bg p-4 shadow-hero sm:max-w-sm sm:rounded-card"
       >
         <div className="mb-3 flex items-center gap-2">
           <span className="grid h-9 w-9 place-items-center rounded-full bg-accent/10 text-accent">
@@ -133,7 +133,7 @@ export function ReportSheet({ targetType, targetId, onClose, onReported }) {
             maxLength={500}
             rows={3}
             placeholder="Tell us more (optional)"
-            className="mt-2 w-full resize-none rounded-input border border-border-light bg-white px-3 py-2 text-sm text-text-primary outline-none placeholder:text-placeholder focus:border-primary"
+            className="mt-2 w-full resize-none rounded-input border border-border-light bg-card-bg px-3 py-2 text-sm text-text-primary outline-none placeholder:text-placeholder focus:border-primary"
           />
         )}
 
@@ -187,7 +187,7 @@ export function HiddenPlaceholder({ variant = 'row', targetType, targetId, onRes
   if (variant === 'card') {
     return (
       <article className="flex items-center gap-3 rounded-card border border-border-light bg-surface px-4 py-6 text-sm text-text-secondary shadow-card">
-        <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-white text-text-muted">
+        <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-card-bg text-text-muted">
           <EyeOff size={16} />
         </span>
         <div className="min-w-0 flex-1">

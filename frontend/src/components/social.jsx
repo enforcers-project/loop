@@ -124,7 +124,7 @@ export function Composer({ mode = 'post', onClose, onCreated }) {
         aria-modal="true"
         aria-label={isStory ? 'Add to your story' : 'Create a post'}
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-h-[85vh] sm:max-w-md sm:rounded-card"
+        className="flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-card bg-card-bg shadow-hero sm:max-h-[85vh] sm:max-w-md sm:rounded-card"
       >
         {/* header */}
         <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">
@@ -450,7 +450,11 @@ export function StoryViewer({ groups, startIndex = 0, onClose, onViewed }) {
           {group.stories.map((s, i) => (
             <div key={s.id ?? i} className="h-0.5 flex-1 overflow-hidden rounded-full bg-white/30">
               <div
-                className={cn('h-full rounded-full bg-white', i < si && 'w-full', i > si && 'w-0')}
+                className={cn(
+                  'h-full rounded-full bg-card-bg',
+                  i < si && 'w-full',
+                  i > si && 'w-0',
+                )}
                 style={
                   i === si
                     ? {
@@ -697,7 +701,7 @@ export function PostCard({ post }) {
   }
 
   return (
-    <article className="overflow-hidden rounded-card border border-border-light bg-white shadow-card">
+    <article className="overflow-hidden rounded-card border border-border-light bg-card-bg shadow-card">
       {/* header — avatar + name link to the author's public profile */}
       <div className="flex items-center gap-3 px-4 py-3.5">
         {profileHref ? (
@@ -881,7 +885,7 @@ function CommentsModal({
         aria-modal="true"
         aria-label="Comments"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-card bg-white shadow-hero sm:max-w-md sm:rounded-card"
+        className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-card bg-card-bg shadow-hero sm:max-w-md sm:rounded-card"
       >
         {/* header */}
         <div className="flex items-center justify-between border-b border-border-light px-5 py-3.5">

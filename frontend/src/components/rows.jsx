@@ -6,7 +6,7 @@ export const pillBase =
   'flex-shrink-0 snap-start whitespace-nowrap rounded-pill px-4 py-2 text-sm font-medium transition-colors border'
 export const pillSelected = 'bg-primary text-white border-primary'
 export const pillUnselected =
-  'bg-white text-text-secondary border-border-light hover:border-text-muted'
+  'bg-card-bg text-text-secondary border-border-light hover:border-text-muted'
 /* Lighter, quieter pill used by the FilterBar so the "Refine" row reads as
    a secondary control rather than a second category strip. */
 export const pillFilterUnselected =
@@ -108,7 +108,7 @@ export function SearchBar({
 }) {
   const ph = placeholder ?? "Try 'free Afrobeats party this weekend'"
   return (
-    <div className="flex h-[52px] items-center gap-2 rounded-input border border-border-light bg-white px-4 shadow-card transition-shadow focus-within:border-primary focus-within:shadow-card-hover focus-within:ring-2 focus-within:ring-primary/15">
+    <div className="flex h-[52px] items-center gap-2 rounded-input border border-border-light bg-card-bg px-4 shadow-card transition-shadow focus-within:border-primary focus-within:shadow-card-hover focus-within:ring-2 focus-within:ring-primary/15">
       <Search size={20} className="flex-shrink-0 text-text-muted" />
       <input
         value={value}

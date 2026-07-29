@@ -186,7 +186,7 @@ function LocationEditor({ user, onSaved }) {
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-button border border-border-light bg-white px-3 text-sm font-medium text-text-secondary hover:border-text-muted"
+          className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-button border border-border-light bg-card-bg px-3 text-sm font-medium text-text-secondary hover:border-text-muted"
         >
           <Pencil size={14} />
           Edit
@@ -220,7 +220,7 @@ function LocationEditor({ user, onSaved }) {
                   'rounded-pill border px-3.5 py-1.5 text-sm font-medium transition-colors',
                   active
                     ? 'border-primary bg-primary text-white'
-                    : 'border-border-light bg-white text-text-secondary hover:border-text-muted',
+                    : 'border-border-light bg-card-bg text-text-secondary hover:border-text-muted',
                 )}
               >
                 {opt.label}
@@ -237,7 +237,7 @@ function LocationEditor({ user, onSaved }) {
           type="button"
           onClick={cancel}
           disabled={saving}
-          className="inline-flex h-10 items-center gap-1.5 rounded-button border border-border-light bg-white px-4 text-sm font-medium text-text-secondary hover:border-text-muted"
+          className="inline-flex h-10 items-center gap-1.5 rounded-button border border-border-light bg-card-bg px-4 text-sm font-medium text-text-secondary hover:border-text-muted"
         >
           <X size={14} />
           Cancel
@@ -325,7 +325,7 @@ function BirthdateEditor({ user }) {
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-button border border-border-light bg-white px-3 text-sm font-medium text-text-secondary hover:border-text-muted"
+          className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-button border border-border-light bg-card-bg px-3 text-sm font-medium text-text-secondary hover:border-text-muted"
         >
           <Pencil size={14} />
           {current ? 'Edit' : 'Add'}
@@ -343,7 +343,7 @@ function BirthdateEditor({ user }) {
         onChange={(e) => setValue(e.target.value)}
         onClick={(e) => e.currentTarget.showPicker?.()}
         aria-label="Date of birth"
-        className="loop-input w-full rounded-input border border-border-light bg-white px-4 py-3 text-sm text-text-primary"
+        className="loop-input w-full rounded-input border border-border-light bg-card-bg px-4 py-3 text-sm text-text-primary"
       />
 
       <InlineAlert message={error} className="mt-3" />
@@ -353,7 +353,7 @@ function BirthdateEditor({ user }) {
           type="button"
           onClick={cancel}
           disabled={saving}
-          className="inline-flex h-10 items-center gap-1.5 rounded-button border border-border-light bg-white px-4 text-sm font-medium text-text-secondary hover:border-text-muted"
+          className="inline-flex h-10 items-center gap-1.5 rounded-button border border-border-light bg-card-bg px-4 text-sm font-medium text-text-secondary hover:border-text-muted"
         >
           <X size={14} />
           Cancel
@@ -411,7 +411,7 @@ function Toggle({ checked, disabled, onChange, label }) {
     >
       <span
         className={cn(
-          'inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform',
+          'inline-block h-5 w-5 transform rounded-full bg-card-bg shadow transition-transform',
           checked ? 'translate-x-5' : 'translate-x-0.5',
         )}
       />
@@ -508,7 +508,7 @@ export function Settings() {
           'inline-flex h-9 items-center gap-1.5 rounded-button px-3 text-sm font-medium transition-colors',
           active
             ? 'border border-primary bg-primary-light text-primary'
-            : 'border border-border-light bg-white text-text-secondary hover:border-text-muted',
+            : 'border border-border-light bg-card-bg text-text-secondary hover:border-text-muted',
         )}
       >
         <Icon size={15} />
@@ -522,11 +522,11 @@ export function Settings() {
       <h1 className="font-display text-3xl font-bold text-ink">Settings</h1>
       <p className="mt-1 text-sm text-text-secondary">Manage your account and preferences.</p>
 
-      <section className="mt-6 overflow-hidden rounded-card border border-border-light bg-white">
+      <section className="mt-6 overflow-hidden rounded-card border border-border-light bg-card-bg">
         <Row title="Profile" description={user?.email || 'View and edit your public profile.'}>
           <button
             onClick={() => navigate('/profile')}
-            className="inline-flex h-9 items-center gap-1.5 rounded-button border border-border-light bg-white px-3 text-sm font-medium text-text-secondary hover:border-text-muted"
+            className="inline-flex h-9 items-center gap-1.5 rounded-button border border-border-light bg-card-bg px-3 text-sm font-medium text-text-secondary hover:border-text-muted"
           >
             <User size={15} />
             View profile
@@ -542,7 +542,7 @@ export function Settings() {
       </section>
 
       {user && (
-        <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-white">
+        <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-card-bg">
           <StackedRow
             title="Location"
             description="Set your address to see events near you. The radius controls how far out we search."
@@ -559,7 +559,7 @@ export function Settings() {
       )}
 
       {user && (
-        <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-white">
+        <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-card-bg">
           <StackedRow
             title="I'm here as"
             description="Switch between attending and organizing anytime. This sets the badge on your profile and unlocks event creation."
@@ -570,7 +570,7 @@ export function Settings() {
       )}
 
       {user && (
-        <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-white">
+        <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-card-bg">
           <div className="border-b border-border-light px-5 pb-2 pt-4">
             <h2 className="text-sm font-semibold text-ink">Notifications</h2>
             <p className="mt-0.5 text-xs text-text-secondary">
@@ -581,11 +581,11 @@ export function Settings() {
         </section>
       )}
 
-      <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-white">
+      <section className="mt-4 overflow-hidden rounded-card border border-border-light bg-card-bg">
         <Row title="Log out" description="Sign out of your Loop account.">
           <button
             onClick={onLogout}
-            className="inline-flex h-9 items-center gap-1.5 rounded-button border border-accent bg-white px-3 text-sm font-semibold text-accent hover:bg-accent/5"
+            className="inline-flex h-9 items-center gap-1.5 rounded-button border border-accent bg-card-bg px-3 text-sm font-semibold text-accent hover:bg-accent/5"
           >
             <LogOut size={15} />
             Log out

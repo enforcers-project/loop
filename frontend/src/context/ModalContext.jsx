@@ -85,7 +85,7 @@ export function ModalProvider({ children }) {
             aria-hidden="true"
           />
 
-          <div className="relative w-full max-w-sm rounded-card bg-white p-6 shadow-hero">
+          <div className="relative w-full max-w-sm rounded-card bg-card-bg p-6 shadow-hero">
             <button
               onClick={() => close(false)}
               aria-label="Close dialog"
@@ -102,7 +102,7 @@ export function ModalProvider({ children }) {
             <div className="mt-6 flex gap-3">
               <button
                 onClick={() => close(false)}
-                className="flex-1 rounded-button border border-border-light bg-white py-2.5 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface"
+                className="flex-1 rounded-button border border-border-light bg-card-bg py-2.5 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface"
               >
                 {dialog.cancelLabel}
               </button>

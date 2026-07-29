@@ -44,7 +44,7 @@ export function OptionCards({ options, value, onChange, disabled = false }) {
               'flex items-start gap-3 rounded-card border px-4 py-3 text-left transition-colors disabled:opacity-60',
               active
                 ? 'border-primary bg-primary-light'
-                : 'border-border-light bg-white hover:border-text-muted',
+                : 'border-border-light bg-card-bg hover:border-text-muted',
             )}
           >
             <span className="min-w-0 flex-1">
@@ -85,7 +85,7 @@ function ModalShell({ title, onClose, children, footer }) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-card bg-white shadow-hero"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-card bg-card-bg shadow-hero"
       >
         <div className="flex items-center justify-between border-b border-border-light px-5 py-4">
           <h2 className="font-display text-lg font-bold text-ink">{title}</h2>

@@ -236,7 +236,7 @@ export function PosseDetail() {
               type="button"
               onClick={onDeclineInvite}
               disabled={busy}
-              className="inline-flex h-9 items-center rounded-button border border-border-light bg-white px-4 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted disabled:opacity-50"
+              className="inline-flex h-9 items-center rounded-button border border-border-light bg-card-bg px-4 text-sm font-semibold text-text-secondary transition-colors hover:border-text-muted disabled:opacity-50"
             >
               Decline
             </button>
@@ -311,7 +311,7 @@ export function PosseDetail() {
         </aside>
 
         {/* chat — reuse the message-thread view by handing it the posse thread */}
-        <section className="flex h-[60vh] min-h-[420px] flex-col overflow-hidden rounded-card border border-border-light bg-white shadow-card lg:h-[70vh]">
+        <section className="flex h-[60vh] min-h-[420px] flex-col overflow-hidden rounded-card border border-border-light bg-card-bg shadow-card lg:h-[70vh]">
           {isMember ? (
             <ThreadView threadId={posse.thread_id} compact />
           ) : (

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
+import { useForceLight } from '../context/ThemeContext'
 import { cn } from '../lib/utils'
 import { FormField, PasswordField, InlineAlert, inputClass } from '../components/primitives'
 
@@ -55,6 +56,10 @@ function useGoogleScript(enabled) {
 }
 
 export function Auth() {
+  // Auth is a light-only surface — the Google button, role picker, and card
+  // shadow are all tuned for a bright canvas. Force light here; the app-side
+  // theme takes over post-login.
+  useForceLight()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { login, signup, loginWithGoogle } = useApp()

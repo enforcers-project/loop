@@ -11,6 +11,7 @@ import {
   animate,
 } from 'motion/react'
 import { api } from '../lib/api'
+import { useForceLight } from '../context/ThemeContext'
 import { CATEGORY_COLOR, formatCount } from '../lib/utils'
 import {
   heroStagger,
@@ -317,6 +318,10 @@ const VALUE_PROPS = [
 ]
 
 export function Landing() {
+  // Marketing surface — the hero, seam, stats and value-prop cards are all
+  // designed against a white body. Force light so a logged-out visitor arriving
+  // in system-dark still sees the intended composition.
+  useForceLight()
   const [events, setEvents] = useState(null)
   const [q, setQ] = useState('')
   const [focused, setFocused] = useState(false)

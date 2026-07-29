@@ -141,7 +141,7 @@ export function VenueAutocomplete({ value, onChange, onPick, onClear, resolved }
       </div>
 
       {open && !resolved && predictions.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-card border border-border-light bg-white shadow-card">
+        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-card border border-border-light bg-card-bg shadow-card">
           {predictions.map((p) => (
             <button
               key={p.place_id}

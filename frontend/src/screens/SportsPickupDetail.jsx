@@ -7,23 +7,19 @@ import { useToast } from '../context/ToastContext'
 import { CATEGORY_COLOR, cn } from '../lib/utils'
 import { PageLoader } from '../components/primitives'
 
-const SKILL_STYLE = {
-  Beginner: { bg: '#F0EFFE', text: '#6D5EFC' },
-  Intermediate: { bg: '#FFF3D6', text: '#B57900' },
-  Advanced: { bg: '#DFF7EC', text: '#16C784' },
+// Skill pills use a semi-transparent tint against their token color so they
+// inherit dark-mode contrast automatically. A hardcoded pastel bg + dark text
+// stays stuck-light against the dark card in dark mode.
+const SKILL_CLASSES = {
+  Beginner: 'bg-primary/15 text-primary',
+  Intermediate: 'bg-food/20 text-food',
+  Advanced: 'bg-success/15 text-success',
 }
 
 function SkillBadge({ skill }) {
-  const s = SKILL_STYLE[skill]
-  if (!s) return null
-  return (
-    <span
-      className="rounded-pill px-2 py-0.5 text-xs font-semibold"
-      style={{ backgroundColor: s.bg, color: s.text }}
-    >
-      {skill}
-    </span>
-  )
+  const cls = SKILL_CLASSES[skill]
+  if (!cls) return null
+  return <span className={cn('rounded-pill px-2 py-0.5 text-xs font-semibold', cls)}>{skill}</span>
 }
 
 // Real backend positions have a UUID id; mock seed positions don't. Key on the
@@ -86,8 +82,9 @@ export function SportsPickupDetail() {
 
   return (
     <div className="pb-24 md:pb-10">
-      {/* dark header */}
-      <div className="relative overflow-hidden bg-ink">
+      {/* dark header — literal near-black so the hero stays dark even when
+          `--color-ink` inverts under `.dark`. */}
+      <div className="relative overflow-hidden bg-[#0b0b0f]">
         <img
           src={event.poster}
           alt=""
@@ -127,7 +124,7 @@ export function SportsPickupDetail() {
             </div>
 
             {/* counter card */}
-            <div className="rounded-card bg-white p-5 shadow-hero">
+            <div className="rounded-card bg-card-bg p-5 shadow-hero">
               <div className="flex items-end justify-between">
                 <span className="font-display text-4xl font-bold text-ink">
                   {signed}
@@ -163,7 +160,7 @@ export function SportsPickupDetail() {
                           ? 'border-primary bg-primary text-white'
                           : full
                             ? 'cursor-not-allowed border-border-light bg-surface text-text-muted'
-                            : 'border-border-light bg-white text-text-primary hover:border-primary',
+                            : 'border-border-light bg-card-bg text-text-primary hover:border-primary',
                       )}
                     >
                       <span className="block font-semibold">{p.label}</span>
@@ -182,7 +179,7 @@ export function SportsPickupDetail() {
                 className={cn(
                   'mt-4 w-full rounded-button py-3 text-sm font-semibold transition-transform active:scale-95',
                   joined
-                    ? 'border border-accent bg-white text-accent'
+                    ? 'border border-accent bg-card-bg text-accent'
                     : position
                       ? 'bg-accent text-white'
                       : 'cursor-not-allowed bg-surface text-text-muted',
@@ -220,7 +217,7 @@ export function SportsPickupDetail() {
               </thead>
               <tbody className="divide-y divide-border-light">
                 {claimed.map((p, i) => (
-                  <tr key={p.id ?? i} className="bg-white">
+                  <tr key={p.id ?? i} className="bg-card-bg">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <img src={p.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
@@ -264,7 +261,7 @@ export function SportsPickupDetail() {
               {waitlist.map((p, i) => (
                 <div
                   key={p.id ?? i}
-                  className="flex items-center gap-2.5 rounded-button border border-border-light bg-white px-4 py-2.5"
+                  className="flex items-center gap-2.5 rounded-button border border-border-light bg-card-bg px-4 py-2.5"
                 >
                   <span className="w-5 text-xs font-semibold text-text-muted">#{i + 1}</span>
                   <img src={p.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />

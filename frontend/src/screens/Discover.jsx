@@ -477,7 +477,7 @@ function ViewToggle({ value, onChange }) {
     <div
       role="tablist"
       aria-label="View mode"
-      className="flex flex-shrink-0 items-center rounded-pill border border-border-light bg-white p-1"
+      className="flex flex-shrink-0 items-center rounded-pill border border-border-light bg-card-bg p-1"
     >
       {OPTS.map(({ key, label, Icon }) => {
         const active = value === key

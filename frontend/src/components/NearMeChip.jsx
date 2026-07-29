@@ -23,7 +23,7 @@ export function NearMeChip({ className = '' }) {
   return (
     <Link
       to="/settings"
-      className={`inline-flex max-w-full items-center gap-1.5 rounded-pill border border-border-light bg-white px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-primary hover:text-primary ${className}`}
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-pill border border-border-light bg-card-bg px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-primary hover:text-primary ${className}`}
       aria-label={`Near me: within ${label}. Tap to change.`}
       title="Change your location or radius"
     >

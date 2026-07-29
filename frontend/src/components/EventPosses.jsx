@@ -103,7 +103,7 @@ export function EventPosses({ eventId, eventTitle }) {
                 type="button"
                 onClick={() => onJoin(p)}
                 disabled={joiningId === p.id || p.viewer_status === 'pending'}
-                className="inline-flex h-9 items-center rounded-button border border-primary bg-white px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 disabled:opacity-50"
+                className="inline-flex h-9 items-center rounded-button border border-primary bg-card-bg px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/5 disabled:opacity-50"
               >
                 {joiningId === p.id ? '…' : ctaLabel(p)}
               </button>

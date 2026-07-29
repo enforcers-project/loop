@@ -8,7 +8,7 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { OAuth2Client } from 'google-auth-library'
 import prisma from '../lib/prisma.js'
-import { toSelfUser, toAuthUser } from './serialize.js'
+import { toSelfUser } from './serialize.js'
 import { fail, requireAuth } from './middleware.js'
 import {
   setAuthCookies,
@@ -140,7 +140,7 @@ router.post('/signup', async (req, res) => {
     const sessionId = await openSession(user.id, req)
     setAuthCookies(res, { userId: user.id, sessionId })
     return res.status(201).json({
-      data: { user: toAuthUser(user), session: { expires_at: accessExpiresAt() } },
+      data: { user: toSelfUser(user), session: { expires_at: accessExpiresAt() } },
     })
   } catch (err) {
     if (err.code === 'P2002') {
@@ -174,7 +174,7 @@ router.post('/login', async (req, res) => {
     const sessionId = await openSession(user.id, req)
     setAuthCookies(res, { userId: user.id, sessionId })
     return res.json({
-      data: { user: toAuthUser(user), session: { expires_at: accessExpiresAt() } },
+      data: { user: toSelfUser(user), session: { expires_at: accessExpiresAt() } },
     })
   } catch (err) {
     console.error('POST /api/auth/login error:', err)
@@ -307,7 +307,7 @@ router.post('/oauth/google', async (req, res) => {
     setAuthCookies(res, { userId: user.id, sessionId })
     return res.status(isNew ? 201 : 200).json({
       data: {
-        user: toAuthUser(user),
+        user: toSelfUser(user),
         session: { expires_at: accessExpiresAt() },
         is_new: isNew,
       },

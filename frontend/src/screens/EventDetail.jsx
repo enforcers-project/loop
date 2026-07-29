@@ -31,6 +31,7 @@ import { EventCard } from '../components/EventCard'
 import { AttendeeStrip } from '../components/UserSearch'
 import { EventPosses } from '../components/EventPosses'
 import { EventComments } from '../components/EventComments'
+import { EventReviews, StarRating } from '../components/EventReviews'
 import { EventMap } from '../components/EventMap'
 import { OrganizerFooterCard } from '../components/OrganizerFooterCard'
 import { ReminderPicker } from '../components/ReminderPicker'
@@ -55,6 +56,11 @@ export function EventDetail() {
   const modal = useModal()
   const [event, setEvent] = useState(null)
   const [related, setRelated] = useState([])
+  // Aggregate community rating shown in the hero. Loaded independently of the
+  // <EventReviews> block below so the hero can show it above the fold; both
+  // hit the same summary endpoint and the response is small, so the duplicate
+  // fetch is acceptable and keeps the two components decoupled.
+  const [ratingSummary, setRatingSummary] = useState(null)
   // Local "going" count so the header + GoingStack update immediately on RSVP;
   // seeded from the event's denormalized rsvp_count (see OrganizerProfile's
   // follower-count pattern).
@@ -75,6 +81,7 @@ export function EventDetail() {
       setGoingCount(e?.rsvpCount ?? 0)
     })
     api.related(id).then(setRelated)
+    api.eventReviewSummary(id).then(setRatingSummary)
     // Log the page view for organizer analytics + the ranker. Fire-and-forget;
     // uses the event id directly so we don't wait on the fetch above.
     api.interactions([{ interaction_type: 'view', surface: 'event_detail', event_id: id }])
@@ -266,6 +273,24 @@ export function EventDetail() {
                 </div>
               )}
 
+              {/* Community rating chip — rendered only when at least one
+                  attendee has left a rating. Anchors the review section below
+                  and gives the hero a signal of past-attendee sentiment. */}
+              {ratingSummary && ratingSummary.count > 0 && ratingSummary.event_avg != null && (
+                <a
+                  href="#reviews"
+                  className="mt-5 inline-flex items-center gap-2 text-sm text-white/85 hover:text-white"
+                >
+                  <StarRating value={ratingSummary.event_avg} readOnly size={16} />
+                  <span className="font-semibold text-white tabular-nums">
+                    {ratingSummary.event_avg.toFixed(1)}
+                  </span>
+                  <span className="text-white/60">
+                    · {ratingSummary.count} {ratingSummary.count === 1 ? 'review' : 'reviews'}
+                  </span>
+                </a>
+              )}
+
               {/* meta rows — trimmed to two lines (date+time / venue) plus an
                   optional age row when the event enforces it. The About section
                   no longer duplicates these, so this is now the canonical read
@@ -420,6 +445,11 @@ export function EventDetail() {
           city={event.city}
           address={event.address}
         />
+
+        {/* Community rating + reviews. Attendees who were checked in for this
+            past event can leave 1-5 stars for the event, optionally for the
+            organizer, plus a written review. Others see the aggregate + list. */}
+        <EventReviews eventId={event.id} organizerId={event.organizer?.id} />
 
         {/* Comments — real threaded comments backed by /api/events/:id/comments
             (#30). The composer, list, and author/organizer delete all live in

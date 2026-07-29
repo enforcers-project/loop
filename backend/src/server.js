@@ -24,6 +24,7 @@ import aiAutotagRouter from './ai/autotag.routes.js'
 import preferencesRouter from './preferences/routes.js'
 import socialRouter from './social/routes.js'
 import reportsRouter from './reports/routes.js'
+import reviewsRouter from './reviews/routes.js'
 import analyticsRouter from './analytics/routes.js'
 import { eventReminderRouter, userReminderRouter, reminderRouter } from './reminders/routes.js'
 import { startScheduler } from './jobs/index.js'
@@ -136,6 +137,12 @@ app.use('/api', socialRouter)
 // POST /api/reports — upsert-idempotent, hides the target from the reporter's
 // list responses (see src/reports/hidden.js).
 app.use('/api', reportsRouter)
+
+// --- Reviews (community rating + comments; attended-only) --------------------
+// Mounts /api/events/:id/reviews[...] and /api/organizers/:id/reviews[...]. A
+// review requires the caller to have been checked in as attended for a past
+// event. See src/reviews/routes.js.
+app.use('/api', reviewsRouter)
 
 // --- Auth (JWT HttpOnly cookie, Prisma-backed; §7.1) ------------------------
 // signup / login / logout / refresh / me — see src/auth/routes.js.

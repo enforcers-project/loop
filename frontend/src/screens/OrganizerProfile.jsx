@@ -7,6 +7,7 @@ import { cn, formatCount, isEventPast, pluralize } from '../lib/utils'
 import { FollowBtn, PageLoader, RoleBadge } from '../components/primitives'
 import { EventGrid } from '../components/EventCard'
 import { FollowListModal } from '../components/UserSearch'
+import { StarRating } from '../components/EventReviews'
 
 // Normalize either shape into what the screen renders: a real backend profile
 // (snake_case from GET /api/users/:id) or a mock organizer (camelCase seed).
@@ -48,6 +49,10 @@ export function OrganizerProfile() {
   // Which follow list is open in the modal: 'followers' | 'following' | null.
   // Only real backend profiles expose these lists (mock organizers have none).
   const [followList, setFollowList] = useState(null)
+  // Aggregate community rating for the organizer (avg + count across every
+  // event they've run). Loaded lazily for backend profiles only — the mock
+  // seed's `org-*` ids would 404 the endpoint.
+  const [ratingSummary, setRatingSummary] = useState(null)
 
   // Load the profile (+ the current tab's events) once per id. Real backend
   // profiles reload events on tab change (below); the mock path ignores tabs.
@@ -96,6 +101,20 @@ export function OrganizerProfile() {
       cancelled = true
     }
   }, [tab, id, org?.isBackend, attending])
+
+  // Load the aggregate community rating for this organizer, once the profile
+  // resolves. Only real backend profiles participate — mock org-* ids would
+  // 404 the endpoint. Fails soft: no summary → no stars, nothing else breaks.
+  useEffect(() => {
+    if (!id || !org?.isBackend) return
+    let cancelled = false
+    api.organizerReviewSummary(id).then((s) => {
+      if (!cancelled) setRatingSummary(s)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [id, org?.isBackend])
 
   if (!org) return <PageLoader label="Loading profile" />
   // Follow state: the shared context set is the source of truth once loaded, but
@@ -180,6 +199,45 @@ export function OrganizerProfile() {
                   {pluralize(events.length, 'event')}
                 </span>
               </div>
+              {ratingSummary && ratingSummary.combined_avg != null && (
+                <div className="mt-2 flex flex-col gap-1 text-sm text-text-secondary">
+                  {/* Headline community rating — pooled avg of every event
+                      star + every organizer star this organizer has received. */}
+                  <div className="flex items-center gap-2">
+                    <StarRating value={ratingSummary.combined_avg} readOnly size={16} />
+                    <strong className="text-ink tabular-nums">
+                      {ratingSummary.combined_avg.toFixed(1)}
+                    </strong>
+                    <span className="text-text-muted">
+                      · {ratingSummary.combined_count}{' '}
+                      {pluralize(ratingSummary.combined_count, 'rating')}
+                    </span>
+                  </div>
+                  {/* Optional breakdown — only shown once BOTH axes have data,
+                      so a new organizer with one review doesn't get a
+                      redundant sub-line. */}
+                  {ratingSummary.event_avg != null &&
+                    ratingSummary.organizer_avg != null &&
+                    ratingSummary.event_count > 0 &&
+                    ratingSummary.count > 0 && (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-text-muted">
+                        <span>
+                          Events{' '}
+                          <strong className="text-ink tabular-nums">
+                            {ratingSummary.event_avg.toFixed(1)}
+                          </strong>
+                        </span>
+                        <span>·</span>
+                        <span>
+                          Organizer{' '}
+                          <strong className="text-ink tabular-nums">
+                            {ratingSummary.organizer_avg.toFixed(1)}
+                          </strong>
+                        </span>
+                      </div>
+                    )}
+                </div>
+              )}
             </div>
           </div>
           <div className="pt-4 sm:pt-6">

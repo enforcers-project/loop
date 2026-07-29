@@ -307,6 +307,8 @@ model User {
   possesCreated        Posse[]                    @relation("PosseCreator")
   posseMemberships     PosseMember[]
   contentReports       ContentReport[]            @relation("ContentReporter")
+  eventReviews         EventReview[]              @relation("EventReviewAuthor")
+  organizerReviews     EventReview[]              @relation("EventReviewOrganizer")
 
   @@map("users")
 }
@@ -465,6 +467,7 @@ model Event {
   analyticsDaily     EventAnalyticsDaily[]
   reportedInFeedback Feedback[]                 @relation("FeedbackReportedEvent")
   posses             Posse[]
+  reviews            EventReview[]
 
   @@unique([source, externalId])
   @@index([status, startsAt])
@@ -1111,4 +1114,33 @@ model ContentReport {
   @@unique([reporterId, targetType, targetId])
   @@index([targetType, targetId, createdAt])
   @@map("content_reports")
+}
+
+// --- Reviews (community ratings) --------------------------------------------
+// A single row captures BOTH scores an attendee can leave for a single event:
+// the event's own rating and a rating for its organizer (nullable when the
+// event has an external organizer / no organizerId). One review per
+// (userId, eventId) — a user can edit but not double-rate. Eligibility (RSVP
+// with attended=true, event past) is enforced in the route, not the schema, so
+// existing engagement rows can still be checked against on the fly.
+model EventReview {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  eventId         String    @map("event_id") @db.Uuid
+  organizerId     String?   @map("organizer_id") @db.Uuid
+  eventRating     Int       @map("event_rating") @db.SmallInt
+  organizerRating Int?      @map("organizer_rating") @db.SmallInt
+  body            String?   @db.VarChar(2000)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  user      User  @relation("EventReviewAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organizer User? @relation("EventReviewOrganizer", fields: [organizerId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, eventId])
+  @@index([eventId, deletedAt])
+  @@index([organizerId, deletedAt])
+  @@map("event_reviews")
 }

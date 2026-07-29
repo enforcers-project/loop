@@ -1478,6 +1478,77 @@ export const api = {
   // both event and post comments; returns nothing (204) on success.
   deleteComment: (id) => request(`/comments/${id}`, { method: 'DELETE' }),
 
+  // --- Reviews (community rating + comments; attended-only) ------------------
+  // An event review carries an event star rating (1-5, required), an optional
+  // organizer star rating (1-5), and an optional body. A user is only allowed
+  // to review a past event they were checked in for (rsvps.attended = true).
+  //
+  // eventReviewSummary: aggregate for the event + eligibility + the caller's
+  //   current review row when signed in. Public read.
+  eventReviewSummary: (id) =>
+    get(`/events/${id}/reviews/summary`, () => ({
+      event_id: id,
+      organizer_id: null,
+      count: 0,
+      event_avg: null,
+      organizer_avg: null,
+      histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      eligibility: { eligible: false, reason: 'not_authenticated' },
+      my_review: null,
+    })),
+  // eventReviews: paginated list of reviews on an event. Public read; degrades
+  // to an empty page rather than throwing.
+  eventReviews: async (id, { cursor, limit } = {}) => {
+    const qs = new URLSearchParams()
+    if (cursor) qs.set('cursor', cursor)
+    if (limit) qs.set('limit', String(limit))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return getPage(`/events/${id}/reviews${suffix}`, () => [])
+  },
+  // Upsert (create or edit) the caller's review for an event. The response is
+  // the review row. Throws with err.code = 'NOT_ELIGIBLE' when the caller
+  // hasn't been checked in for the event, so the UI can show a targeted hint.
+  submitEventReview: (id, { eventRating, organizerRating, body }) =>
+    request(`/events/${id}/reviews`, {
+      method: 'PUT',
+      body: {
+        event_rating: eventRating,
+        ...(organizerRating != null ? { organizer_rating: organizerRating } : {}),
+        ...(body != null ? { body } : {}),
+      },
+    }),
+  // Soft-delete the caller's review. Idempotent — a repeat delete is a no-op.
+  deleteEventReview: (id) => request(`/events/${id}/reviews`, { method: 'DELETE' }),
+
+  // Aggregate rating across every event this organizer has run — powers the
+  // stars row on the OrganizerProfile header. Two averages:
+  //   event_avg     — avg of every event_rating on their events (main signal)
+  //   organizer_avg — avg of every optional organizer_rating (sparser)
+  // Public read.
+  organizerReviewSummary: (id) =>
+    get(`/organizers/${id}/reviews/summary`, () => ({
+      organizer_id: id,
+      count: 0,
+      event_count: 0,
+      combined_count: 0,
+      event_avg: null,
+      organizer_avg: null,
+      combined_avg: null,
+      event_histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      organizer_histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      combined_histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      histogram: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    })),
+  // Paginated list of every review that mentioned this organizer. Each row
+  // carries the review + the { id, title, starts_at } of the event it was on.
+  organizerReviews: async (id, { cursor, limit } = {}) => {
+    const qs = new URLSearchParams()
+    if (cursor) qs.set('cursor', cursor)
+    if (limit) qs.set('limit', String(limit))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return getPage(`/organizers/${id}/reviews${suffix}`, () => [])
+  },
+
   // Report a post / comment / story (POST /api/reports). Idempotent (upserts on
   // reporter+target). Server returns { hidden: true } and, from the next list
   // fetch onward, subtracts the target from what this user sees. `targetType`

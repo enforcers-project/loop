@@ -209,6 +209,18 @@ export function Discover() {
     [events, filtersActive],
   )
 
+  // Events already surfaced in a rail — excluded from the "All near you" grid
+  // below so the same event doesn't appear twice on the default browse view.
+  const railedIds = useMemo(() => new Set(rails.flatMap((r) => r.events.map((e) => e.id))), [rails])
+  // The full near-you catalog for the default browse view, minus what the rails
+  // already show and minus past events. This is the paginated grid that lets a
+  // user reach *all* nearby events (rails only sample the top few each), so
+  // Load more / infinite scroll fills it out beyond the first page.
+  const restNearYou = useMemo(
+    () => filtered.filter((e) => !railedIds.has(e.id)),
+    [filtered, railedIds],
+  )
+
   // Two view modes: NL-search results (a query is active) or the default browse
   // experience. The search runs live as the user types.
   const searching = debouncedQuery.length > 0
@@ -349,7 +361,27 @@ export function Discover() {
                     <EventGrid events={r.events} />
                   </section>
                 ))}
+
+                {/* All near you — the paginated catalog under the curated
+                    rails. Rails only sample the top few of each theme; this
+                    grid is how a user reaches *every* nearby event, filling out
+                    via Load more + infinite scroll. Hidden when the rails
+                    already cover everything on the current page. */}
+                {restNearYou.length > 0 && (
+                  <section>
+                    <h2 className="mb-4 mt-10 font-display text-2xl font-bold text-ink">
+                      All events near you
+                    </h2>
+                    <EventGrid events={restNearYou} />
+                  </section>
+                )}
               </div>
+              <LoadMore
+                hasMore={hasMore}
+                loading={loadingMore}
+                onClick={loadMore}
+                sentinelRef={sentinelRef}
+              />
             </>
           ) : (
             <p className="py-16 text-center text-sm text-text-muted">No events near you yet.</p>

@@ -54,6 +54,11 @@ function ageFromParts({ m, d, y }) {
     return NaN
   }
   const today = new Date()
+  // A future birthdate isn't a valid DOB — treat it as invalid (NaN) rather
+  // than letting the subtraction below yield a negative age that renders as
+  // "You're -4." in the preview chip.
+  const todayUTC = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  if (dob.getTime() > todayUTC) return NaN
   let age = today.getUTCFullYear() - year
   const monthDelta = today.getUTCMonth() - (month - 1)
   if (monthDelta < 0 || (monthDelta === 0 && today.getUTCDate() < day)) age -= 1

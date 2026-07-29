@@ -398,23 +398,30 @@ function World({
                         : `inset 0 0 0 1px ${meta.soft}`,
                     }}
                     className={cn(
-                      'relative flex aspect-square w-full items-center justify-center px-3 py-2 text-center text-[13px] font-semibold leading-tight transition-colors',
+                      'relative flex aspect-square w-full items-center justify-center overflow-hidden px-3 py-2 text-center text-[13px] font-semibold leading-tight transition-colors',
                       on ? 'text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.25)]' : 'text-ink',
                     )}
                     aria-pressed={on}
                   >
-                    <span className="relative flex flex-col items-center gap-1.5">
+                    {/* Cap the content to the blob's inner width and clamp long
+                        labels — without this a multi-word interest wraps past
+                        the round outline and collides with the neighbouring
+                        blob. `break-words` splits an over-long single word;
+                        `line-clamp-3` keeps the stack inside the square. */}
+                    <span className="relative flex max-w-full flex-col items-center gap-1.5">
                       {on && (
                         <m.span
                           initial={{ scale: 0, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-                          className="grid h-4 w-4 place-items-center rounded-full bg-white/30"
+                          className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-white/30"
                         >
                           <Check size={10} strokeWidth={3} />
                         </m.span>
                       )}
-                      <span className="px-1 leading-snug">{interest.label}</span>
+                      <span className="line-clamp-3 break-words px-1 leading-snug">
+                        {interest.label}
+                      </span>
                     </span>
                   </m.button>
                 )

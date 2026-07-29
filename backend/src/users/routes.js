@@ -107,11 +107,20 @@ router.get('/', async (req, res) => {
   try {
     // Similarity on both fields; GREATEST picks the stronger of the two so a
     // strong handle match isn't diluted by a weak name match (or vice versa).
-    // The `%` trigram operator (pg_trgm) gates candidates before ranking, so
-    // this rides the GIN index rather than scanning the table. handle is citext,
-    // so the comparison is already case-insensitive. $queryRawUnsafe with
-    // positional params matches the recommender's raw-SQL convention (social.js).
-    // $1 = query text, $2 = viewer id (nullable → the AND clause no-ops), $3 = limit.
+    // handle is citext, so the comparison is already case-insensitive.
+    // $queryRawUnsafe with positional params matches the recommender's raw-SQL
+    // convention (social.js). $1 = query text, $2 = viewer id (nullable → the
+    // AND clause no-ops), $3 = limit.
+    //
+    // Matching combines two operators, both riding the trigram GIN index:
+    //   - `%` (pg_trgm) for fuzzy/typo-tolerant matches on longer queries; and
+    //   - `ILIKE '%q%'` substring, so a SHORT prefix still matches. The `%`
+    //     operator alone requires trigram similarity ≥ pg_trgm.similarity_threshold
+    //     (0.3), which a 3-char query like "mon" against "Monika" can't clear —
+    //     so results only appeared once you'd typed nearly the whole name. The
+    //     substring clause surfaces "Monika" the moment you type "mon".
+    // Ordering puts leading-prefix matches ("mon…") first, then fuzzy similarity,
+    // then follower count, so the most-expected name leads.
     const rows = await prisma.$queryRawUnsafe(
       `SELECT id,
               GREATEST(
@@ -119,9 +128,16 @@ router.get('/', async (req, res) => {
                 similarity(coalesce(handle::text, ''), $1)
               ) AS sim
        FROM users
-       WHERE (display_name % $1 OR handle::text % $1)
+       WHERE (
+               display_name % $1 OR handle::text % $1
+               OR display_name ILIKE '%' || $1 || '%'
+               OR handle::text ILIKE '%' || $1 || '%'
+             )
          AND ($2::uuid IS NULL OR id <> $2::uuid)
-       ORDER BY sim DESC, follower_count DESC
+       ORDER BY
+         (CASE WHEN display_name ILIKE $1 || '%' OR handle::text ILIKE $1 || '%' THEN 1 ELSE 0 END) DESC,
+         sim DESC,
+         follower_count DESC
        LIMIT $3`,
       q,
       viewerId,
@@ -353,6 +369,12 @@ router.put('/:id/birthdate', requireAuth, async (req, res) => {
     return fail(res, 422, 'VALIDATION_ERROR', 'birth_date is not a real date')
   }
   const today = new Date()
+  // Reject a future birthdate outright — otherwise the age math below goes
+  // negative and trips the "must be at least 13" branch with a confusing
+  // message for what is really an impossible date.
+  if (dob.getTime() > today.getTime()) {
+    return fail(res, 422, 'VALIDATION_ERROR', 'birth_date cannot be in the future')
+  }
   let age = today.getUTCFullYear() - dob.getUTCFullYear()
   const monthDelta = today.getUTCMonth() - dob.getUTCMonth()
   if (monthDelta < 0 || (monthDelta === 0 && today.getUTCDate() < dob.getUTCDate())) {

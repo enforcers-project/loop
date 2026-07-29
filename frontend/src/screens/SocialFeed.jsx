@@ -390,6 +390,9 @@ export function SocialFeed() {
   const suggested = eventList
     .map((e) => e.organizer)
     .filter((o) => !!o)
+    // Never suggest the viewer themselves — you can't follow your own account
+    // (the backend 422s it), so a Follow button on your own row is a dead end.
+    .filter((o) => o.id !== user?.id)
     .filter((o, i, arr) => arr.findIndex((x) => x.id === o.id) === i)
     .slice(0, 4)
 

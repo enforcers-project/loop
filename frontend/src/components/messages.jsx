@@ -5,6 +5,7 @@ import {
   Calendar,
   Check,
   CheckCheck,
+  Link2,
   MapPin,
   Pencil,
   PenSquare,
@@ -1154,10 +1155,14 @@ export function ShareEventSheet({ event, onClose, onSent }) {
   const preview = event
     ? { image: event.poster || '', title: event.title || 'Event', subtitle: event.date || '' }
     : null
+  // Absolute link to the event's detail page so "Copy link" yields something
+  // shareable outside the app (matches the /event/:id route in App.jsx).
+  const shareUrl = event?.id ? `${window.location.origin}/event/${event.id}` : null
   return (
     <ShareTargetSheet
       title="Share event"
       preview={preview}
+      shareUrl={shareUrl}
       canSend={!!event?.id}
       onSendTo={(userId, threadId, note) => sendEventShare(userId, threadId, event, note)}
       onClose={onClose}
@@ -1186,13 +1191,16 @@ export function SharePostSheet({ post, onClose, onSent }) {
   )
 }
 
-function ShareTargetSheet({ title, preview, canSend, onSendTo, onClose, onSent }) {
+function ShareTargetSheet({ title, preview, shareUrl, canSend, onSendTo, onClose, onSent }) {
   const { user } = useApp()
   const threads = useThreads(user?.id)
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [note, setNote] = useState('')
+  // Flips to true for ~2s after a successful clipboard write so the "Copy link"
+  // button can confirm ("Copied!") without a separate toast.
+  const [copied, setCopied] = useState(false)
   // Selected targets keyed by a stable string so we can survive re-renders /
   // switching between "existing chat" and "new person" without collisions.
   const [selected, setSelected] = useState({})
@@ -1257,6 +1265,31 @@ function ShareTargetSheet({ title, preview, canSend, onSendTo, onClose, onSent }
     return s
   }, [threads])
   const visibleResults = results.filter((p) => p.id !== user?.id && !existingDmPartnerIds.has(p.id))
+
+  // Copy the shareable link to the clipboard. Falls back to a hidden-textarea
+  // + execCommand for older/insecure-context browsers where navigator.clipboard
+  // is unavailable, so the button never silently no-ops.
+  const copyLink = async () => {
+    if (!shareUrl) return
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl)
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = shareUrl
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Could not copy the link.')
+    }
+  }
 
   const send = async () => {
     if (!user?.id || !canSend || selectedList.length === 0 || sending) return
@@ -1330,6 +1363,26 @@ function ShareTargetSheet({ title, preview, canSend, onSendTo, onClose, onSent }
                 )}
               </div>
             </div>
+          )}
+
+          {/* Copy link — a share path that doesn't require picking a chat, so
+              the user can paste the event elsewhere (SMS, notes, another app). */}
+          {shareUrl && (
+            <button
+              type="button"
+              onClick={copyLink}
+              className="mt-3 flex w-full items-center gap-2.5 rounded-input border border-border-light bg-surface px-3 py-2.5 text-left transition-colors hover:bg-primary/5"
+            >
+              <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
+                {copied ? <Check size={16} /> : <Link2 size={16} />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-ink">
+                  {copied ? 'Link copied!' : 'Copy link'}
+                </p>
+                <p className="truncate text-xs text-text-muted">{shareUrl}</p>
+              </div>
+            </button>
           )}
 
           {/* Search field for pulling in people you don't have a chat with yet. */}

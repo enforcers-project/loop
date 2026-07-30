@@ -759,7 +759,14 @@ router.get('/events/:id/posses', requireAuth, async (req, res) => {
 
   try {
     const posses = await prisma.posse.findMany({
-      where: { eventId, visibility: { in: ['public', 'mutuals'] } },
+      // Public/mutuals posses are discoverable to eligible viewers; a private
+      // posse only appears here if the viewer has a membership on it (they were
+      // invited, requested, or joined) — otherwise it stays hidden. Fetching
+      // both lets a private invite surface its accept/decline banner right here.
+      where: {
+        eventId,
+        OR: [{ visibility: { in: ['public', 'mutuals'] } }, { members: { some: { userId: me } } }],
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         event: {
@@ -777,7 +784,8 @@ router.get('/events/:id/posses', requireAuth, async (req, res) => {
     })
 
     // Filter mutuals-visibility posses down to reciprocal follows of the creator
-    // (or ones I'm already in). Public ones always pass.
+    // (or ones I'm already in). Public ones always pass; a private posse only
+    // reached this list because I'm a member of it, so it passes on `viewer`.
     const visible = []
     for (const p of posses) {
       const viewer = viewerMembership(p, me)

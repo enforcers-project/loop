@@ -17,7 +17,7 @@
 import { Router } from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth, fail } from '../auth/middleware.js'
-import { retrieveEvents, searchEventsByTitle, serializeHits } from './retrieve.js'
+import { DISCOVER_SEARCH_LIMIT, retrieveEvents, serializeHits } from './retrieve.js'
 import { generateReply } from './chat.js'
 
 const router = Router()
@@ -54,31 +54,42 @@ function titleFromQuery(q) {
   return clean || 'New chat'
 }
 
-// POST /api/ai/search — title-only event search for the Discover search bar.
+// POST /api/ai/search — NL-aware event search for the Discover search bar.
 //
-// Case-insensitive substring match against event.title, ranked by pg_trgm
-// similarity so "fut" surfaces "Futureforce" ahead of an unrelated event that
-// only shares a common word. No LLM parse, no semantic rerank, no pills — the
-// user asked for a literal title search, and that's what this does.
+// Runs the shared retrieval pipeline (retrieve.js): LLM/regex parse into
+// {isFree, category, date} → SQL pre-filter → title-match + semantic rerank
+// (pgvector, keyword fallback). Title matches always merge in first so a
+// literal query like "futureforce" still surfaces the exact event, while
+// NL phrasing like "free afrobeats this weekend" gets the constrained set.
+//
+// `label` in the request bypasses the parse — the client sends the current
+// label back minus a dropped pill, and the server re-runs with that override
+// so removing "Free" doesn't get re-added by the LLM.
 router.post('/search', async (req, res) => {
   try {
     const q = typeof req.body?.q === 'string' ? req.body.q.trim().slice(0, MAX_QUERY_LEN) : ''
     if (!q) return fail(res, 400, 'VALIDATION_ERROR', 'q is required')
 
-    const hits = await searchEventsByTitle(q)
-    const events = serializeHits(hits)
+    const labelOverride =
+      req.body?.label && typeof req.body.label === 'object' ? req.body.label : null
+
+    const result = await retrieveEvents(q, {
+      limit: DISCOVER_SEARCH_LIMIT,
+      labelOverride,
+    })
+    const events = serializeHits(result.events)
     const reply = events.length
       ? `Found ${events.length} ${events.length === 1 ? 'event' : 'events'} that match.`
-      : 'No events match that title — try a different word.'
+      : 'No events match — try a different search.'
 
     res.json({
       data: {
         reply,
         events,
-        pills: [],
-        label: {},
-        retrieval: 'title',
-        parse: 'none',
+        pills: result.pills,
+        label: result.label,
+        retrieval: result.retrieval,
+        parse: result.parse,
       },
     })
   } catch (err) {

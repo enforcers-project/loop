@@ -36,6 +36,32 @@ const withOrganizer = (e) => ({
   organizer: MOCK_ORGANIZERS.find((o) => o.id === e.organizerId) ?? null,
 })
 
+// Offline-only NL-label parser used by nlSearch's mock fallback. Mirrors the
+// backend's controlled vocabulary (retrieve.js: isFree | category slug | date
+// token) so the fallback exercises the same pill shape the server returns.
+const MOCK_NL_CATEGORY_KEYWORDS = {
+  music: ['music', 'concert', 'gig', 'dj', 'show'],
+  nightlife: ['nightlife', 'party', 'club', 'afrobeats', 'rooftop', 'lounge'],
+  sports: ['sports', 'soccer', 'football', 'basketball', 'run', 'pickup', 'game'],
+  networking: ['networking', 'meetup', 'career', 'startup', 'mixer'],
+  food: ['food', 'brunch', 'dinner', 'tasting', 'restaurant'],
+  campus: ['campus', 'college', 'student', 'university'],
+}
+function mockParseNlLabel(lower) {
+  const label = {}
+  if (/\bfree\b/.test(lower)) label.isFree = true
+  for (const [slug, keywords] of Object.entries(MOCK_NL_CATEGORY_KEYWORDS)) {
+    if (keywords.some((kw) => lower.includes(kw))) {
+      label.category = slug
+      break
+    }
+  }
+  if (/\b(this )?weekend\b/.test(lower)) label.date = 'weekend'
+  else if (/\btonight\b/.test(lower)) label.date = 'tonight'
+  else if (/\btomorrow\b/.test(lower)) label.date = 'tomorrow'
+  return label
+}
+
 // The backend (GET /events, /events/:id, /events/:id/related, POST
 // /recommendations) serializes events in snake_case with a nested `category`
 // object, while every screen + the mock seed use a flat camelCase shape
@@ -1756,21 +1782,49 @@ export const api = {
       }
     }),
 
-  // Title-only event search for the Discover search bar (POST /api/ai/search).
-  // Case-insensitive substring match on event.title so a query like "fut" only
-  // returns events whose title literally contains those letters — no semantic
-  // fan-out, no NL parse, no pills. Offline fallback filters MOCK_EVENTS the
-  // same way so both paths behave identically. `label` is accepted for
-  // backwards compatibility with older callers but ignored.
-  nlSearch: async (q) => {
-    const res = await post('/ai/search', { q }, () => {
-      const n = String(q ?? '')
-        .trim()
-        .toLowerCase()
-      const events = n
-        ? MOCK_EVENTS.map(withOrganizer).filter((e) => e.title?.toLowerCase().includes(n))
-        : []
-      return { reply: '', events: events.slice(0, 20), pills: [], label: {} }
+  // NL-aware event search for the Discover search bar (POST /api/ai/search).
+  // Backend parses the query into {isFree, category, date} constraints, blends
+  // literal title matches with a semantic rerank, and returns removable pills.
+  // A caller that dropped a pill passes the trimmed `label` so the server
+  // skips the parse and re-runs with the exact filter set (otherwise the LLM
+  // would just re-add the pill the user meant to remove).
+  //
+  // Offline fallback mimics the same shape: recognizes "free" + category
+  // names + weekend/tonight/tomorrow tokens, filters MOCK_EVENTS accordingly,
+  // and emits matching pills so the UI still exercises the pill-drop flow.
+  nlSearch: async (q, label = null) => {
+    const body = { q }
+    if (label && typeof label === 'object') body.label = label
+    const res = await post('/ai/search', body, () => {
+      const raw = String(q ?? '').trim()
+      const lower = raw.toLowerCase()
+      const parsed = label ?? mockParseNlLabel(lower)
+      const pills = []
+      let matches = MOCK_EVENTS.map(withOrganizer)
+      if (raw) matches = matches.filter((e) => e.title?.toLowerCase().includes(lower))
+      if (parsed.isFree) {
+        matches = matches.filter((e) => e.isFree)
+        pills.push({ key: 'isFree', label: 'Free' })
+      }
+      if (parsed.category) {
+        const cat = MOCK_CATEGORIES.find((c) => c.slug === parsed.category)
+        if (cat) {
+          matches = matches.filter((e) => e.category === cat.name)
+          pills.push({ key: 'category', label: cat.name })
+        }
+      }
+      if (parsed.date) {
+        const dateLabel = { weekend: 'This weekend', tonight: 'Tonight', tomorrow: 'Tomorrow' }[
+          parsed.date
+        ]
+        if (dateLabel) pills.push({ key: 'date', label: dateLabel })
+      }
+      return {
+        reply: '',
+        events: matches.slice(0, 20),
+        pills,
+        label: parsed,
+      }
     })
     return {
       reply: res.reply ?? '',

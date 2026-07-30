@@ -765,10 +765,7 @@ router.get('/events/:id/posses', requireAuth, async (req, res) => {
       // both lets a private invite surface its accept/decline banner right here.
       where: {
         eventId,
-        OR: [
-          { visibility: { in: ['public', 'mutuals'] } },
-          { members: { some: { userId: me } } },
-        ],
+        OR: [{ visibility: { in: ['public', 'mutuals'] } }, { members: { some: { userId: me } } }],
       },
       orderBy: { createdAt: 'desc' },
       include: {

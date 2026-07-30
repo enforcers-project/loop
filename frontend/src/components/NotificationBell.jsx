@@ -93,7 +93,13 @@ export function NotificationBell() {
   const onItemClick = (n) => {
     if (!n.is_read) markRead.mutate(n.id)
     setOpen(false)
-    if (n.event_id) navigate(`/event/${n.event_id}`)
+    // Posse notifications (invite / join request / approval) carry a posse_id in
+    // metadata — deep-link to the posse so the invite banner / roster is right
+    // there. Routing to the event instead would dead-end for a *private* posse,
+    // which never surfaces on the event page. Everything else routes to its event.
+    const posseId = n.metadata?.posse_id
+    if (posseId) navigate(`/posse/${posseId}`)
+    else if (n.event_id) navigate(`/event/${n.event_id}`)
   }
 
   return (

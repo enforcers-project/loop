@@ -100,25 +100,41 @@ router.post('/signup', async (req, res) => {
   if (is_host && resolvedRole !== 'organizer') {
     return fail(res, 422, 'VALIDATION_ERROR', 'is_host is only valid for organizers')
   }
-  // Username (`handle`) is required at signup and unique across users (citext,
-  // case-insensitive). Display name is required too but NOT unique — two people
-  // can both be "Ada Lovelace"; the @-mention identity is the handle.
-  const cleanHandle = typeof handle === 'string' ? handle.trim().replace(/^@/, '') : ''
-  if (!HANDLE_RE.test(cleanHandle)) {
-    return fail(res, 422, 'VALIDATION_ERROR', 'username must be 3–30 chars (letters, numbers, _)')
+  // Identity (display_name + handle) is collected during onboarding now, not on
+  // this screen. If the client sends them anyway (legacy callers, tests) we
+  // still validate the shape; otherwise we let the row through with a
+  // temporary handle so the account can exist while onboarding runs. The
+  // onboarding "name & username" step calls PATCH /users/:id with the final
+  // values before it commits interests + navigates to /feed.
+  const providedHandle = typeof handle === 'string' && handle.trim() !== ''
+  const providedName = typeof display_name === 'string' && display_name.trim() !== ''
+  let cleanHandle = null
+  if (providedHandle) {
+    cleanHandle = handle.trim().replace(/^@/, '')
+    if (!HANDLE_RE.test(cleanHandle)) {
+      return fail(res, 422, 'VALIDATION_ERROR', 'username must be 3–30 chars (letters, numbers, _)')
+    }
   }
-  const cleanName = typeof display_name === 'string' ? display_name.trim() : ''
-  if (cleanName.length < DISPLAY_NAME_MIN || cleanName.length > DISPLAY_NAME_MAX) {
-    return fail(
-      res,
-      422,
-      'VALIDATION_ERROR',
-      `display name must be ${DISPLAY_NAME_MIN}–${DISPLAY_NAME_MAX} characters`,
-    )
+  let cleanName = null
+  if (providedName) {
+    cleanName = display_name.trim()
+    if (cleanName.length < DISPLAY_NAME_MIN || cleanName.length > DISPLAY_NAME_MAX) {
+      return fail(
+        res,
+        422,
+        'VALIDATION_ERROR',
+        `display name must be ${DISPLAY_NAME_MIN}–${DISPLAY_NAME_MAX} characters`,
+      )
+    }
   }
 
   try {
     const passwordHash = await bcrypt.hash(String(password), BCRYPT_ROUNDS)
+    // No client-supplied handle → pick a unique auto-generated one from the
+    // email local-part so the DB's unique index isn't violated. Onboarding
+    // rewrites it via PATCH /users/:id once the user picks a real one.
+    const finalHandle =
+      cleanHandle ?? (await pickUniqueHandle(prisma, stubHandle(email.split('@')[0])))
     const user = await prisma.user.create({
       data: {
         email,
@@ -126,11 +142,17 @@ router.post('/signup', async (req, res) => {
         role: resolvedRole,
         organizerKind: resolvedRole === 'organizer' ? (organizer_kind ?? null) : null,
         isHost: resolvedRole === 'organizer' ? !!is_host : false,
-        displayName: cleanName,
-        handle: cleanHandle,
-        // Start the 7-day username-change cooldown at account creation so a
-        // fresh user can't cycle usernames mid-onboarding.
-        handleChangedAt: new Date(),
+        // Display name is required to be non-null in the client's SelfUser shape
+        // (the nav pill reads it), so fall back to the email local-part when the
+        // signup step didn't collect one — the user overwrites it on the very
+        // next screen.
+        displayName: cleanName ?? email.split('@')[0],
+        handle: finalHandle,
+        // Don't stamp handle_changed_at when the handle is our auto-picked
+        // placeholder — otherwise the 7-day cooldown would block the user from
+        // setting their real username on the very next screen. We stamp it in
+        // PATCH /users/:id when the real handle lands.
+        handleChangedAt: cleanHandle ? new Date() : null,
         // Every new account starts with the shared default silhouette (on S3);
         // the user can replace it later from their profile.
         avatarUrl: DEFAULT_AVATAR_URL,
@@ -291,7 +313,11 @@ router.post('/oauth/google', async (req, res) => {
           isHost: resolvedRole === 'organizer' ? !!is_host : false,
           displayName: payload.name ?? null,
           handle,
-          handleChangedAt: new Date(),
+          // Leave handle_changed_at null: the auto-picked handle is a
+          // placeholder, so the onboarding "name & username" step should be
+          // able to overwrite it without hitting the 7-day cooldown. The PATCH
+          // route stamps the timestamp when a real handle lands.
+          handleChangedAt: null,
           // Prefer the Google profile photo; fall back to our default silhouette.
           avatarUrl: payload.picture ?? DEFAULT_AVATAR_URL,
           isVerified: true, // Google-verified email

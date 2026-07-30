@@ -750,6 +750,14 @@ export const api = {
   // (handle taken) or validation message.
   updateProfile: (userId, fields) => request(`/users/${userId}`, { method: 'PATCH', body: fields }),
 
+  // Ask the backend whether a username is available (used by the onboarding
+  // name-and-username step to live-validate as the user types). Returns
+  // { available, reason, suggestions } — `suggestions` is a short list of free
+  // handles the user can tap when their first pick is taken. Requires auth
+  // (onboarding runs after signup, so a session always exists here).
+  checkHandle: (handle) =>
+    request(`/users/handle/check?q=${encodeURIComponent(handle)}`).then((res) => res ?? null),
+
   // Change the user's self-defined role (PUT /users/:id/role). `preset` is one
   // of 'attendee' | 'organizer' | 'promoter' | 'sports_host' — the backend
   // resolves it to the valid { role, organizer_kind, is_host } triple and

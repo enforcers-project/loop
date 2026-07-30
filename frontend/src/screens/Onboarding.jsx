@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Navigation, Search } from 'lucide-react'
+import { Check, MapPin, Navigation, Search, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { useForceLight } from '../context/ThemeContext'
 import { cn } from '../lib/utils'
-import { InlineAlert } from '../components/primitives'
+import { FormField, InlineAlert, inputClass } from '../components/primitives'
 import { InterestBlobs } from '../components/InterestBlobs'
 import {
   cityFromGeocode,
@@ -32,6 +32,28 @@ const FALLBACK_CITIES = [
 // PUT /users/:id/birthdate.
 const MIN_AGE = 13
 const MAX_AGE = 120
+
+// Identity constraints — mirror the backend (auth/routes.js + users/routes.js).
+// The username (stored as `handle`) is the immutable-ID-free lookup key for
+// @-mentions; the DB references (messages, posses) still key off user.id, so
+// a later handle change won't orphan anything.
+const USERNAME_RE = /^[a-zA-Z0-9_]{3,30}$/
+const NAME_MIN = 2
+const NAME_MAX = 120
+
+// "Ada Lovelace" → "adalovelace". Lowercase, strip non-[a-z0-9_], drop leading
+// digits/underscores, cap at 30. Empty when the name has no usable chars; the
+// caller should render an empty state rather than a broken suggestion.
+function usernameFromName(name) {
+  if (!name) return ''
+  const cleaned = name
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '')
+    .slice(0, 30)
+  // Guard against a stub too short for the backend's 3-char minimum — leave
+  // empty rather than pad with junk that the user would just have to delete.
+  return cleaned.length >= 3 ? cleaned : ''
+}
 
 // Compute age (in full years) from a { m, d, y } triple. Returns NaN when any
 // piece is missing or the date doesn't exist (e.g. Feb 30). Used to gate the
@@ -74,10 +96,34 @@ export function Onboarding() {
   // theme choice takes over once they land on /feed.
   useForceLight()
   const navigate = useNavigate()
-  const { user, setInterests, saveBirthDate, saveLocation } = useApp()
+  const { user, setInterests, saveBirthDate, saveLocation, updateProfile } = useApp()
   const toast = useToast()
   const [step, setStep] = useState(1)
   const [dob, setDob] = useState({ m: '', d: '', y: '' })
+  // Name & username — pre-filled from the signed-in user's SelfUser so a Google
+  // sign-up (backend seeded displayName from the Google profile) usually only
+  // needs a confirm-tap. The stored handle at this point is an auto-picked
+  // placeholder (see auth/routes.js), so we leave the field empty and let the
+  // derive-from-name pass suggest one. Both fields lazy-init from `user`;
+  // AppContext resolves `user` before this screen mounts (auth guard), so
+  // there's no useEffect chase.
+  const [displayName, setDisplayName] = useState(() => user?.name ?? '')
+  const [username, setUsername] = useState(() => usernameFromName(user?.name))
+  // Tracks whether the user hand-edited the username field. Once true, typing
+  // in the name field stops re-deriving the handle (so we don't stomp their
+  // choice). Managed by the setUsername wrapper below.
+  const usernameEditedRef = useRef(false)
+  // Name setter that also derives a fresh username when the user hasn't
+  // touched it yet — running as part of the change handler (rather than a
+  // useEffect) avoids the cascading-render lint and keeps the two fields in
+  // step in a single React commit.
+  const updateDisplayName = (next) => {
+    setDisplayName(next)
+    if (!usernameEditedRef.current) {
+      const derived = usernameFromName(next)
+      if (derived) setUsername(derived)
+    }
+  }
   const [interests, setInterestList] = useState([])
   const [picked, setPicked] = useState(new Set())
   const [citySearch, setCitySearch] = useState('')
@@ -99,6 +145,68 @@ export function Onboarding() {
   useEffect(() => {
     api.interests().then(setInterestList)
   }, [])
+
+  // --- Live handle availability ---------------------------------------------
+  // As the user types (or the derive-from-name pass fills the field), ask the
+  // backend whether the candidate is free. The effect only runs the async
+  // fetch — the "empty" / "wrong-shape" states are derived in render below
+  // (via `handleStatus`), which keeps setState out of the effect body until a
+  // real network result lands.
+  const cleanUsername = useMemo(() => username.trim().replace(/^@/, ''), [username])
+  // Result of the last completed remote check. Never touched synchronously in
+  // an effect body — only from the async callback below.
+  const [remoteHandleResult, setRemoteHandleResult] = useState({
+    checked: '',
+    state: 'idle', // available | taken | invalid | error
+    suggestions: [],
+  })
+
+  useEffect(() => {
+    if (!cleanUsername || !USERNAME_RE.test(cleanUsername)) return undefined
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.checkHandle(cleanUsername)
+        if (cancelled) return
+        if (!res) {
+          setRemoteHandleResult({ checked: cleanUsername, state: 'error', suggestions: [] })
+          return
+        }
+        setRemoteHandleResult({
+          checked: cleanUsername,
+          state: res.available ? 'available' : res.reason === 'invalid' ? 'invalid' : 'taken',
+          suggestions: res.suggestions ?? [],
+        })
+      } catch {
+        if (!cancelled) {
+          setRemoteHandleResult({ checked: cleanUsername, state: 'error', suggestions: [] })
+        }
+      }
+    }, 350)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [cleanUsername])
+
+  // Derived status the NameStep reads. Local shape rules (empty, invalid) are
+  // computed here so a slow network response can't clobber what the user has
+  // since typed; only when the remote result matches the current field do we
+  // trust its verdict.
+  const handleStatus = useMemo(() => {
+    if (!cleanUsername) return { state: 'idle', suggestions: [], checked: '' }
+    if (!USERNAME_RE.test(cleanUsername)) {
+      return { state: 'invalid', suggestions: [], checked: cleanUsername }
+    }
+    if (remoteHandleResult.checked === cleanUsername) {
+      return {
+        state: remoteHandleResult.state,
+        suggestions: remoteHandleResult.suggestions,
+        checked: cleanUsername,
+      }
+    }
+    return { state: 'checking', suggestions: [], checked: '' }
+  }, [cleanUsername, remoteHandleResult])
 
   // Load the Places SDK once on mount. If the key is missing or the script
   // fails, the picker silently degrades to the hardcoded fallback list.
@@ -246,10 +354,59 @@ export function Onboarding() {
     ? FALLBACK_CITIES.filter((c) => c.toLowerCase().includes(citySearch.toLowerCase()))
     : []
 
-  // Step 2 (the blob picker) needs a wider canvas than the other steps so the
+  // Step 3 (the blob picker) needs a wider canvas than the other steps so the
   // interest tiles are square enough for their labels to sit inside without
-  // wrapping into three lines. Age + location keep the tighter reading width.
-  const wide = step === 2
+  // wrapping into three lines. The other steps keep the tighter reading width.
+  const wide = step === 3
+
+  // Save the name & username, then advance to interests. Uses PATCH
+  // /users/:id — same endpoint the profile edit form uses. A 409 on the handle
+  // races another sign-up snagging it in the last few hundred ms; surface as
+  // an inline error and let the user pick a suggestion or a new value.
+  const saveIdentity = async () => {
+    if (saving) return
+    setError('')
+    const cleanName = displayName.trim()
+    if (cleanName.length < NAME_MIN || cleanName.length > NAME_MAX) {
+      return setError(`Enter your name (${NAME_MIN}–${NAME_MAX} characters).`)
+    }
+    if (!USERNAME_RE.test(cleanUsername)) {
+      return setError('Username must be 3–30 characters: letters, numbers and _ only.')
+    }
+    // Trust the last availability result when it matches what's in the field;
+    // if the debounce hasn't landed yet, let the backend be the source of truth.
+    if (handleStatus.checked === cleanUsername && handleStatus.state === 'taken') {
+      return setError('That username is taken — try one of the suggestions.')
+    }
+    setSaving(true)
+    try {
+      await updateProfile({ display_name: cleanName, handle: cleanUsername })
+      setStep(3)
+    } catch (err) {
+      // Backend surfaces 409 with { field: 'handle' } when the handle races
+      // another signup; refresh the suggestions so the user can one-tap fix it.
+      if (err.status === 409) {
+        setError('That username is taken — pick another.')
+        try {
+          const res = await api.checkHandle(cleanUsername)
+          if (res && !res.available) {
+            setRemoteHandleResult({
+              checked: cleanUsername,
+              state: 'taken',
+              suggestions: res.suggestions ?? [],
+            })
+          }
+        } catch {
+          // Non-fatal — the field already shows the taken banner.
+        }
+      } else {
+        setError(err.message || 'Could not save. Please try again.')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -259,7 +416,7 @@ export function Onboarding() {
     >
       {/* progress */}
       <div className="mb-8 flex items-center gap-2">
-        {[1, 2, 3].map((s) => (
+        {[1, 2, 3, 4].map((s) => (
           <span
             key={s}
             className={cn(
@@ -287,6 +444,20 @@ export function Onboarding() {
           }}
         />
       ) : step === 2 ? (
+        <NameStep
+          displayName={displayName}
+          setDisplayName={updateDisplayName}
+          username={username}
+          setUsername={(v) => {
+            usernameEditedRef.current = true
+            setUsername(v)
+          }}
+          handleStatus={handleStatus}
+          error={error}
+          saving={saving}
+          onContinue={saveIdentity}
+        />
+      ) : step === 3 ? (
         <div className="flex flex-1 flex-col">
           <h1 className="font-display text-4xl font-bold text-ink">What are you into?</h1>
           <p className="mt-2 text-sm text-text-secondary">
@@ -300,7 +471,7 @@ export function Onboarding() {
           <div className="mt-auto pt-10">
             <button
               disabled={!canContinue}
-              onClick={() => setStep(3)}
+              onClick={() => setStep(4)}
               className={cn(
                 'w-full rounded-button py-3.5 text-sm font-semibold transition-colors',
                 canContinue
@@ -528,4 +699,165 @@ function AgeStep({ dob, setDob, error, onContinue }) {
       </div>
     </div>
   )
+}
+
+/**
+ * NameStep — display name (free-form, non-unique) + username (unique @handle).
+ * The username field live-checks against the backend and shows an inline chip
+ * (available/taken/checking); when taken, up to three free suggestions render
+ * beneath the field so the user can pick one with a single tap.
+ *
+ * Handles vs identity: the DB stores handles on users but references from
+ * messages/posses/etc. always join on user.id. So a handle change here — or
+ * later, from the profile edit form — never orphans a message or event ref.
+ */
+function NameStep({
+  displayName,
+  setDisplayName,
+  username,
+  setUsername,
+  handleStatus,
+  error,
+  saving,
+  onContinue,
+}) {
+  const cleanUsername = username.trim().replace(/^@/, '')
+  const cleanName = displayName.trim()
+  const canContinue =
+    cleanName.length >= NAME_MIN &&
+    cleanName.length <= NAME_MAX &&
+    USERNAME_RE.test(cleanUsername) &&
+    handleStatus.checked === cleanUsername &&
+    handleStatus.state === 'available' &&
+    !saving
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <h1 className="font-display text-4xl font-bold text-ink">What should we call you?</h1>
+      <p className="mt-2 text-sm text-text-secondary">
+        Your name is what friends see. Your username is your @-mention — pick something short.
+      </p>
+
+      <div className="mt-8 space-y-4">
+        <FormField label="Name">
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value.slice(0, NAME_MAX))}
+            placeholder="Ada Lovelace"
+            autoComplete="name"
+            // Slightly taller (py-4) and larger text (text-base) than the shared
+            // inputClass — this is the only screen where reading these values is
+            // the whole point, so the accessibility tradeoff wins here.
+            className={cn(inputClass, 'py-4 text-base')}
+          />
+        </FormField>
+
+        <FormField label="Username">
+          <div className="relative">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base text-text-muted">
+              @
+            </span>
+            <input
+              value={username}
+              onChange={(e) =>
+                setUsername(e.target.value.replace(/^@/, '').slice(0, 30).toLowerCase())
+              }
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="adalovelace"
+              className={cn(inputClass, 'py-4 pl-8 pr-12 text-base')}
+            />
+            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
+              <HandleStatusIcon status={handleStatus} candidate={cleanUsername} />
+            </span>
+          </div>
+          <HandleStatusText status={handleStatus} candidate={cleanUsername} />
+          {handleStatus.state === 'taken' && handleStatus.suggestions.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {handleStatus.suggestions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setUsername(s)}
+                  className="rounded-full border border-border-light bg-white px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:border-primary"
+                >
+                  @{s}
+                </button>
+              ))}
+            </div>
+          )}
+        </FormField>
+      </div>
+
+      <div className="mt-auto pt-10">
+        <InlineAlert message={error} className="mb-3" />
+        <button
+          disabled={!canContinue}
+          onClick={onContinue}
+          className={cn(
+            'w-full rounded-button py-3.5 text-sm font-semibold transition-colors',
+            canContinue
+              ? 'bg-accent text-white active:scale-95'
+              : 'cursor-not-allowed bg-surface text-text-muted',
+          )}
+        >
+          {saving ? 'Saving…' : 'Continue'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Right-side status glyph inside the username input. Only paints a definitive
+// state when the last result matches what's in the field right now — otherwise
+// a slow response could green-check a handle the user has since edited.
+function HandleStatusIcon({ status, candidate }) {
+  if (!candidate) return null
+  if (status.checked !== candidate) {
+    return <span className="h-2 w-2 rounded-full bg-border-light" aria-hidden />
+  }
+  if (status.state === 'checking') {
+    return <span className="h-2 w-2 animate-pulse rounded-full bg-primary/60" aria-hidden />
+  }
+  if (status.state === 'available') {
+    return <Check size={16} className="text-emerald-500" aria-label="Username is available" />
+  }
+  if (status.state === 'taken' || status.state === 'invalid') {
+    return <X size={16} className="text-accent" aria-label="Username is not available" />
+  }
+  return null
+}
+
+// Sub-label under the username input. Kept as a separate helper so the icon
+// stays inside the input and this line handles the wordier feedback (why a
+// handle was rejected, what the tone should be).
+function HandleStatusText({ status, candidate }) {
+  if (!candidate) {
+    return (
+      <p className="mt-2 text-sm text-text-muted">3–30 characters. Letters, numbers, and _ only.</p>
+    )
+  }
+  if (status.checked !== candidate || status.state === 'checking') {
+    return <p className="mt-2 text-sm text-text-muted">Checking availability…</p>
+  }
+  if (status.state === 'available') {
+    return <p className="mt-2 text-sm font-medium text-emerald-600">@{candidate} is available.</p>
+  }
+  if (status.state === 'invalid') {
+    return (
+      <p className="mt-2 text-sm text-accent">3–30 characters. Letters, numbers, and _ only.</p>
+    )
+  }
+  if (status.state === 'taken') {
+    return (
+      <p className="mt-2 text-sm font-medium text-accent">
+        @{candidate} is taken. Try one of these:
+      </p>
+    )
+  }
+  if (status.state === 'error') {
+    return <p className="mt-2 text-sm text-text-muted">Couldn’t check — try again in a moment.</p>
+  }
+  return null
 }

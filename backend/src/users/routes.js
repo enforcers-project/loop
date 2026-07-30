@@ -88,6 +88,62 @@ async function resolveFollowedSet(viewerId, targetIds) {
   return new Set(rows.map((r) => r.followeeId))
 }
 
+// --- GET /api/users/handle/check?q= — is a username available? -------------
+// Auth-only (onboarding + profile edit form both call it). Returns whether the
+// candidate handle is free and, when it isn't, up to three free numeric-suffix
+// suggestions. Case-insensitive (handle is citext); the caller's own current
+// handle counts as available so a user editing their profile doesn't see
+// themselves flagged as a conflict.
+router.get('/handle/check', requireAuth, async (req, res) => {
+  const raw = typeof req.query.q === 'string' ? req.query.q.trim().replace(/^@/, '') : ''
+  if (!HANDLE_RE.test(raw)) {
+    return res.json({
+      data: {
+        handle: raw,
+        available: false,
+        reason: 'invalid',
+        suggestions: [],
+      },
+    })
+  }
+
+  try {
+    // Own handle is not a conflict — a user re-typing what they already have
+    // (during a profile edit) should read as "available".
+    const clash = await prisma.user.findUnique({
+      where: { handle: raw },
+      select: { id: true },
+    })
+    if (!clash || clash.id === req.user.id) {
+      return res.json({
+        data: { handle: raw, available: true, reason: null, suggestions: [] },
+      })
+    }
+
+    // Taken: generate numeric-suffix candidates ("ada", "ada2", "ada3", …) and
+    // return the first few free ones so the client can offer them as one-tap
+    // alternatives. Trims the base so `_N` fits under the 30-char handle cap.
+    const base = raw.slice(0, 27)
+    const candidates = []
+    for (let i = 2; i < 30 && candidates.length < 8; i += 1) {
+      candidates.push(`${base}${i}`)
+    }
+    const taken = await prisma.user.findMany({
+      where: { handle: { in: candidates } },
+      select: { handle: true },
+    })
+    const takenSet = new Set(taken.map((u) => u.handle?.toLowerCase()).filter(Boolean))
+    const suggestions = candidates.filter((c) => !takenSet.has(c.toLowerCase())).slice(0, 3)
+
+    return res.json({
+      data: { handle: raw, available: false, reason: 'taken', suggestions },
+    })
+  } catch (err) {
+    console.error('GET /api/users/handle/check error:', err)
+    return fail(res, 500, 'INTERNAL', 'Could not check username')
+  }
+})
+
 // --- GET /api/users?q= — search people by name / handle ---------------------
 // Public. Trigram (pg_trgm — enabled in the schema) fuzzy match against
 // display_name and handle, so "sara" finds "Sarah" and a typo'd handle still

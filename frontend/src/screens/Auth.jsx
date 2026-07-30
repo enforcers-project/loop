@@ -12,14 +12,8 @@ const ROLES = [
   { id: 'organizer', label: 'Organizer', blurb: 'Create & manage events' },
 ]
 
-// Signup identity constraints — mirror the backend (auth/routes.js).
-//   • Username (handle) — required, 3–30 chars, letters/numbers/_ only, and
-//     unique across all users (case-insensitive). A duplicate is rejected with
-//     a 409 the form surfaces inline.
-//   • Display name — required, 2–120 chars, NOT unique (two people can share).
-const USERNAME_RE = /^[a-zA-Z0-9_]{3,30}$/
-const NAME_MIN = 2
-const NAME_MAX = 120
+// Display name + username used to live on this screen; they moved into
+// onboarding (the "name & username" step) so signup stays a two-field ask.
 
 // Google OAuth Web client id (same value the backend verifies against). It's not
 // a secret — it ships to the browser — but lives in env for parity/config. When
@@ -66,12 +60,6 @@ export function Auth() {
   const [mode, setMode] = useState(params.get('mode') === 'login' ? 'login' : 'signup')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
-  // Username — required at signup, must match /^[a-zA-Z0-9_]{3,30}$/ (mirrors
-  // the backend). The leading @ is stripped before we send, so the user can
-  // type "ada" or "@ada" and either works. Sent as `handle` to the API — the
-  // column name stayed put; only the user-facing label changed.
-  const [username, setUsername] = useState('')
   const [role, setRole] = useState('attendee')
   const [submitting, setSubmitting] = useState(false)
   // Inline error shown right above the submit button (instead of a bottom-of-
@@ -141,22 +129,10 @@ export function Auth() {
     if (submitting) return
     setError('')
     // Client-side guard mirrors the backend contract (email + 8-char password).
+    // Display name + username are collected during onboarding now, so we don't
+    // validate them here.
     if (!email.trim()) return setError('Enter your email.')
     if (password.length < 8) return setError('Password must be at least 8 characters.')
-    // Signup requires a display name AND a unique username (the @-mention).
-    // The username has a 7-day change cooldown once accepted; the display name
-    // can be updated freely and doesn't have to be unique. Catch obvious shape
-    // errors here rather than round-tripping to the backend for the 422.
-    const cleanName = name.trim()
-    const cleanUsername = username.trim().replace(/^@/, '')
-    if (mode === 'signup') {
-      if (cleanName.length < NAME_MIN || cleanName.length > NAME_MAX) {
-        return setError(`Enter your display name (${NAME_MIN}–${NAME_MAX} characters).`)
-      }
-      if (!USERNAME_RE.test(cleanUsername)) {
-        return setError('Username must be 3–30 characters: letters, numbers and _ only.')
-      }
-    }
 
     // A gated redirect (ProtectedRoute / authGate) parks the intended path in
     // ?next=; return there after login, else the sensible default per mode.
@@ -168,9 +144,6 @@ export function Auth() {
           email: email.trim(),
           password,
           role,
-          display_name: cleanName,
-          // API column is still `handle` — only the label the user sees changed.
-          handle: cleanUsername,
           organizer_kind: role === 'organizer' ? 'organizer' : undefined,
           is_host: wantsHost,
         })
@@ -218,33 +191,6 @@ export function Auth() {
 
           {/* form */}
           <div className="space-y-4">
-            {mode === 'signup' && (
-              <>
-                <FormField label="Display name">
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value.slice(0, NAME_MAX))}
-                    placeholder="Ada Lovelace"
-                    className={inputClass}
-                  />
-                </FormField>
-                <FormField label="Username">
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-text-muted">
-                      @
-                    </span>
-                    <input
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value.replace(/^@/, '').slice(0, 30))}
-                      onKeyDown={(e) => e.key === 'Enter' && submit()}
-                      autoComplete="off"
-                      placeholder="ada"
-                      className={cn(inputClass, 'pl-7')}
-                    />
-                  </div>
-                </FormField>
-              </>
-            )}
             <FormField label="Email">
               <input
                 value={email}

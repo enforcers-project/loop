@@ -366,7 +366,9 @@ export function Discover() {
                     aria-label={`Remove ${p.label} filter`}
                   >
                     {p.label}
-                    <span aria-hidden className="text-white/80">×</span>
+                    <span aria-hidden className="text-white/80">
+                      ×
+                    </span>
                   </button>
                 ))}
               </div>

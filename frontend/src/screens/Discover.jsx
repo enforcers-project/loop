@@ -200,10 +200,15 @@ export function Discover() {
   // Shape: { lat, lng, city, radiusKm? } — radiusKm optional (map picks omit it).
   const [locationOverride, setLocationOverride] = useState(null)
 
-  // Title search state. `nlResults` is null while a search is in flight and
-  // becomes the ranked title-match array once it resolves; that flip drives the
-  // search-mode UI (browse hidden, results shown).
+  // NL search state. `nlResults` is null while a search is in flight and
+  // becomes the ranked hit array once it resolves; that flip drives the
+  // search-mode UI (browse hidden, results shown). `nlLabel` is the parsed
+  // constraint set the backend applied ({isFree, category, date}); dropping a
+  // pill removes a key and re-runs the search with the trimmed label as an
+  // override so the LLM doesn't just re-add it.
   const [nlResults, setNlResults] = useState(null)
+  const [nlPills, setNlPills] = useState([])
+  const [nlLabel, setNlLabel] = useState(null)
 
   // Debounce the raw query (350ms) so the search fires once typing settles
   // rather than on every keystroke.
@@ -251,22 +256,45 @@ export function Discover() {
   if (searchedFor !== debouncedQuery) {
     setSearchedFor(debouncedQuery)
     setNlResults(null)
+    setNlPills([])
+    setNlLabel(null)
   }
 
-  // Fire the title search automatically whenever the debounced query changes.
-  useEffect(() => {
-    if (!debouncedQuery) return
+  // Fire the NL search automatically whenever the debounced query changes.
+  // `labelOverride` is passed only when the user explicitly dropped a pill —
+  // otherwise we let the server parse fresh.
+  const runNlSearch = (q, labelOverride) => {
     const seq = ++searchSeq.current
     api
-      .nlSearch(debouncedQuery)
+      .nlSearch(q, labelOverride ?? null)
       .then((res) => {
-        if (seq !== searchSeq.current) return // a newer search superseded this one
+        if (seq !== searchSeq.current) return
         setNlResults(res.events)
+        setNlPills(res.pills ?? [])
+        setNlLabel(res.label ?? {})
       })
       .catch(() => {
-        if (seq === searchSeq.current) setNlResults([]) // surface the empty state
+        if (seq === searchSeq.current) {
+          setNlResults([])
+          setNlPills([])
+          setNlLabel(null)
+        }
       })
+  }
+
+  useEffect(() => {
+    if (!debouncedQuery) return
+    runNlSearch(debouncedQuery)
   }, [debouncedQuery])
+
+  const dropPill = (key) => {
+    const next = { ...(nlLabel ?? {}) }
+    delete next[key]
+    setNlPills((pills) => pills.filter((p) => p.key !== key))
+    setNlLabel(next)
+    setNlResults(null)
+    runNlSearch(debouncedQuery, next)
+  }
 
   // Local browse filtering (only used when NOT in NL-search mode). NL results
   // are already ranked + constrained server-side, so we render them as-is.
@@ -317,14 +345,32 @@ export function Discover() {
 
   return (
     <div className="loop-container pb-24 pt-4 md:pb-12">
-      <SearchBar value={query} onChange={setQuery} placeholder="Search events by title" />
+      <SearchBar value={query} onChange={setQuery} />
 
       {searching ? (
-        /* ---- Title-search mode: results run live as you type. ------------ */
+        /* ---- NL-search mode: results run live as you type. --------------- */
         nlResults === null ? (
           <PageLoader label="Searching" />
         ) : (
           <>
+            {nlPills.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium uppercase tracking-wider text-text-muted">
+                  Filters
+                </span>
+                {nlPills.map((p) => (
+                  <button
+                    key={p.key}
+                    onClick={() => dropPill(p.key)}
+                    className="inline-flex items-center gap-1.5 rounded-pill border border-primary bg-primary px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-primary/90"
+                    aria-label={`Remove ${p.label} filter`}
+                  >
+                    {p.label}
+                    <span aria-hidden className="text-white/80">×</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <h1 className="mb-5 mt-6 font-display text-[28px] font-bold leading-tight text-ink md:text-3xl">
               {searchHeading}
             </h1>
@@ -332,7 +378,7 @@ export function Discover() {
               <EventGrid events={nlResults} />
             ) : (
               <p className="py-16 text-center text-sm text-text-muted">
-                No events match that title. Try a different word.
+                No events match. Try a different search.
               </p>
             )}
           </>

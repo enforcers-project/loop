@@ -10,6 +10,7 @@ import { toEventCard } from '../events/serialize.js'
 
 const TOP_K = 5
 const PRE_FILTER_LIMIT = 200
+export const DISCOVER_SEARCH_LIMIT = 20
 
 const EVENT_INCLUDE = {
   category: true,
@@ -228,7 +229,7 @@ async function candidateEvents(filters) {
   })
 }
 
-async function knnRerank(queryVector, candidates) {
+async function knnRerank(queryVector, candidates, limit = TOP_K) {
   if (!candidates.length) return []
   const ids = candidates.map((c) => c.id)
   const rows = await prisma.$queryRawUnsafe(
@@ -239,26 +240,26 @@ async function knnRerank(queryVector, candidates) {
      LIMIT $3`,
     queryVector,
     ids,
-    TOP_K,
+    limit,
   )
   const distMap = new Map(rows.map((r) => [r.event_id, Number(r.cos_dist)]))
   return candidates
     .map((ev) => ({ ev, dist: distMap.get(ev.id) ?? Number.POSITIVE_INFINITY }))
     .sort((a, b) => a.dist - b.dist)
     .filter((r) => r.dist !== Number.POSITIVE_INFINITY)
-    .slice(0, TOP_K)
+    .slice(0, limit)
     .map((r) => r.ev)
 }
 
 // Keyword scoring fallback for when embedding keys aren't set or pgvector
 // returns nothing (e.g. no events embedded yet). Ranks by simple token overlap
 // with title/description/tags/city so the drawer still surfaces relevant events.
-function keywordRerank(rawQuery, candidates) {
+function keywordRerank(rawQuery, candidates, limit = TOP_K) {
   const tokens = String(rawQuery ?? '')
     .toLowerCase()
     .split(/\W+/)
     .filter((t) => t.length > 2)
-  if (!tokens.length) return candidates.slice(0, TOP_K)
+  if (!tokens.length) return candidates.slice(0, limit)
   const scored = candidates.map((ev) => {
     const haystack = [ev.title, ev.description ?? '', ev.city ?? '', ev.venueName ?? '']
       .join(' ')
@@ -269,7 +270,7 @@ function keywordRerank(rawQuery, candidates) {
   scored.sort((a, b) => b.score - a.score)
   return scored
     .filter((r) => r.score > 0)
-    .slice(0, TOP_K)
+    .slice(0, limit)
     .map((r) => r.ev)
 }
 
@@ -303,6 +304,7 @@ export async function parseQuery(rawQuery, labelOverride = null) {
  * (pill-removal re-runs).
  */
 export async function retrieveEvents(rawQuery, opts = {}) {
+  const limit = Math.max(1, Math.min(50, opts.limit ?? TOP_K))
   const { label, parse } = await parseQuery(rawQuery, opts.labelOverride)
   const filters = resolveFilters(label)
   const pills = filtersToPills(filters)
@@ -315,7 +317,7 @@ export async function retrieveEvents(rawQuery, opts = {}) {
   // match — with only date + isFree constraints applied — guarantees a
   // word-for-word title search surfaces the event regardless of parser
   // guesses or embedding state.
-  const titleMatches = await titleMatchEvents(rawQuery, filters)
+  const titleMatches = await titleMatchEvents(rawQuery, filters, limit)
 
   if (!candidates.length && !titleMatches.length) {
     return { events: [], filters, label, pills, queryVector: null, retrieval: 'empty', parse }
@@ -327,12 +329,12 @@ export async function retrieveEvents(rawQuery, opts = {}) {
     try {
       const vec = await generateEmbedding(rawQuery)
       queryVector = `[${vec.join(',')}]`
-      const knn = await knnRerank(queryVector, candidates)
+      const knn = await knnRerank(queryVector, candidates, limit)
       // Title matches go first so an exact-title hit beats a merely semantically-
       // similar event — including on un-embedded events (pgvector's LIMIT drops
       // rows without an embedding row, so a just-published event would otherwise
       // never appear until the every-5-min embed cron runs over it).
-      events = mergePreserveOrder(titleMatches, knn, TOP_K)
+      events = mergePreserveOrder(titleMatches, knn, limit)
       if (events.length) {
         return { events, filters, label, pills, queryVector, retrieval: 'pgvector', parse }
       }
@@ -343,9 +345,9 @@ export async function retrieveEvents(rawQuery, opts = {}) {
 
   // No embeddings (or the KNN turned up nothing): blend title matches with a
   // keyword rerank over whatever candidates the parser gave us.
-  const keyword = keywordRerank(rawQuery, candidates)
-  events = mergePreserveOrder(titleMatches, keyword, TOP_K)
-  if (!events.length) events = candidates.slice(0, TOP_K)
+  const keyword = keywordRerank(rawQuery, candidates, limit)
+  events = mergePreserveOrder(titleMatches, keyword, limit)
+  if (!events.length) events = candidates.slice(0, limit)
   return {
     events,
     filters,
@@ -363,7 +365,7 @@ export async function retrieveEvents(rawQuery, opts = {}) {
 // nightlife event even when the parser incorrectly classified the query as
 // music. Uses Postgres' full-text search index on `search_document` for the
 // title/description match; caller merges results with the semantic rerank.
-async function titleMatchEvents(rawQuery, filters) {
+async function titleMatchEvents(rawQuery, filters, limit = TOP_K) {
   const tokens = String(rawQuery ?? '')
     .toLowerCase()
     .split(/\W+/)
@@ -391,7 +393,7 @@ async function titleMatchEvents(rawQuery, filters) {
   if (filters.isFree) {
     clauses.push(`is_free = true`)
   }
-  params.push(TOP_K)
+  params.push(limit)
   const limitIdx = params.length
 
   const rows = await prisma.$queryRawUnsafe(
@@ -432,45 +434,6 @@ function mergePreserveOrder(primary, secondary, limit) {
     if (out.length >= limit) return out
   }
   return out
-}
-
-/**
- * Title-only event search for the Discover search bar. Case-insensitive
- * substring match on event.title, restricted to published + future events, and
- * ranked by pg_trgm similarity so "fut" surfaces "Futureforce" before an
- * unrelated event. Returns up to TITLE_SEARCH_LIMIT full Prisma rows (with the
- * usual EVENT_INCLUDE relations) so serializeHits can render EventCards.
- *
- * Substring semantics come from ILIKE — trigram similarity is only the
- * tiebreaker, so a query like "fut" never returns a title that doesn't
- * literally contain those letters.
- */
-const TITLE_SEARCH_LIMIT = 20
-
-export async function searchEventsByTitle(rawQuery) {
-  const q = String(rawQuery ?? '').trim()
-  if (!q) return []
-  const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
-  const rows = await prisma.$queryRawUnsafe(
-    `SELECT id
-       FROM events
-      WHERE status = 'published'
-        AND starts_at >= NOW()
-        AND title ILIKE $1
-      ORDER BY similarity(title, $2) DESC, starts_at ASC
-      LIMIT $3`,
-    like,
-    q,
-    TITLE_SEARCH_LIMIT,
-  )
-  if (!rows.length) return []
-  const ids = rows.map((r) => r.id)
-  const events = await prisma.event.findMany({
-    where: { id: { in: ids } },
-    include: EVENT_INCLUDE,
-  })
-  const order = new Map(ids.map((id, i) => [id, i]))
-  return events.sort((a, b) => order.get(a.id) - order.get(b.id))
 }
 
 /** Serialize a Prisma event row for the drawer response (EventCard shape). */

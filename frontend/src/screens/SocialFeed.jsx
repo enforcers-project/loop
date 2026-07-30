@@ -44,8 +44,9 @@ function SidebarCard({ title, children }) {
 // tapped, letting the search dropdown close itself. `user.handle` here is the
 // bare stored value (no leading '@') — the row renders one, falling back to
 // the display name for legacy accounts that never set a handle.
-function FollowRow({ user, following, onToggle, onNavigate }) {
-  const primary = user.handle ? `@${user.handle}` : user.name
+function FollowRow({ user, following, onToggle, onNavigate, bareHandle }) {
+  const bare = user.handle ? user.handle.replace(/^@+/, '') : ''
+  const primary = user.handle ? (bareHandle ? bare : `@${bare}`) : user.name
   return (
     <div className="flex items-center gap-3">
       <Link
@@ -469,6 +470,7 @@ export function SocialFeed() {
                     user={o}
                     following={followingIds.has(o.id)}
                     onToggle={() => toggleFollow(o.id)}
+                    bareHandle
                   />
                 ))}
               </div>

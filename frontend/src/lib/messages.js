@@ -963,15 +963,22 @@ async function doSend(thread, message, payload, opts = {}) {
     sendErr = err
   }
   if (!res) {
-    message.status = 'failed'
+    // Profanity blocks (and the rate-limit escalation for repeat offenders)
+    // are refused by the server — the message never reaches the recipient.
+    // Drop the optimistic bubble entirely so the sender doesn't see it linger
+    // as a retryable "failed" bubble, and surface a toast so they know why.
+    const filterBlocked =
+      sendErr && (sendErr.code === 'PROFANITY_BLOCKED' || sendErr.code === 'RATE_LIMITED')
+    if (filterBlocked) {
+      const idx = thread.messages.findIndex((m) => m.clientId === message.clientId)
+      if (idx >= 0) {
+        thread.messages = [...thread.messages.slice(0, idx), ...thread.messages.slice(idx + 1)]
+      }
+    } else {
+      message.status = 'failed'
+    }
     emit()
-    // Filter blocks (and their rate-limit escalation) need a user-visible
-    // toast — the "failed" tail alone would give the sender no idea why.
-    if (
-      sendErr &&
-      (sendErr.code === 'PROFANITY_BLOCKED' || sendErr.code === 'RATE_LIMITED') &&
-      typeof opts.onError === 'function'
-    ) {
+    if (filterBlocked && typeof opts.onError === 'function') {
       try {
         opts.onError(sendErr)
       } catch {

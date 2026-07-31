@@ -6,6 +6,20 @@ import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { api } from '../lib/api'
 
+// Presentation defaults so the demo doesn't stall typing on stage. Merged with
+// EMPTY_DRAFT inside EventForm — only the create screen seeds them; EditEvent
+// keeps hydrating from the live event.
+const PRESENTATION_DRAFT = {
+  title: 'FTL Day Party',
+  category: 'Networking',
+  date: '2026-08-06',
+  time: '18:00',
+  price: '0',
+  capacity: '1000',
+  age: '20',
+  description: 'Ftl Day Party Networking Event',
+}
+
 export function CreateEvent() {
   // Posting a pickup run requires the host sub-capability (organizer + is_host).
   // Non-hosts can create ordinary events but never see the Sports toggle.
@@ -36,6 +50,7 @@ export function CreateEvent() {
       <EventForm
         mode="create"
         isHost={isHost}
+        initialValues={PRESENTATION_DRAFT}
         submitPending={publish.isPending}
         submitError={error}
         onSubmit={(draft) => {

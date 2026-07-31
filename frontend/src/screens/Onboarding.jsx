@@ -99,7 +99,8 @@ export function Onboarding() {
   const { user, setInterests, saveBirthDate, saveLocation, updateProfile } = useApp()
   const toast = useToast()
   const [step, setStep] = useState(1)
-  const [dob, setDob] = useState({ m: '', d: '', y: '' })
+  // Presentation defaults — DOB 03/03/2000 so we don't type it live on stage.
+  const [dob, setDob] = useState({ m: '03', d: '03', y: '2000' })
   // Name & username — pre-filled from the signed-in user's SelfUser so a Google
   // sign-up (backend seeded displayName from the Google profile) usually only
   // needs a confirm-tap. The stored handle at this point is an auto-picked
@@ -107,8 +108,10 @@ export function Onboarding() {
   // derive-from-name pass suggest one. Both fields lazy-init from `user`;
   // AppContext resolves `user` before this screen mounts (auth guard), so
   // there's no useEffect chase.
-  const [displayName, setDisplayName] = useState(() => user?.name ?? '')
-  const [username, setUsername] = useState(() => usernameFromName(user?.name))
+  // Presentation defaults — pre-fill "Steve" / "steve" so the demo doesn't stall
+  // typing them. Falls back to the signed-in user's name if there already is one.
+  const [displayName, setDisplayName] = useState(() => user?.name ?? 'Steve')
+  const [username, setUsername] = useState(() => usernameFromName(user?.name) || 'steve')
   // Tracks whether the user hand-edited the username field. Once true, typing
   // in the name field stops re-deriving the handle (so we don't stomp their
   // choice). Managed by the setUsername wrapper below.

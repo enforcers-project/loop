@@ -58,8 +58,9 @@ export function Auth() {
   const navigate = useNavigate()
   const { login, signup, loginWithGoogle } = useApp()
   const [mode, setMode] = useState(params.get('mode') === 'login' ? 'login' : 'signup')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  // Presentation defaults so the demo flow doesn't require typing.
+  const [email, setEmail] = useState('steve@gmail.com')
+  const [password, setPassword] = useState('12345678')
   const [role, setRole] = useState('attendee')
   const [submitting, setSubmitting] = useState(false)
   // Inline error shown right above the submit button (instead of a bottom-of-

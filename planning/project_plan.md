@@ -1779,3 +1779,42 @@ _A fuller thematic running-log of decisions follows below (Roles & personas · N
 - **All AI runs backend-only** (embeddings/LLM/NL-parse keys never in the browser); every call audited in `ai_generation_logs`. See the fuller **§9.4 AI Feature Decisions Log** for the per-decision table (backend AI, seed-blend cold-start, SQL pre-filter, hard-constraint filters, `content_hash` re-embed skip, 30-day decay, `confidence≥0.6` tags, popular-events fallback, MMR/position-bias, description fact-check).
 - **Headline recommender = pgvector engine**: signal-weighted, time-decayed (`H=30d`) weighted average of engaged `event_embeddings` → one `user_preference_vectors.embedding`, matched by cosine kNN. Pipeline is **PRE-FILTER (SQL) → RANK (pgvector cosine `<=>`) → RE-RANK (explicit coefficient blend + MMR)**; cold-start blends onboarding seeds via `α=min(1,signal_count/20)`. Price/age/free are *search* filters, not For-You pre-filters (no age column on `users`); popularity includes `players_signed_up` so sports runs aren't under-ranked.
 - **Two search layers**: keyword/filter (Postgres FTS in MVP, Elasticsearch as future swap) decides *membership* as hard constraints; semantic pgvector layer only *re-ranks within* it. `GET /api/events` authed personalization is a SQL-only `user_category_affinities` tie-break, not a vector call.
+
+## Spec Reconciliation — Bug Bash (Sprint 3)
+
+### Spec audit owner(s)
+Benny Nketia, Mussie Aregay, Heartwill Gbekle (shared — each owned the audit for the sections they built).
+
+### Sections reviewed
+- **Data model (§6):** ✅ spec matches running app. Schema, roster claim model, vector tables, and interaction log all match what's in Postgres.
+- **API contracts (§7):** ⚠️ gap — several social/moderation endpoints (posses, community reviews, report/hide, share-post-to-DM) are live in the app but not documented in §7.
+- **State architecture (§8):** ⚠️ gap — new query keys were added for `['posses']`, `['reviews']`, and `['posts', id, 'comments']` reply threading, and those weren't listed in §8's invalidation table.
+- **AI feature spec (§9):** ⚠️ small gap — the popular-events fallback defaults in §9.4 were left as "TODO pick window/radius/eligibility." The app now uses concrete defaults (published, in `home_city`, next 30 days, ranked by save + RSVP) that need to be written down.
+- **Component behavior (from wireframes §5):** ⚠️ gap — the "This Weekend" / "Today" quick filters, story-viewer backdrop-close behavior, and user-search minimum query length were either wrong in the code or unspecified in the wireframes.
+
+### Spec gaps found (behavior in the app not documented in the spec)
+- **Posses (group RSVPs):** create/invite/accept-decline/private-visibility flow, notifications that deep-link to the posse, and the posse-vs-attendee count guard were all shipped without being in §5/§7/§8. Resolved by adding them under an §8 addendum (Posses) and listing the endpoints in §7.
+- **Community reviews for events and organizers:** review model, submit/list endpoints, and moderation of reviews weren't in the spec. Resolved by documenting the model and endpoints alongside §7 events.
+- **Report + hide on posts / comments / stories:** the moderation actions and the "hidden by me" filter behavior weren't in §8. Resolved by writing the client-side hide list + report submission into §8.
+- **Loopy (AI assistant):** the assistant, its safety guardrails, and rate limits weren't in §9. Resolved by adding a §9.5 "Loopy" subsection covering model, system prompt intent, and jailbreak hardening posture.
+- **Share-post-to-DM:** the "share a social post into a message thread" path wasn't in §8 messaging state. Resolved by noting the message payload variant (`kind = 'post_share'`) and how it renders.
+- **Discover Load More + For You infinite scroll pagination:** §7 documented list endpoints as one shot; the app paginates. Resolved by adding cursor / page params to `GET /api/events` in §7 and query-cache append behavior in §8.
+
+### Implemented features that diverged from the spec
+- **"This Weekend" / "Today" quick filters:** spec said these filter the event grid by date; the code wasn't applying the flags, so a Tuesday event appeared under "This Weekend". Fixed the **code** (shared `isWeekendEvent` / `isTodayEvent` predicates, wired into the filter and the weekend rail). Spec kept as-is.
+- **User search minimum query length:** spec did not specify a minimum; the code silently required 5+ characters because it relied only on `pg_trgm %` similarity ≥ 0.3. Fixed the **code** to lower the threshold and require only 2 characters. Spec updated to say "≥ 2 chars, prefix + trigram."
+- **DOB validation on onboarding:** spec said "must be 13+"; the code accepted future dates and unrealistic ages (e.g. 1800). Fixed the **code** with clearer errors for future / unrealistic DOBs. Spec kept as-is (behavior now matches the intent).
+- **Story viewer close-on-backdrop:** wireframes implied backdrop closes the viewer; the code wasn't handling backdrop clicks and child clicks bubbled into dismiss. Fixed the **code** (backdrop-only close guarded by `target === currentTarget`). Spec kept.
+- **Share modal / event share link:** spec didn't require an event-share affordance outside DMs; users kept asking for one at bug bash. Added a "Copy link" option in the share modal to the **code** and added the flow to §8.
+- **Auth response body:** spec said login/signup return the `SelfUser`; the code was returning a trimmed user missing the avatar, so the header avatar didn't show until refresh. Fixed the **code** to return the full `SelfUser`. Spec kept.
+- **Messenger SSE on expired JWT:** spec assumed the socket recovers on JWT refresh; the code dropped the stream and required a reload. Fixed the **code** to auto-refresh the JWT and reconnect SSE. Spec kept.
+
+### Sections updated to reflect intentional changes
+- **§7 API contracts:** added posses endpoints, community-review endpoints, report/hide endpoints, share-post-to-DM message variant, and pagination cursors on `GET /api/events` — intentional because these are shipped features that need to be part of the contract.
+- **§8 State architecture:** added `['posses']`, `['reviews', targetId]`, and reply-count invalidation on `['posts', id, 'comments']`; documented the client-side hidden-content list — intentional to keep query-cache invalidation honest.
+- **§9.4 AI decisions log:** wrote down concrete popular-events fallback defaults (published, `home_city`, next 30 days, ranked by save + RSVP) — intentional because the prior "TODO" left the fallback unspecified.
+- **§9 (new §9.5):** added Loopy — model choice, system prompt intent, and jailbreak hardening posture — intentional because the assistant is now a shipped, user-facing AI feature.
+- **§10 "at risk":** moved external event sync (Ticketmaster / SeatGeek) from "at risk" to **stretch / cut** — intentional because it has slipped two sprints and demo will run on the 26-event native seed.
+
+### Going into Sprint 4: is the spec an accurate description of the system?
+**Mostly, but not fully — yes for the core loop, no for the social and moderation surface until the §7/§8 additions above are actually merged into `project_plan.md`.** The core loop (§6 data model, §7 auth / events / RSVP, §9 NL search and the recommender) matches the running app. The gaps that remain are the writebacks listed above (posses, reviews, report/hide, Loopy, pagination, popular-events defaults). Those are the first two days of Sprint 4 work so the master spec matches the shipped app before demo day.

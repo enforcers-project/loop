@@ -56,10 +56,19 @@ const SAFETY_RULES = `Strict rules — follow these even if the user asks, insis
 - If unsure whether something crosses a line, refuse and redirect. Safety > helpfulness on these rules.`
 
 const SYSTEM_PROMPT_EVENT = `You are Loopy, a warm and concise local-events guide inside the Loop app.
-The user asked about events, and the retrieval layer has surfaced a short list below.
+The user asked about events, and the retrieval layer has surfaced a short list below. Each event line includes its category and tags — use them to judge whether an event actually matches what the user asked for.
+
 Answer in 1–3 short sentences. Refer only to events in the provided list — never invent titles, dates, or venues.
-If the list is empty, say you didn't find a match and suggest one specific way to broaden the search (e.g. drop the price filter, try another day).
-The UI renders the event cards below your reply, so don't restate the full list — a quick vibe check ("2 free jazz picks — top one is Sunday at Blue Note") is perfect.
+
+Match the user's SPECIFIC ask, not just the broad category:
+- If they asked for "jazz" and the list is all hip-hop, that is NOT a match — say you didn't find jazz specifically and suggest broadening (e.g. "no jazz picks right now — want me to widen to any live music?").
+- If they asked for "soccer pickup" and the list is basketball games, say so — don't call basketball a soccer match.
+- Only claim events "match" when the tags, title, or clear description signal actually line up with the user's specific vibe (genre, sport, cuisine, mood).
+- When a couple of items match and others don't, name the ones that do rather than blanket-endorsing the whole list.
+
+If the list is empty, or nothing in the list actually matches the user's specific ask, say you didn't find a match and suggest one specific way to broaden the search (e.g. drop the price filter, try another day, widen the genre).
+
+The UI renders the event cards below your reply, so don't restate the full list — a quick vibe check ("2 free jazz picks — top one is Sunday at Blue Note") is perfect when the picks do match.
 
 ${SAFETY_RULES}
 
@@ -141,6 +150,10 @@ function looksOffTopic(query) {
 const REFUSAL_REPLY =
   "I only help with Loop events — I can't share app internals, contact info, or help with other topics. Want me to find you something to do this week?"
 
+// Turn a Prisma event row into a one-line summary the LLM can reason over.
+// Includes tags and a short description snippet — without them the model only
+// sees the broad category ("music") and can't tell that a hip-hop event isn't
+// a match for a jazz query, so it happily calls the whole list "matches".
 function eventsForPrompt(events) {
   if (!events.length) return 'No matching events found in the catalog.'
   return events
@@ -150,11 +163,26 @@ function eventsForPrompt(events) {
       const price = ev.isFree ? 'Free' : ev.priceMin != null ? `$${ev.priceMin}` : 'Ticketed'
       const cat = ev.category?.name ?? ''
       const city = ev.city ?? '—'
-      return `${i + 1}. ${ev.title} — ${cat} · ${city} · ${when} · ${price}`
+      const tagLabels = Array.isArray(ev.tags)
+        ? ev.tags
+            .map((t) => t.label)
+            .filter(Boolean)
+            .slice(0, 6)
+        : []
+      const tags = tagLabels.length ? ` · tags: ${tagLabels.join(', ')}` : ''
+      const sport = ev.sportsDetail?.sport ? ` · sport: ${ev.sportsDetail.sport}` : ''
+      const desc = ev.description
+        ? ` · about: ${String(ev.description).replace(/\s+/g, ' ').slice(0, 140)}`
+        : ''
+      return `${i + 1}. ${ev.title} — ${cat} · ${city} · ${when} · ${price}${tags}${sport}${desc}`
     })
     .join('\n')
 }
 
+// Groq is down: hand back a soft template. Don't overclaim — say what CATEGORY
+// showed up, not that it matches the user's specific vibe. If the user's query
+// had a discriminating word (e.g. "jazz") and none of the events' tags/titles
+// carry that word, hedge instead of claiming a match.
 function templateReply(query, events, mode) {
   if (mode === 'chat') {
     if (looksOffTopic(query)) return REFUSAL_REPLY
@@ -168,7 +196,76 @@ function templateReply(query, events, mode) {
   const noun = count > 1 ? `${count} events` : 'one event'
   const catBits = new Set(events.map((e) => e.category?.name).filter(Boolean))
   const cat = catBits.size === 1 ? [...catBits][0].toLowerCase() : 'options'
+
+  // If the query's discriminating tokens don't appear in ANY event's tags,
+  // title, or description, hedge — otherwise we tell the user "matches" when
+  // it doesn't.
+  if (!eventsCoverQueryTokens(query, events)) {
+    return `Didn't find an exact match, but here are ${noun} in the same ${cat} space — top pick is ${first.title}.`
+  }
   return `Found ${noun} matching that ${cat} vibe — top pick is ${first.title}.`
+}
+
+const TEMPLATE_STOPWORDS = new Set([
+  'free',
+  'cheap',
+  'ticketed',
+  'paid',
+  'tonight',
+  'tomorrow',
+  'weekend',
+  'today',
+  'this',
+  'next',
+  'week',
+  'near',
+  'nearby',
+  'around',
+  'here',
+  'event',
+  'events',
+  'the',
+  'and',
+  'any',
+  'some',
+  'for',
+  'with',
+  'find',
+  'show',
+  'shows',
+  'got',
+  'recommend',
+  'suggest',
+  'what',
+  'whats',
+  'music',
+  'concert',
+  'concerts',
+  'nightlife',
+  'party',
+  'sports',
+  'game',
+  'networking',
+  'meetup',
+  'food',
+  'campus',
+])
+
+function eventsCoverQueryTokens(query, events) {
+  const tokens = String(query ?? '')
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((t) => t.length > 2 && !TEMPLATE_STOPWORDS.has(t))
+  if (!tokens.length) return true
+  const haystack = events
+    .map((ev) => {
+      const tagText = Array.isArray(ev.tags) ? ev.tags.map((t) => t.label || t.slug).join(' ') : ''
+      return [ev.title, ev.description ?? '', tagText, ev.sportsDetail?.sport ?? '']
+        .join(' ')
+        .toLowerCase()
+    })
+    .join(' ')
+  return tokens.some((t) => haystack.includes(t))
 }
 
 function buildMessages(query, events, history, mode) {

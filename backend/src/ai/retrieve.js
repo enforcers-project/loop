@@ -16,6 +16,11 @@ const EVENT_INCLUDE = {
   category: true,
   organizer: true,
   sportsDetail: true,
+  // Tags carry the genre/vibe signal ("jazz", "afrobeats", "soccer") that the
+  // top-level category ("music", "sports") flattens away — the chat prompt
+  // uses them to tell a jazz query from a hip-hop event before it claims a
+  // match. Also let the LLM see a short description snippet for context.
+  tags: true,
 }
 
 // ---------------------------------------------------------------------------
@@ -229,6 +234,13 @@ async function candidateEvents(filters) {
   })
 }
 
+// Cosine-distance ceiling for the KNN rerank. pgvector's `<=>` returns
+// (1 - cos_sim) in [0, 2]; anything above ~0.8 is barely related. Without a
+// ceiling, a query like "jazz concerts" over a hip-hop-only music catalog
+// still returns the top-N hip-hop events — high distance, but the SQL just
+// takes the closest. This gates that path.
+const KNN_MAX_DISTANCE = 0.85
+
 async function knnRerank(queryVector, candidates, limit = TOP_K) {
   if (!candidates.length) return []
   const ids = candidates.map((c) => c.id)
@@ -246,7 +258,7 @@ async function knnRerank(queryVector, candidates, limit = TOP_K) {
   return candidates
     .map((ev) => ({ ev, dist: distMap.get(ev.id) ?? Number.POSITIVE_INFINITY }))
     .sort((a, b) => a.dist - b.dist)
-    .filter((r) => r.dist !== Number.POSITIVE_INFINITY)
+    .filter((r) => r.dist < KNN_MAX_DISTANCE)
     .slice(0, limit)
     .map((r) => r.ev)
 }
@@ -347,7 +359,19 @@ export async function retrieveEvents(rawQuery, opts = {}) {
   // keyword rerank over whatever candidates the parser gave us.
   const keyword = keywordRerank(rawQuery, candidates, limit)
   events = mergePreserveOrder(titleMatches, keyword, limit)
-  if (!events.length) events = candidates.slice(0, limit)
+
+  // Only fall back to unranked candidates when the user did NOT supply a
+  // specific vibe token beyond what the filter already captures. Previously
+  // this fallback always fired — so a "jazz" query would parse to
+  // category=music, keyword score 0 across a hip-hop-heavy list, and then
+  // return hip-hop events as if they matched the jazz ask. If the user typed a
+  // discriminating word (jazz, salsa, techno, soccer, ramen, …), prefer an
+  // empty result — the drawer surfaces "no match, want to broaden?" which is
+  // honest and lets them retry.
+  if (!events.length && !hasDiscriminatingToken(rawQuery, filters)) {
+    events = candidates.slice(0, limit)
+  }
+
   return {
     events,
     filters,
@@ -357,6 +381,98 @@ export async function retrieveEvents(rawQuery, opts = {}) {
     retrieval: queryVector ? 'keyword_fallback' : 'keyword',
     parse,
   }
+}
+
+// Words a query can safely contain WITHOUT counting as a specific ask — these
+// are the tokens the parser already captures as structured filters, plus a few
+// stopwords. If a query contains anything BEYOND these, the user meant
+// something specific (a genre, a sport, a cuisine) and we shouldn't paper over
+// a zero-match retrieval by returning arbitrary category events.
+const FILTER_STOPWORDS = new Set([
+  'free',
+  'cheap',
+  'ticketed',
+  'paid',
+  'tonight',
+  'tomorrow',
+  'weekend',
+  'today',
+  'this',
+  'next',
+  'week',
+  'day',
+  'night',
+  'near',
+  'nearby',
+  'around',
+  'here',
+  'close',
+  'me',
+  'event',
+  'events',
+  'show',
+  'shows',
+  'thing',
+  'things',
+  'the',
+  'and',
+  'any',
+  'some',
+  'for',
+  'with',
+  'find',
+  'show',
+  'got',
+  'have',
+  'recommend',
+  'suggest',
+  'what',
+  'whats',
+  'about',
+  // Every category slug plus common phrasings that map onto them — these are
+  // encoded in the filter, not a specific vibe.
+  'music',
+  'concert',
+  'concerts',
+  'gig',
+  'gigs',
+  'dj',
+  'nightlife',
+  'party',
+  'parties',
+  'club',
+  'clubs',
+  'rooftop',
+  'lounge',
+  'sports',
+  'sport',
+  'game',
+  'games',
+  'pickup',
+  'networking',
+  'meetup',
+  'meetups',
+  'mixer',
+  'career',
+  'startup',
+  'food',
+  'brunch',
+  'dinner',
+  'lunch',
+  'restaurant',
+  'tasting',
+  'campus',
+  'college',
+  'student',
+  'university',
+])
+
+function hasDiscriminatingToken(rawQuery, _filters) {
+  const tokens = String(rawQuery ?? '')
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((t) => t.length > 2)
+  return tokens.some((t) => !FILTER_STOPWORDS.has(t))
 }
 
 // Fetch events whose title/description literally covers most of the query

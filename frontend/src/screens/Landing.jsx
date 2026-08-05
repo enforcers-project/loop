@@ -242,8 +242,11 @@ function AnimatedSearchHint({ show }) {
 
   if (!show) return null
   return (
-    <span className="pointer-events-none absolute inset-0 flex items-center overflow-hidden text-sm text-placeholder">
-      <span className="flex-shrink-0">Try&nbsp;‘</span>
+    <span className="pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-nowrap text-sm text-placeholder">
+      <span className="flex-shrink-0">Try&nbsp;</span>
+      {/* The quotes live INSIDE the animated span so they hug the hint text as
+          it swaps. Keeping the closing ’ in a separate flex-shrink-0 span pushed
+          it to the far right edge of the input (a big empty gap before it). */}
       <span className="relative min-w-0 flex-1">
         <AnimatePresence mode="popLayout" initial={false}>
           <m.span
@@ -254,11 +257,10 @@ function AnimatedSearchHint({ show }) {
             transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-0 flex items-center truncate"
           >
-            {SEARCH_HINTS[reduce ? 0 : i]}
+            ‘{SEARCH_HINTS[reduce ? 0 : i]}’
           </m.span>
         </AnimatePresence>
       </span>
-      <span className="flex-shrink-0">’</span>
     </span>
   )
 }
@@ -348,8 +350,14 @@ export function Landing() {
   const heroRef = useRef(null)
 
   const showHint = q === '' && !focused
-  const goSearch = () =>
-    navigate(`/discover${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`)
+  // Only navigate when there's an actual query — an empty search shouldn't fire
+  // (previously it routed to a bare /discover, so hitting Search/Enter on a
+  // blank box "searched for nothing").
+  const goSearch = () => {
+    const trimmed = q.trim()
+    if (!trimmed) return
+    navigate(`/discover?q=${encodeURIComponent(trimmed)}`)
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -461,10 +469,11 @@ export function Landing() {
               <m.button
                 type="button"
                 onClick={goSearch}
+                disabled={q.trim() === ''}
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.95 }}
                 transition={springSnappy}
-                className="flex-shrink-0 rounded-button bg-primary px-3.5 py-1.5 text-xs font-semibold text-white"
+                className="flex-shrink-0 rounded-button bg-primary px-3.5 py-1.5 text-xs font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Search
               </m.button>

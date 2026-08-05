@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Sparkles, X, Send } from 'lucide-react'
+import { Sparkles, X, Send, RotateCcw } from 'lucide-react'
 import { api } from '../lib/api'
 import { cn } from '../lib/utils'
 
@@ -115,6 +115,26 @@ export function AIAssistant() {
     }
   }
 
+  // Restart the chat: wipe the visible thread back to the welcome message and
+  // spin up a fresh server conversation so the old thread is left behind. The
+  // stored id is dropped first so a failed start() falls back to a clean
+  // 'mock'-style local session rather than resuming the old thread on reopen.
+  const restart = async () => {
+    if (thinking) return
+    setInput('')
+    setMessages([WELCOME_MESSAGE])
+    setConversationId(null)
+    sessionStorage.removeItem(STORAGE_KEY)
+    try {
+      const conv = await api.ai.startConversation()
+      if (!conv?.id) return
+      setConversationId(conv.id)
+      if (conv.id !== 'mock') sessionStorage.setItem(STORAGE_KEY, conv.id)
+    } catch {
+      // Non-fatal — sendMessage still works via the legacy one-shot path.
+    }
+  }
+
   return (
     <>
       {/* floating trigger — fixed bottom-right. The floating sparkle is the
@@ -162,9 +182,24 @@ export function AIAssistant() {
           <span className="flex items-center gap-2 font-display text-lg font-bold">
             <Sparkles size={20} /> Loopy
           </span>
-          <button onClick={() => setOpen(false)} aria-label="Close">
-            <X size={22} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={restart}
+              disabled={thinking}
+              className="grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-white/15 disabled:opacity-50"
+              aria-label="Restart chat"
+              title="Restart chat"
+            >
+              <RotateCcw size={18} />
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              className="grid h-8 w-8 place-items-center rounded-full transition-colors hover:bg-white/15"
+              aria-label="Close"
+            >
+              <X size={22} />
+            </button>
+          </div>
         </div>
 
         {/* scrollable messages */}

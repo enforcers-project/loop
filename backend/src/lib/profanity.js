@@ -24,7 +24,7 @@ import {
 // Words that should trigger a hard block on top of the built-in English list.
 // Kept literal — leetspeak variants are already covered by the recommended
 // transformer set.
-const CUSTOM_BLOCK_WORDS = ['frick']
+const CUSTOM_BLOCK_WORDS = ['frick', 'balloon']
 
 // Words that should merely flag (mod queue) rather than block. Empty by default;
 // leaving the mechanism in place so the mod team can grow this without touching

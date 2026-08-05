@@ -59,7 +59,7 @@ export function Auth() {
   const { login, signup, loginWithGoogle } = useApp()
   const [mode, setMode] = useState(params.get('mode') === 'login' ? 'login' : 'signup')
   // Presentation defaults so the demo flow doesn't require typing.
-  const [email, setEmail] = useState('steve@gmail.com')
+  const [email, setEmail] = useState('david@gmail.com')
   const [password, setPassword] = useState('12345678')
   const [role, setRole] = useState('attendee')
   const [submitting, setSubmitting] = useState(false)

@@ -8,7 +8,12 @@ import prisma from '../lib/prisma.js'
 import { generateEmbedding } from '../embeddings/embed.js'
 import { toEventCard } from '../events/serialize.js'
 
-const TOP_K = 5
+// Default retrieval limit for the chat assistant. 5 was too tight — a genre
+// query like "free jazz" would rank the top 2 jazz hits first, then a couple
+// of nearby-but-not-jazz music events (Symphony, Karaoke), so Loopy could
+// only truthfully call out "2 jazz picks" even when 5+ jazz events existed.
+// Widen to 8 so the LLM has enough room to name every genuine match.
+const TOP_K = 8
 const PRE_FILTER_LIMIT = 200
 export const DISCOVER_SEARCH_LIMIT = 20
 

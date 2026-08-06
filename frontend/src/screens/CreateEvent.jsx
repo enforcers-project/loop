@@ -10,14 +10,15 @@ import { api } from '../lib/api'
 // EMPTY_DRAFT inside EventForm — only the create screen seeds them; EditEvent
 // keeps hydrating from the live event.
 const PRESENTATION_DRAFT = {
-  title: 'FTL Day Party',
+  title: 'Futureforce Tech Launchpad Yacht Party',
   category: 'Networking',
   date: '2026-08-06',
   time: '18:00',
   price: '0',
   capacity: '1000',
   age: '20',
-  description: 'Ftl Day Party Networking Event',
+  description:
+    "The Futureforce team is proud to host our final event of the year—we're going on a cruise! Join us for Futurefest 😎 to celebrate everything you've accomplished with your fellow interns. This is the BIGGEST EVENT of the season and you definitely don't want to miss it.",
 }
 
 export function CreateEvent() {

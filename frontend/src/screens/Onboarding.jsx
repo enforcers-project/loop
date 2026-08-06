@@ -108,10 +108,10 @@ export function Onboarding() {
   // derive-from-name pass suggest one. Both fields lazy-init from `user`;
   // AppContext resolves `user` before this screen mounts (auth guard), so
   // there's no useEffect chase.
-  // Presentation defaults — pre-fill "David" / "david" so the demo doesn't stall
+  // Presentation defaults — pre-fill "Mike" / "mike" so the demo doesn't stall
   // typing them. Falls back to the signed-in user's name if there already is one.
-  const [displayName, setDisplayName] = useState(() => user?.name ?? 'David')
-  const [username, setUsername] = useState(() => usernameFromName(user?.name) || 'david')
+  const [displayName, setDisplayName] = useState(() => user?.name ?? 'Mike')
+  const [username, setUsername] = useState(() => usernameFromName(user?.name) || 'mike')
   // Tracks whether the user hand-edited the username field. Once true, typing
   // in the name field stops re-deriving the handle (so we don't stomp their
   // choice). Managed by the setUsername wrapper below.
